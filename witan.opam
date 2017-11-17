@@ -1,0 +1,32 @@
+opam-version: "1.2"
+name: "witan"
+license: "LGPL v3"
+version: "dev"
+author: ["François Bobot" "Guillaume Bury" "Simon Cruanes" "Stéphane Graham-Lengrand"]
+maintainer: ["guillaume.bury@gmail.com"]
+build: [
+    [make "build-install"]
+]
+build-doc: [
+    [make "doc"]
+]
+build-test: [
+  [make "test"]
+]
+install: [
+    [make "install"]
+]
+remove: [
+    [make "uninstall"]
+]
+depends: [
+  "containers"
+  "jbuilder" {build}
+]
+available: [
+  ocaml-version >= "4.03.0"
+]
+tags: [ "sat" "smt" "mcsat" ]
+homepage: "https://github.com/Gbury/witan"
+dev-repo: "https://github.com/Gbury/witan.git"
+bug-reports: "https://github.com/Gbury/witan/issues/"

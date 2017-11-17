@@ -1,0 +1,2 @@
+- .header file for easy inclusion to new files
+- separate witan into two packages (witan-lib and witan-bin)
