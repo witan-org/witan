@@ -1,6 +1,6 @@
 (** Need header *)
 
-type t
+type t = unit
 
-let mk _ = assert false
+let mk _ = ()
 
