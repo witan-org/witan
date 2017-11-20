@@ -17,6 +17,7 @@ build-dev:
 
 clean:
 	jbuilder clean
+	cd tests && $(MAKE) clean
 
 install: build-install
 	jbuilder install
@@ -29,7 +30,9 @@ doc:
 
 test:
 	@echo "run API tests…"
-	jbuilder runtest
+	@jbuilder runtest
+	@echo "run BIN tests…"
+	@cd tests && $(MAKE) --no-print-directory
 
 reinstall: | uninstall install
 
