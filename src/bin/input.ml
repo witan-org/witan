@@ -48,7 +48,7 @@ let read_aux ~language ~dir input =
 let read ?language ~dir f =
   (** Formats Dimacs and Tptp are descriptive and lack the emission
       of formal solve/prove instructions, so we need to add them. *)
-  let s = Dolmen.Statement.import f in
+  let s = Dolmen.Statement.include_ f [] in
   (* Auto-detect input format *)
   let language =
     match language with
