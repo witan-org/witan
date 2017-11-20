@@ -932,7 +932,7 @@ module Make(K:Map_intf.TaggedEqualType) :
           let b = lf j (phi j None y) in
           glue s b
 
-      | Lf(i,x) , Br(q,t0,t1) ->
+      | Lf(i,_) , Br(q,t0,t1) ->
         if match_prefix (K.tag i) q then
           (* leaf i is in tree t *)
           if zero_bit (K.tag i) q
@@ -1663,6 +1663,12 @@ module Make(K:Map_intf.TaggedEqualType) :
         | Empty
         | Lf of K.t * 'a
         | Br of int * 'a t * 'a t
+
+      (** implemntation without obj bust with copy of the next function *)
+      let view_ : 'a t -> 'a view = function
+        | Empty -> Empty
+        | Lf(k,v,_) -> Lf(k,v)
+        | Br(i,t1,t2,_) -> Br(i,t1,t2)
 
       (** This obj.magic "just" hide the last field of the root node *)
       let view x = (Obj.magic (x : 'a t): 'a view)

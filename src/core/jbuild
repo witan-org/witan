@@ -6,7 +6,7 @@
    (public_name witan.core)
    (synopsis "core mcsat solver for witan")
    (libraries (containers zarith ocamlgraph))
-   (flags (:standard -w +a-4-42-44-48-50-58-32-60-40@8 -color always))
+   (flags (:standard -w +a-4-42-44-48-50-58-32-60-40-9@8 -color always))
    (ocamlopt_flags (:standard -O3 -bin-annot
                     -unbox-closures -unbox-closures-factor 20))
   ))
