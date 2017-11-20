@@ -20,10 +20,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Witan_core
-open Std
-open Typedef
+open Witan_stdlib
 open Stdlib
+open Witan_core
 open Solver
 
 let lazy_propagation = false
@@ -34,7 +33,7 @@ let debug = Debug.register_info_flag
 
 let ty_ctr = Ty.Constr.create "Bool"
 let ty = Ty.ctr ty_ctr
-let dom : bool dom = Dom.create_key "bool"
+let dom : bool Dom.t = Dom.create_key "bool"
 let cl_true = Cl.fresh "⊤" ty
 let cl_false = Cl.fresh "⊥" ty
 
@@ -107,7 +106,7 @@ type t =
     lits: (Cl.t * bool) IArray.t;
   }
 
-let sem : t sem = Sem.create_key "Prop"
+let sem : t Sem.t = Sem.create_key "Prop"
 
 (* let iter f x = IArray.iter f x.lits *)
 
@@ -196,7 +195,7 @@ module Th = struct
 
 end
 
-module ThE = RegisterSem(Th)
+module ThE = Sem.Register(Th)
 
 type bcpkind =
   | BCPOwnKnown

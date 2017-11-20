@@ -21,11 +21,10 @@
 (**************************************************************************)
 
 open Witan_core
-open Typedef
 
 type t
-val sem: t sem
-val dom: bool dom
+val sem: t Sem.t
+val dom: bool Dom.t
 
 val _true : Cl.t
 val _false : Cl.t
