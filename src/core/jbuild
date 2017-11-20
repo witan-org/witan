@@ -1,6 +1,6 @@
 (jbuild_version 1)
 
-; main binary
+; core library
 (library
   ((name witan_core)
    (public_name witan.core)

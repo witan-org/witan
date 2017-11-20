@@ -3,7 +3,7 @@
 
 J?=3
 TIMEOUT?=30
-TARGETS=src/main.exe
+TARGETS=src/bin/witan.exe
 OPTS= -j $(J)
 
 build:
