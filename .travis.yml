@@ -16,6 +16,9 @@ addons:
     packages:
       - opam
       - time
+cache:
+  directories:
+    - $HOME/.opam
 before_install:
   - export OPAMYES=1
   - export OPAMVERBOSE=1
