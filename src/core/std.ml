@@ -20,7 +20,24 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+exception Impossible (* Absurd *)
+exception TODO of string
 
-let () =
-  Format.printf "Witan !@."
-
+module Q = struct
+  module Q = struct
+    include Q
+    let hash = Hashtbl.hash
+    let pp fmt q =
+      match Q.classify q with
+      | Q.ZERO  -> Pp.char   fmt '0'
+      | Q.INF   -> Pp.string fmt "+∞"
+      | Q.MINF  -> Pp.string fmt "-∞"
+      | Q.UNDEF -> Pp.string fmt "!undef!"
+      | Q.NZERO -> Q.pp_print fmt q
+  end
+  include Q
+  let le = leq
+  let ge = geq
+  let two = Q.of_int 2
+  include Stdlib.MkDatatype(Q)
+end

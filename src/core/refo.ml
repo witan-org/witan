@@ -20,7 +20,19 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+type 'a t = 'a ref
 
-let () =
-  Format.printf "Witan !@."
+let dumb : 'a. 'a =
+  let dumb_addr = ref 0 in
+  Obj.magic dumb_addr
 
+
+let create () = ref dumb
+let init x = ref x
+let is_init r = !r != dumb
+
+let set r x = r := x
+let set_once r x = assert (not (is_init r)); r := x
+let get r = assert (is_init r); !r
+let get_opt r = if is_init r then Some !r else None
+let get_exn exn r = if is_init r then !r else raise exn

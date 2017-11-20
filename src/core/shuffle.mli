@@ -20,7 +20,35 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+val set_shuffle: int array option -> unit
+(** if None is given shuffling is disable (default) *)
 
-let () =
-  Format.printf "Witan !@."
+val is_shuffle: unit -> bool
 
+val shuffle2: ('a * 'a) -> ('a * 'a)
+(* uniform *)
+
+val shuffle3: ('a * 'a * 'a) -> ('a * 'a * 'a)
+(* uniform *)
+
+val shufflel: 'a list -> 'a list
+(* not uniform *)
+
+val seq2: ('a -> 'b) -> ('a * 'a) -> ('b * 'b)
+(* uniform *)
+
+val seq3: ('a -> 'b) -> ('a * 'a * 'a) -> ('b * 'b * 'b)
+(* uniform *)
+
+val seql': ('a -> unit) -> 'a list -> unit
+val seql : (unit -> unit) list -> unit
+
+val chooseb: ('a -> 'b) -> ((unit -> bool) ->'a -> 'b) -> 'a -> 'b
+(** [chooseb f g] call f if there is no shuffling or g otherwise.
+    The first argument given to g is a random boolean generator.
+*)
+
+val choosef: ('a -> 'b) -> ((float -> float) ->'a -> 'b) -> 'a -> 'b
+val choosei: ('a -> 'b) -> ((int -> int) ->'a -> 'b) -> 'a -> 'b
+
+val int: int -> int

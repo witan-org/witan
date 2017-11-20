@@ -20,7 +20,23 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+(** just reference not initialized at creation *)
 
-let () =
-  Format.printf "Witan !@."
+type 'a t
 
+val create: unit -> 'a t
+val init: 'a -> 'a t
+
+val is_init: 'a t -> bool
+
+val set: 'a t -> 'a -> unit
+
+val set_once: 'a t -> 'a -> unit
+(** fail if already initialized *)
+
+val get: 'a t -> 'a
+(** fail if not initialized *)
+
+val get_opt: 'a t -> 'a option
+
+val get_exn: exn -> 'a t -> 'a

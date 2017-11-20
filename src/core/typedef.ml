@@ -1,0 +1,554 @@
+(*************************************************************************)
+(*  This file is part of Witan.                                          *)
+(*                                                                       *)
+(*  Copyright (C) 2017                                                   *)
+(*    CEA   (Commissariat à l'énergie atomique et aux énergies           *)
+(*           alternatives)                                               *)
+(*    INRIA (Institut National de Recherche en Informatique et en        *)
+(*           Automatique)                                                *)
+(*                                                                       *)
+(*  you can redistribute it and/or modify it under the terms of the GNU  *)
+(*  Lesser General Public License as published by the Free Software      *)
+(*  Foundation, version 2.1.                                             *)
+(*                                                                       *)
+(*  It is distributed in the hope that it will be useful,                *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of       *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        *)
+(*  GNU Lesser General Public License for more details.                  *)
+(*                                                                       *)
+(*  See the GNU Lesser General Public License version 2.1                *)
+(*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
+(*************************************************************************)
+
+open Stdlib
+
+exception BrokenInvariant of string
+exception SolveSameRepr
+exception UnregisteredKey
+exception AlreadyRegisteredKey
+exception UnwaitedEvent
+exception AlreadyDead
+exception AlreadyRedirected
+
+
+let debug_create = Debug.register_info_flag
+  ~desc:"for the core solver class creation information"
+  "index"
+
+module Ty = struct
+  module Constr= Strings.Fresh(struct end)
+
+  type ty = { ctr: Constr.t; args: ty IArray.t; tag: int}
+
+  module Ty = Hashcons.Make(struct
+      type t = ty
+
+      let equal ty1 ty2 =
+        Constr.equal ty1.ctr ty2.ctr &&
+        IArray.equal (fun x1 x2 -> DInt.equal x1.tag x2.tag) ty1.args ty2.args
+
+      let hash {ctr;args} =
+          Hashcons.combine (Constr.hash ctr)
+            (IArray.hash (fun x1 -> x1.tag) args)
+
+      let set_tag i t = {t with tag = i}
+      let tag t = t.tag
+
+      let rec pp fmt = function
+        | {ctr;args} when IArray.length args = 0 -> Constr.pp fmt ctr
+        | {ctr;args} -> Format.fprintf fmt "%a(%a)"
+                          Constr.pp ctr (IArray.pp Pp.comma pp) args
+    end)
+
+  let app ctr args = Ty.hashcons {ctr;args; tag = -1}
+  let args0 = IArray.of_array [||]
+  let ctr ctr = app ctr args0
+
+  include Ty
+
+end
+
+exception BadCoercion
+
+type (_,_) eq = Eq : ('a,'a) eq
+
+module type Key = sig
+
+  module K: Datatype
+  type 'a k = private K.t
+  val pp: 'a k Pp.pp
+  val compare: 'a k -> 'b k -> int
+  val equal: 'a k -> 'b k -> bool
+  val hash : 'a k -> int
+  val tag: 'a k -> int
+
+  type iter = {iter : 'a. 'a k -> unit}
+  val iter : iter -> unit
+  val hint_size : unit -> int
+
+  module Eq: sig
+    val eq_type : 'a k -> 'b k -> ('a,'b) eq option
+    (** If the two arguments are physically identical then an equality witness
+        between the types is returned *)
+
+    val coerce_type : 'a k -> 'b k -> ('a,'b) eq
+    (** If the two arguments are physically identical then an equality witness
+        between the types is returned otherwise
+        the exception BadCoercion is raised  *)
+
+    val coerce : 'a k -> 'b k -> 'a -> 'b
+    (** If the two arguments are physically identical then covnert the
+        argument otherwise taise BadCoercion *)
+
+  end
+  val create_key: string -> 'a k
+
+  module MkVector(D:sig type ('a,'b) t end)
+    : Vector_hetero.S1 with
+                         type 'a key = 'a k and type ('a,'b) data = ('a,'b) D.t
+
+  module MkMap(D:sig type ('a,'b) t end)
+    : Intmap_hetero.S1 with
+                         type 'a key = 'a k and type ('a,'b) data = ('a,'b) D.t
+
+  module Vector : Vector_hetero.R1 with type 'a key = 'a k
+  module VectorH : Vector_hetero.T1 with type 'a key = 'a k
+  module M : Intmap_hetero.R1 with type 'a key = 'a k
+end
+
+module Make_key(X:sig end): Key = struct
+  module K = Strings.Fresh(struct end)
+
+  type 'a k = K.t (* >= 0 *)
+  let pp fmt x = K.pp fmt x
+  let compare x y   = K.compare x y
+  let equal x y   = K.equal x y
+  let hash  x     = K.hash x
+  let tag (x:K.t) = (x:>int)
+
+  type iter = {iter : 'a. 'a k -> unit}
+  let iter f = K.iter f.iter
+  let hint_size = K.hint_size
+
+  let create_key s = K.create s
+
+  (** the 'a k can be used as equality witness because K gives fresh values *)
+  module Eq = struct
+    let eq_type :
+      type a b. a k -> b k -> (a,b) eq option =
+      fun a b ->
+        if equal a b
+        then Some ((Obj.magic (Eq : (a,a) eq)) : (a,b) eq)
+        else None
+
+    let coerce_type :
+      type a b. a k -> b k -> (a,b) eq =
+      fun a b ->
+        if equal a b
+        then ((Obj.magic (Eq : (a,a) eq)) : (a,b) eq)
+        else raise BadCoercion
+
+    let coerce (type a) (type b) (a:a k) (b:b k) (x:a) : b =
+      match coerce_type a b with
+      | (Eq:(a,b) eq) -> x
+  end
+  module MkVector(D:sig type ('a,'b) t end) =
+    Vector_hetero.Make1(struct type 'a t = 'a k end)(D)
+  module MkMap(D:sig type ('a,'b) t end) =
+    Intmap_hetero.Make1(struct type 'a t = 'a k end)(D)
+  module Vector =
+    Vector_hetero.RMake1(struct type 'a t = 'a k end)
+  module VectorH =
+    Vector_hetero.TMake1(struct type 'a t = 'a k end)
+  module M =
+    Intmap_hetero.RMake1(struct type 'a t = 'a k end)
+
+end
+
+module Make_key2(X:sig end) = struct
+  module K = Strings.Fresh(struct end)
+
+  type ('k,'d) k = K.t (* >= 0 *)
+  let pp fmt x = K.pp fmt x
+  let equal = K.equal
+  let hash  x     = K.hash x
+
+  type iter = {iter : 'k 'd. ('k,'d) k -> unit}
+  let iter f = K.iter f.iter
+
+  let create_key s = K.create s
+
+  (** the ('k,'d) k can be used as equality witness because K gives
+      fresh values *)
+  module Eq = struct
+
+    let eq_type :
+      type a1 b1 a2 b2. (a1,b1) k -> (a2,b2) k
+      -> ((a1,a2) eq * (b1,b2) eq) option =
+      fun a b ->
+        if equal a b
+        then let eq1 = (Obj.magic (Eq : (a1,a1) eq) : (a1,a2) eq) in
+          let eq2 = (Obj.magic (Eq : (b1,b1) eq) : (b1,b2) eq) in
+          Some (eq1,eq2)
+        else None
+
+    let coerce_type :
+      type a1 b1 a2 b2. (a1,b1) k -> (a2,b2) k
+      -> ((a1,a2) eq * (b1,b2) eq) =
+      fun a b ->
+        if equal a b
+        then let eq1 = (Obj.magic (Eq : (a1,a1) eq) : (a1,a2) eq) in
+          let eq2 = (Obj.magic (Eq : (b1,b1) eq) : (b1,b2) eq) in
+          (eq1,eq2)
+        else raise BadCoercion
+
+  end
+  module MkVector(D:sig type ('k,'d,'b) t end) =
+    Vector_hetero.Make2(struct type ('k,'d) t = ('k,'d) k end)(D)
+end
+
+module Dom = Make_key(struct end)
+module Sem = Make_key(struct end)
+
+type 'a dom = 'a Dom.k
+type 'a sem = 'a Sem.k
+
+module type Sem = sig
+  include Stdlib.Datatype
+  val key: t sem
+end
+
+
+module VSem = Sem.MkVector
+  (struct type ('a,'unedeed) t =
+            (module Sem with type t = 'a)
+   end)
+
+let defined_sem : unit VSem.t = VSem.create 8
+let sem_uninitialized sem = VSem.is_uninitialized defined_sem sem
+let get_sem k =
+  assert (if sem_uninitialized k then raise UnregisteredKey else true);
+  VSem.get defined_sem k
+
+let print_sem (type a) (k : a sem) fmt s =
+  let sem = get_sem k in
+  let module S = (val sem : Sem with type t = a) in
+  S.pp fmt s
+
+module Dem = Make_key2(struct end)
+
+type ('k,'d) dem = ('k,'d) Dem.k
+
+
+module Cl = struct
+  type 'a r =
+    | Fresh: int * Ty.t -> [>`Fresh] r
+    | Fresh_to_reg: int * Ty.t * ('event,'r) dem * 'event -> [>`Fresh] r
+    | Sem  : int * Ty.t * 'a sem * 'a -> [>`Sem] r
+
+  type t' = [ `Fresh | `Sem] r
+  type clsem = [`Sem] r
+
+  let tag: t' -> int = function
+    | Fresh(tag,_) -> tag
+    | Fresh_to_reg(tag,_,_,_) -> tag
+    | Sem(tag,_,_,_) -> tag
+
+  let names = Simple_vector.create 100
+  let used_names : (* next id to use *) int DStr.H.t = DStr.H.create 100
+
+  (** remove the empty string *)
+  let () = DStr.H.add used_names "" 0
+
+  let pp fmt x =
+    Format.pp_print_char fmt '@';
+    Format.pp_print_string fmt (Simple_vector.get names (tag x))
+
+  module T = Stdlib.MakeMSH(struct
+      type t = t' let tag = tag
+      let pp = pp
+    end)
+
+  include T
+
+  let next_tag, incr_tag = Util.get_counter ()
+
+  let fresh ?to_reg s ty : t =
+    let i = next_tag () in
+    incr_tag ();
+    let s = Strings.find_new_name used_names s in
+    Simple_vector.inc_size (i+1) names;
+    Simple_vector.set names i s;
+    match to_reg with
+    | None ->
+      Debug.dprintf1 debug_create "[Solver] @[fresh @@%s@]" s;
+      Fresh(i,ty)
+    | Some (dem,event) ->
+      Debug.dprintf1 debug_create "[Solver] @[fresh to reg @@%s@]" s;
+      Fresh_to_reg(i,ty,dem,event)
+
+  let rename cl s =
+    let s = Strings.find_new_name used_names s in
+    Simple_vector.set names (tag cl) s
+
+  let ty = function | Fresh (_,ty)
+                    | Fresh_to_reg (_,ty,_,_)
+                    | Sem(_,ty,_,_) -> ty
+
+  module SemIndex = Sem.MkVector
+      (struct type ('a,'unedeed) t = 'a -> Ty.t -> clsem end)
+
+  let semindex : unit SemIndex.t = SemIndex.create 8
+
+  let clsem sem v ty : clsem =
+    assert (if sem_uninitialized sem then raise UnregisteredKey else true);
+    (SemIndex.get semindex sem) v ty
+
+  (** Just used for checking the typability *)
+  let _cl : clsem -> t = function
+    | Sem(tag,ty,sem,v) -> Sem(tag,ty,sem,v)
+
+  (** IF the previous function is typable this one is correct:
+      I'm not able to defined is without obj.magic
+  *)
+  let of_clsem : clsem -> t = Obj.magic
+
+  let index sem v ty = of_clsem (clsem sem v ty)
+
+end
+
+module ClSem = struct
+  include Stdlib.MakeMSH(struct
+      type t = Cl.clsem
+      let tag: t -> int = function
+        | Cl.Sem(tag,_,_,_) -> tag
+      let pp fmt : t -> unit = function
+        | Cl.Sem(_,_,sem,v) -> print_sem sem fmt v
+    end)
+
+  let index = Cl.clsem
+  let cl = Cl.of_clsem
+  let ty : t -> Ty.t = function
+    | Cl.Sem(_,ty,_,_) -> ty
+
+
+end
+
+module type RegisteredSem = sig
+  type s
+  val key: s sem
+  (** clsem *)
+  include Datatype
+
+  val index: s -> Ty.t -> t
+  (** Return a clsem from a semantical value *)
+
+  val cl: t -> Cl.t
+  (** Return a class from a clsem *)
+
+  val ty: t -> Ty.t
+  (** Return the type from a clsem *)
+
+  val sem: t -> s
+  (** Return the sem from a clsem *)
+
+  val clsem: t -> ClSem.t
+  val of_clsem: ClSem.t -> t option
+
+  val coerce_clsem: ClSem.t -> t
+
+end
+
+
+
+module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
+
+  module HC = Hashcons.MakeTag(struct
+      open Cl
+      type t = clsem
+
+      let next_tag = Cl.next_tag
+      let incr_tag = Cl.incr_tag
+
+      let equal: t -> t -> bool = fun a b ->
+        match a, b with
+        | Sem(_,tya,sema,va), Sem(_,tyb,semb,vb) ->
+          match Sem.Eq.coerce_type sema D.key,
+                Sem.Eq.coerce_type semb D.key with
+          | Eq, Eq  ->
+             Ty.equal tya tyb && D.equal va vb
+
+      let hash: t -> int = fun a ->
+        match a with
+        | Sem(_,tya,sema,va) ->
+          match Sem.Eq.coerce_type sema D.key with
+          | Eq ->
+            Hashcons.combine (Ty.hash tya) (D.hash va)
+
+      let set_tag: int -> t -> t = fun tag x ->
+        match x with
+        | Sem(_,ty,sem,v) -> Sem(tag,ty,sem,v)
+
+      let tag: t -> int = function
+        | Sem(tag,_,_,_) -> tag
+
+      let pp fmt x =
+        Format.pp_print_char fmt '@';
+        Format.pp_print_string fmt (Simple_vector.get names (tag x))
+    end)
+
+  include HC
+
+  type s = D.t
+  let key = D.key
+
+  let tag: t -> int = function
+    | Cl.Sem(tag,_,_,_) -> tag
+
+  let index v ty =
+    let cl =
+      HC.hashcons3
+        (fun tag sem v ty -> Cl.Sem(tag,ty,sem,v))
+        D.key v ty in
+    let i = tag cl in
+    Simple_vector.inc_size (i+1) Cl.names;
+    begin
+      if Simple_vector.is_uninitialized Cl.names i then
+        let s = Strings.find_new_name Cl.used_names ""
+        (** TODO use Sem.pp or Sem.print_debug *) in
+        Debug.dprintf3 debug_create "[Solver] @[index %a into @@%s@]"
+          D.pp v s;
+        Simple_vector.set Cl.names i s
+    end;
+    cl
+
+  let cl = Cl.of_clsem
+
+  let sem : t -> D.t = function
+    | Cl.Sem(_,_,sem,v) ->
+      match Sem.Eq.coerce_type sem D.key with
+      | Eq -> v
+
+  let ty = ClSem.ty
+
+  let clsem: t -> ClSem.t = fun x -> x
+
+  let of_clsem: ClSem.t -> t option = function
+    | Cl.Sem(_,_,sem',_) as v when Sem.equal sem' D.key -> Some v
+    | _ -> None
+
+  let coerce_clsem: ClSem.t -> t = function
+    | Cl.Sem(_,_,sem',_) as v -> assert (Sem.equal sem' D.key); v
+
+  let () =
+    VSem.inc_size D.key defined_sem;
+    assert (if not (VSem.is_uninitialized defined_sem D.key)
+      then raise AlreadyRegisteredKey else true);
+    let sem = (module D: Sem with type t = D.t) in
+    VSem.set defined_sem D.key sem;
+    Cl.SemIndex.set Cl.semindex D.key (fun v ty -> index v ty)
+
+end
+
+module Env = Make_key(struct end)
+type 'a env = 'a Env.k
+
+module type Key2 = sig
+  module K: Datatype
+  type ('k,'d) k = private K.t
+  (** kind of daemon for semantic value of type 'a *)
+  val pp: ('k,'d) k Pp.pp
+  val equal: ('k1,'d1) k -> ('k2,'d2) k -> bool
+  val hash : ('k,'d) k -> int
+
+  type iter = {iter : 'k 'd. ('k,'d) k -> unit}
+  val iter : iter -> unit
+
+  val create_key: string -> ('k,'d) k
+
+  module Eq: sig
+    val eq_type : ('a1,'b1) k -> ('a2,'b2) k
+      -> (('a1,'a2) eq * ('b1,'b2) eq) option
+    (** If the two arguments are physically identical then an equality witness
+        between the types is returned *)
+
+    val coerce_type : ('a1,'b1) k -> ('a2,'b2) k
+      -> ('a1,'a2) eq * ('b1,'b2) eq
+      (** If the two arguments are physically identical then an equality witness
+          between the types is returned otherwise
+          the exception BadCoercion is raised  *)
+  end
+  module MkVector(D:sig type ('k,'d,'b) t end)
+    : Vector_hetero.S2 with type ('k,'d) key = ('k,'d) k
+                       and type ('k,'d,'b) data = ('k,'d,'b) D.t
+end
+
+
+module Print = struct (** Cutting the knot for pp *)
+  (* type psem = { mutable psem : 'a. ('a sem -> 'a Pp.pp)} *)
+
+  (* let psem : psem = *)
+  (*   {psem = fun _ _ _ -> assert false} (\** called too early *\) *)
+  (* let sem sem fmt s = psem.psem sem fmt s *)
+
+  type pdem_event = { mutable
+      pdem_event : 'k 'd. ('k,'d) dem -> 'k Pp.pp}
+
+  let pdem_event : pdem_event =
+    {pdem_event = fun _ _ _ -> assert false} (** called too early *)
+  let dem_event dem fmt s = pdem_event.pdem_event dem fmt s
+
+  type pdem_runable = { mutable
+      pdem_runable : 'k 'd. ('k,'d) dem -> 'd Pp.pp}
+
+  let pdem_runable : pdem_runable =
+    {pdem_runable = fun _ _ _ -> assert false} (** called too early *)
+  let dem_runable dem fmt s = pdem_runable.pdem_runable dem fmt s
+
+
+end
+
+module Only_for_solver = struct
+  type sem_of_cl =
+    | Sem: 'a sem * 'a  -> sem_of_cl
+
+  let clsem: Cl.t -> ClSem.t option = function
+    | Cl.Fresh _ | Cl.Fresh_to_reg _ -> None
+    | Cl.Sem _ as x -> Some (Obj.magic x: ClSem.t)
+
+  let sem_of_cl: ClSem.t -> sem_of_cl = function
+    | Cl.Sem (_,_,sem,v) -> Sem(sem,v)
+
+  (** Just used for checking the typability *)
+  let _cl_of_clsem : ClSem.t -> Cl.t = function
+    | Cl.Sem(tag,ty,sem,v) -> Cl.Sem(tag,ty,sem,v)
+
+  (** IF the previous function is typable this one is correct:
+      I'm not able to defined is without obj.magic
+  *)
+  let cl_of_clsem : ClSem.t -> Cl.t = Obj.magic
+
+  type opened_cl =
+    | Fresh: opened_cl
+    | Fresh_to_reg: ('event,'r) dem * 'event -> opened_cl
+    | Sem  : ClSem.t -> opened_cl
+
+  let open_cl = function
+    | Cl.Fresh _ -> Fresh
+    | Cl.Fresh_to_reg(_,_,dem,event) -> Fresh_to_reg(dem,event)
+    | Cl.Sem _ as x -> Sem (Obj.magic x: ClSem.t)
+end
+
+
+let check_initialization () =
+  let well_initialized = ref true in
+
+  Sem.iter {Sem.iter = fun sem ->
+    if VSem.is_uninitialized defined_sem sem then begin
+      Format.eprintf
+        "[Warning] The set of values %a is not registered" Sem.pp sem;
+      well_initialized := false;
+    end};
+
+  !well_initialized
+

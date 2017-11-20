@@ -20,7 +20,10 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+let version   = "0.80+git"
+let builddate = "Mon Jan  7 17:00:21 CET 2013"
 
-let () =
-  Format.printf "Witan !@."
+let libdir    = "/home/bobot/Sources/why3/lib"
+let datadir   = "/home/bobot/Sources/why3/share"
+let localdir  = Some "/home/bobot/Sources/why3"
 

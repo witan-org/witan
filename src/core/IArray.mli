@@ -21,6 +21,30 @@
 (*************************************************************************)
 
 
-let () =
-  Format.printf "Witan !@."
+(** immutable arrays, like arrays but you can't modify them after
+    creation *)
 
+type 'a t
+
+val of_list: 'a list -> 'a t
+val of_array: 'a array -> 'a t
+val of_iter: int -> (('a -> unit) -> unit) -> 'a t
+(** create the array using an iterator. The integer indicate the
+    number of iteration that will occur *)
+
+val length: 'a t -> int
+
+val compare: ('a -> 'a ->  int)  -> 'a t -> 'a t -> int
+val equal  : ('a -> 'a -> bool)  -> 'a t -> 'a t -> bool
+
+val get : 'a t -> int -> 'a
+
+val hash   : ('a -> int) -> 'a t -> int
+
+
+val iter : ('a -> unit)  -> 'a t -> unit
+val iteri : (int -> 'a -> unit)  -> 'a t -> unit
+val fold : ('b -> 'a -> 'b) -> 'b -> 'a t -> 'b
+val foldi : (int -> 'b -> 'a -> 'b) -> 'b -> 'a t -> 'b
+
+val pp: unit Pp.pp -> 'a Pp.pp -> 'a t Pp.pp

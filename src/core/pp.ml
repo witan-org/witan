@@ -1,0 +1,210 @@
+(********************************************************************)
+(*                                                                  *)
+(*  The Why3 Verification Platform   /   The Why3 Development Team  *)
+(*  Copyright 2010-2017   --   INRIA - CNRS - Paris-Sud University  *)
+(*                                                                  *)
+(*  This software is distributed under the terms of the GNU Lesser  *)
+(*  General Public License version 2.1, with the special exception  *)
+(*  on linking described in file LICENSE.                           *)
+(*                                                                  *)
+(********************************************************************)
+
+(*s Pretty-pp library *)
+
+open Format
+
+type 'a pp = formatter -> 'a -> unit
+type formatter = Format.formatter
+
+let option f fmt = function
+  | None -> ()
+  | Some x -> f fmt x
+
+let option_or_default default f fmt = function
+  | None -> fprintf fmt "%s" default
+  | Some x -> f fmt x
+
+let rec list sep pp fmt = function
+  | [] -> ()
+  | [x] -> pp fmt x
+  | x :: r -> pp fmt x; sep fmt (); list sep pp fmt r
+
+let list_or_default default sep pp fmt = function
+  | [] -> fprintf fmt "%s" default
+  | l -> list sep pp fmt l
+
+let list_par sep pr fmt l =
+  list sep (fun fmt x -> fprintf fmt "(%a)" pr x) fmt l
+
+let list_delim ~start ~stop ~sep pr fmt = function
+  | [] -> ()
+  | l -> fprintf fmt "%a%a%a" start () (list sep pr) l stop ()
+
+
+let iter1 iter sep pp fmt l =
+  let first = ref true in
+  iter (fun x ->
+          if !first
+          then first := false
+          else sep fmt ();
+          pp fmt x ) l
+
+let iter2 iter sep1 sep2 print1 print2 fmt l =
+  let first = ref true in
+  iter (fun x y ->
+          if !first
+          then first := false
+          else sep1 fmt ();
+          print1 fmt x;sep2 fmt (); print2 fmt y) l
+
+
+let iteri2 iter sep1 sep2 print1 print2 fmt l =
+  let first = ref true in
+  iter (fun x y ->
+          if !first
+          then first := false
+          else sep1 fmt ();
+          print1 fmt x;sep2 fmt (); print2 x fmt y) l
+
+
+let iter22 iter sep pp fmt l =
+  let first = ref true in
+  iter (fun x y ->
+          if !first
+          then first := false
+          else sep fmt ();
+          pp fmt x y) l
+
+
+let pair_delim start sep stop pr1 pr2 fmt (a,b) =
+  fprintf fmt "%a%a%a%a%a" start () pr1 a sep () pr2 b stop ()
+
+
+type formatted = (unit, unit, unit, unit, unit, unit) format6
+let empty_formatted : formatted = ""
+
+let dot fmt () = fprintf fmt ".@ "
+let comma fmt () = fprintf fmt ",@ "
+let star fmt () = fprintf fmt "*@ "
+let simple_comma fmt () = fprintf fmt ", "
+let underscore fmt () = fprintf fmt "_"
+let semi fmt () = fprintf fmt ";@ "
+let colon fmt () = fprintf fmt ":@ "
+let space fmt () = fprintf fmt "@ "
+let alt fmt () = fprintf fmt "|@ "
+let alt2 fmt () = fprintf fmt "@ | "
+let equal fmt () = fprintf fmt "@ =@ "
+let newline fmt () = fprintf fmt "@\n"
+let newline2 fmt () = fprintf fmt "@\n@\n"
+let arrow fmt () = fprintf fmt "@ -> "
+let lbrace fmt () = fprintf fmt "{"
+let rbrace fmt () = fprintf fmt "}"
+let lsquare fmt () = fprintf fmt "["
+let rsquare fmt () = fprintf fmt "]"
+let lparen fmt () = fprintf fmt "("
+let rparen fmt () = fprintf fmt ")"
+let lchevron fmt () = fprintf fmt "<"
+let rchevron fmt () = fprintf fmt ">"
+let nothing _fmt _ = ()
+let string = pp_print_string
+let float = pp_print_float
+let int = pp_print_int
+let bool = pp_print_bool
+let char = pp_print_char
+let unit fmt () = pp_print_string fmt "()"
+let constant_string s fmt () = string fmt s
+let formatted fmt x = Format.fprintf fmt "%( %)" x
+let constant_formatted f fmt () = formatted fmt f
+let print0 fmt () = pp_print_string fmt "\000"
+let add_flush sep fmt x = sep fmt x; pp_print_flush fmt ()
+
+let asd f fmt x = fprintf fmt "\"%a\"" f x
+
+let pair pr1 = pair_delim lparen comma rparen pr1
+
+let hov n f fmt x = pp_open_hovbox fmt n; f fmt x; pp_close_box fmt ()
+let indent n f fmt x =
+  for _i = 0 to n do
+    pp_print_char fmt ' '
+  done;
+  hov 0 f fmt x
+
+let open_formatter ?(margin=78) cout =
+  let fmt = formatter_of_out_channel cout in
+  pp_set_margin fmt margin;
+  pp_open_box fmt 0;
+  fmt
+
+let close_formatter fmt =
+  pp_close_box fmt ();
+  pp_print_flush fmt ()
+
+let open_file_and_formatter ?(margin=78) f =
+  let cout = open_out f in
+  let fmt = open_formatter ~margin cout in
+  cout,fmt
+
+let close_file_and_formatter (cout,fmt) =
+  close_formatter fmt;
+  close_out cout
+
+let in_file_no_close ?(margin=78) p f =
+  let cout,fmt = open_file_and_formatter ~margin f in
+  p fmt;
+  close_formatter fmt;
+  cout
+
+let in_file ?(margin=78) p f =
+  let cout = in_file_no_close ~margin p f in
+  close_out cout
+
+
+
+(* With optional separation *)
+let rec list_opt sep pp fmt = function
+  | [] -> false
+  | [x] -> pp fmt x
+  | x :: r ->
+      let notempty1 = pp fmt x in
+      if notempty1 then sep fmt ();
+      let notempty2 = list_opt sep pp fmt r in
+      notempty1 || notempty2
+
+
+let string_of p x =
+  let b = Buffer.create 100 in
+  let fmt = formatter_of_buffer b in
+  fprintf fmt "%a@?" p x;
+  Buffer.contents b
+
+let wnl fmt =
+  let out =
+    Format.pp_get_formatter_out_functions fmt () in
+  pp_set_formatter_out_functions fmt
+    {out with Format.out_newline = (fun () -> out.out_spaces 1)}
+
+
+let string_of_wnl p x =
+  let b = Buffer.create 100 in
+  let fmt = formatter_of_buffer b in
+  wnl fmt;
+  fprintf fmt "%a@?" p x;
+  Buffer.contents b
+
+let sprintf p =
+  let b = Buffer.create 100 in
+  let fmt = formatter_of_buffer b in
+  kfprintf (fun fmt -> Format.pp_print_flush fmt (); Buffer.contents b) fmt p
+
+let sprintf_wnl p =
+  let b = Buffer.create 100 in
+  let fmt = formatter_of_buffer b in
+  wnl fmt;
+  kfprintf (fun fmt -> Format.pp_print_flush fmt (); Buffer.contents b) fmt p
+
+
+module Ansi =
+  struct
+
+    let set_column fmt n = fprintf fmt "\027[%iG" n
+end

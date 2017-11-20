@@ -20,7 +20,19 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+(** Map, Set, and hash for Unit type. Mainly for fun *)
 
-let () =
-  Format.printf "Witan !@."
+type t = unit
+val hash : t -> int
+val equal : t -> t -> bool
+val compare : t -> t -> int
+val pp: t Pp.pp
 
+module M: Map_intf.Map with type key = unit
+                        and type +'a t = 'a option
+                        and type 'a data = 'a
+
+module S : Map_intf.Set with module M = M
+
+
+module H: Exthtbl.Hashtbl.S with type key = unit

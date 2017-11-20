@@ -20,7 +20,20 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+(** Use enum for deforesting *)
 
-let () =
-  Format.printf "Witan !@."
+type 'a t
 
+val for_all: ('a -> bool) -> 'a t -> bool
+val exists: ('a -> bool) -> 'a t -> bool
+val is_empty: 'a t -> bool
+
+val fold: ('acc -> 'a -> 'acc) -> 'acc -> 'a t -> 'acc
+val iter: ('a -> unit) -> 'a t -> unit
+
+val list_rev: 'a t -> 'a list
+(** return the enumeration in the reverse order *)
+
+(** Create Enum *)
+val from_list: ?filter:('b -> bool) -> map:('b -> 'a) -> 'b list  -> 'a t
+val from_bag : ?filter:('b -> bool) -> map:('b -> 'a) -> 'b Bag.t -> 'a t
