@@ -36,6 +36,10 @@ build-install:
 build-dev:
 	jbuilder build $(TARGETS) $(OPTS) --dev
 
+build-all-supported-version:
+	jbuilder build $(TARGETS) $(OPTS) --dev --workspace jbuild-workspace.dev
+
+
 clean:
 	jbuilder clean
 	cd tests && $(MAKE) clean

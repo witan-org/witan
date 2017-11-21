@@ -1,7 +1,7 @@
 (jbuild_version 1)
 
 (library
-  ((name witan_theories)
+  ((name witan_theories_bool)
    (public_name witan.theories.bool)
    (synopsis "theories for witan")
    (libraries (containers zarith ocamlgraph witan.core witan.stdlib))

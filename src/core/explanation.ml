@@ -328,7 +328,7 @@ let new_handler t = {
 
 let current_age t = t.age
 let last_dec t = t.last_dec
-let dom_before_last_dec t dom cl =
+let dom_before_last_dec (t:t) dom cl =
   t.dom_before_last_dec.dom_before_last_dec dom cl
 let nbdec t = t.nbdec
 let at_current_level t age = Age.compare t.last_dec age <= 0
@@ -344,7 +344,7 @@ let push (* modif *) t =
   Debug.dprintf2 debugage "[Trail] @[new age %a@]" Age.pp t.age
 
 
-let new_dec dom_before_last_dec t  =
+let new_dec dom_before_last_dec (t:t)  =
   t.dom_before_last_dec <- dom_before_last_dec;
   t.nbdec <- t.nbdec + 1;
   let dec = t.age + 1 in

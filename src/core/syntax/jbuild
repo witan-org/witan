@@ -4,7 +4,7 @@
   ((name syntax)
    (public_name witan.syntax)
    (synopsis "initial syntax for sorts and symbols")
-   (libraries (containers witan_open))
+   (libraries (containers witan.open))
    (preprocess (pps (ppx_deriving.std)))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 -color always -open "Witan_open.Open"))
    (ocamlopt_flags (:standard -O3 -bin-annot

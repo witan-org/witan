@@ -1,9 +1,10 @@
 language: c
 env:
-  - OCAML_VERSION=4.03.0
-  - OCAML_VERSION=4.03.0+flambda
-  - OCAML_VERSION=4.04.2
-  - OCAML_VERSION=4.04.2+flambda
+  # ppx_deriving seems not to generate anything
+  #  - OCAML_VERSION=4.03.0
+  #  - OCAML_VERSION=4.03.0+flambda
+  #  - OCAML_VERSION=4.04.2
+  #  - OCAML_VERSION=4.04.2+flambda
   - OCAML_VERSION=4.05.0
   - OCAML_VERSION=4.05.0+flambda
     # There are some dependency build problems on 4.06

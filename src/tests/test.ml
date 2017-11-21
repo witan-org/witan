@@ -21,6 +21,8 @@
 (*************************************************************************)
 
 let () =
-  let _ = Witan_core.Solver.mk [] in
+  (* let solver = Witan_core.Solver.new_t () in *)
+  (* let d = Witan_core.Solver. *)
+  (* Witan_theories_bool.Bool.th_register solver; *)
   Format.printf "All tests OK ! (total: 0)@."
 
