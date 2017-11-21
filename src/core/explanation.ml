@@ -49,8 +49,8 @@ module Age = struct
   let bef = -1
   let min = 0
   let max (x : int) y = if x < y then y else x
-  let pred = Pervasives.pred
-  let succ = Pervasives.succ
+  let pred x = x - 1
+  let succ x = x + 1
   let to_int x = x
 end
 type age = Age.t (* position in the trail *)

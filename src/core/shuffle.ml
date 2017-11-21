@@ -36,13 +36,13 @@ let make_random =
 let int m =
   match !opt_shuffle with
   | Some rnd -> Random.State.int rnd m
-  | None -> max 0 (m-1)
+  | None -> Witan_open.Open.max ~compare:Stdlib.DInt.compare 0 (m-1)
 
 let set_shuffle = function
   | None -> opt_shuffle := None
   | Some i -> opt_shuffle := Some (make_random i)
 
-let is_shuffle () = !opt_shuffle <> None
+let is_shuffle () = match !opt_shuffle with | None -> false | Some _ -> true
 
 let shuffle2 ((t1,t2) as p) =
   match !opt_shuffle with

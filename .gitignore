@@ -7,3 +7,9 @@ _build/
 
 # jbuild generated files
 *.merlin
+
+# test result files
+*.res
+
+# old versions of files
+*~

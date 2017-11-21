@@ -1,0 +1,12 @@
+(jbuild_version 1)
+
+(library
+  ((name witan_theories_LRA)
+   (public_name witan.theories.LRA)
+   (synopsis "solver for LRA")
+   (libraries (containers zarith witan_open witan_core))
+   (preprocess (pps (ppx_deriving.std)))
+   (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 -color always -open "Witan_open.Open"))
+   (ocamlopt_flags (:standard -O3 -bin-annot
+                    -unbox-closures -unbox-closures-factor 20))
+  ))
