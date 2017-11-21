@@ -1286,8 +1286,8 @@ let new_dec t =
     {dom_before_last_dec = (fun dom cl -> get_dom t' dom cl)}
     t.trail
 
-let current_age t = Explanation.current_age t.trail
-let current_nbdec t = Explanation.nbdec t.trail
+let current_age (t:t) = Explanation.current_age t.trail
+let current_nbdec (t:t) = Explanation.nbdec t.trail
 
 let get_direct_dom t dom cl =
   assert (t.current_delayed == dumb_delayed ||
