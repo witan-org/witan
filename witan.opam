@@ -27,6 +27,7 @@ depends: [
   "jbuilder" {build}
   "zarith"
   "ppx_deriving"
+  "ocamlgraph"
 ]
 available: [
   ocaml-version >= "4.03.0"
