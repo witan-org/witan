@@ -28,6 +28,7 @@ depends: [
   "zarith"
   "ppx_deriving"
   "ocamlgraph"
+  "ocaml-migrate-parsetree"
 ]
 available: [
   ocaml-version >= "4.03.0"
