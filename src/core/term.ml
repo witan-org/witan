@@ -9,11 +9,7 @@ type binder =
   | Forall  (** Universal quantification *)
   | Exists  (** Existencial quantification *)
 
-type id = {
-  index : int;          (** unique index *)
-  path  : string list;  (** path to the id (including, e.g. module names) *)
-  id_ty : t             (** Identifier type *)
-}
+and id = t Id.t
 
 and descr =
   | Type
@@ -31,30 +27,20 @@ and t = {
 exception Function_expected of t
 exception Type_mismatch of t * t
 
-(* Identifiers functions *)
-(* ************************************************************************ *)
-
-(* TODO: have a separate module for defining identifiers ? *)
-module Id = struct
-
-  type t = id
-
-  let hash v = v.index
-  let compare v v' = Pervasives.compare v.index v'.index
-  let equal v v' = compare v v' = 0
-
-  let mk =
-    let c = ref 0 in
-    (fun path id_ty ->
-       incr c; { index = !c; path; id_ty; })
-
-  let named name ty = mk [name] ty
-
-end
 
 (* Std functions *)
 (* ************************************************************************ *)
 
+(** Wrapper around the id module to be given to functor such as Map/Set
+    which expect a non-polymorphic type *)
+module TId = struct
+  type t = id
+  let hash = Id.hash
+  let equal = Id.equal
+  let compare = Id.compare
+end
+
+(** Memoised hash function *)
 let rec hash_aux t =
   match t.term with
   | Type -> 0
@@ -110,7 +96,7 @@ let equal t t' = compare t t' = 0
 (* Bound variables *)
 (* ************************************************************************ *)
 
-module S = Set.Make(Id)
+module S = Set.Make(TId)
 
 let rec free_vars acc t =
   match t.term with
@@ -134,16 +120,16 @@ let rec _Type = {
 let mk ty term =
   { ty; term; hash = -1; }
 
-let const v = mk v.id_ty (Id v)
+let const v = mk (Id.ty v) (Id v)
 
-let _Prop_id = Id.named "Prop" _Type
+let _Prop_id = Id.mk "Prop" _Type
 let _Prop = const _Prop_id
 
 let letin v e body =
-  if equal v.id_ty e.ty then
+  if equal (Id.ty v) e.ty then
     mk body.ty (Let (v, e, body))
   else
-    raise (Type_mismatch (e, v.id_ty))
+    raise (Type_mismatch (e, (Id.ty v)))
 
 let rec bind b v body =
   match b with
@@ -164,7 +150,7 @@ let rec bind b v body =
 (* Typing and application *)
 (* ************************************************************************ *)
 
-module Subst = Map.Make(Id)
+module Subst = Map.Make(TId)
 
 let extract_fun_ty t =
   match t.ty with
@@ -174,7 +160,7 @@ let extract_fun_ty t =
 
 let rec app t arg =
   let v, ty = extract_fun_ty t in
-  let expected_arg_ty = v.id_ty in
+  let expected_arg_ty = Id.ty v in
   let actual_arg_ty = arg.ty in
   if equal expected_arg_ty actual_arg_ty then
     let s = Subst.singleton v arg in
@@ -197,20 +183,20 @@ and subst s t =
     let v', s'' =
       if equal e.ty e'.ty then v, s'
       else
-        let v' = Id.mk v.path e'.ty in
+        let v' = Id.mk (Id.name v) e'.ty in
         v', Subst.add v (const v') s'
     in
     let body' = subst s'' body in
     if v == v' && e == e' && body == body' then t
     else letin v' e' body'
   | Binder (b, v, body) ->
-    let ty = v.id_ty in
+    let ty = Id.ty v in
     let ty' = subst s ty in
     let s' = Subst.remove v s in
     let v', s'' =
       if equal ty ty' then v, s'
       else
-        let v' = Id.mk v.path ty' in
+        let v' = Id.mk (Id.name v) ty' in
         v', Subst.add v (const v') s'
     in
     let body' = subst s'' body in
@@ -235,7 +221,7 @@ let pis l body = List.fold_right pi l body
 let lambda v body = bind Lambda v body
 let lambdas l body = List.fold_right lambda l body
 
-let arrow ty ret = bind Arrow (Id.named "_" ty) ret
+let arrow ty ret = bind Arrow (Id.mk "_" ty) ret
 let arrows l ret = List.fold_right arrow l ret
 
 let forall v body = bind Forall v body
@@ -257,6 +243,9 @@ let rec split_last = function
 
 (* Term Uncurryfication *)
 (* ************************************************************************ *)
+
+(* TODO: Expose a 'view' function for
+   first-order uncurried concatenated terms ? *)
 
 let uncurry_app t =
   let rec aux acc = function
@@ -320,9 +309,9 @@ let concat_vars l =
     | [] ->
       List.rev (concat_aux ty curr acc)
     | v :: r ->
-      if equal ty v.id_ty
+      if equal ty (Id.ty v)
       then aux ty acc (v :: curr) r
-      else aux v.id_ty (concat_aux ty curr acc) [v] r
+      else aux (Id.ty v) (concat_aux ty curr acc) [v] r
   in
   aux _Type [] [] l
 
@@ -344,8 +333,7 @@ let binder_sep = function _ -> ","
 let print_type fmt () =
   Format.fprintf fmt "Type"
 
-let print_id fmt { path; _ } =
-  CCFormat.(list ~sep:(return ".") string) fmt path
+let print_id = Id.print
 
 let rec print_app fmt t =
   let f, l = uncurry_app t in
@@ -359,7 +347,7 @@ and print_let fmt v e body =
 
 and print_arrow fmt t =
   let l, body = flatten_binder Arrow t in
-  let l' = List.map (fun v -> v.id_ty) l in
+  let l' = List.map Id.ty l in
   let sep fmt () = Format.fprintf fmt " ->@ " in
   Format.fprintf fmt "(@[<hov>%a ->@ %a@])"
     CCFormat.(list ~sep print) l' print body
@@ -393,26 +381,26 @@ and print fmt t =
 (* ************************************************************************ *)
 
 let equal_id =
-  let a_id = Id.named "a" _Type in
+  let a_id = Id.mk "a" _Type in
   let a_type = const a_id in
-  Id.named "==" (pi a_id (arrows [a_type; a_type] _Prop))
+  Id.mk "==" (pi a_id (arrows [a_type; a_type] _Prop))
 
-let true_id = Id.named "true" _Prop
-let false_id = Id.named "false" _Prop
+let true_id = Id.mk "true" _Prop
+let false_id = Id.mk "false" _Prop
 
-let not_id = Id.named "not" (arrow _Prop _Prop)
+let not_id = Id.mk "not" (arrow _Prop _Prop)
 
 let imply_id =
-  Id.named "->" (arrows [_Prop; _Prop] _Prop)
+  Id.mk "->" (arrows [_Prop; _Prop] _Prop)
 
 let equiv_id =
-  Id.named "<->" (arrows [_Prop; _Prop] _Prop)
+  Id.mk "<->" (arrows [_Prop; _Prop] _Prop)
 
 let or_id =
-  Id.named "||" (arrows [_Prop; _Prop] _Prop)
+  Id.mk "||" (arrows [_Prop; _Prop] _Prop)
 
 let and_id =
-  Id.named "&&" (arrows [_Prop; _Prop] _Prop)
+  Id.mk "&&" (arrows [_Prop; _Prop] _Prop)
 
 
 let or_term = const or_id

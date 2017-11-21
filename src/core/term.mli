@@ -1,4 +1,9 @@
 
+(** Witan Typed terms
+
+    This module defines higher-order typed terms. These terms are designed
+    to faithfully represent input terms, as well as proof terms. *)
+
 (** {2 Terms} *)
 
 type binder = private
@@ -9,11 +14,7 @@ type binder = private
   | Exists  (** Existencial quantification *)
 (** Available binders *)
 
-type id = {
-  index : int;          (** unique index *)
-  path  : string list;  (** path to the id (including, e.g. module names) *)
-  id_ty : t             (** Identifier type *)
-}
+type id = t Id.t
 (** Identifiers in terms. Used for bound/free variables, constants, etc... *)
 
 and descr = private
@@ -22,7 +23,7 @@ and descr = private
   | Id of id
   (** Identifiers (i.e variables, constants) *)
   | App of t * t
-  (** Curried appliation *)
+  (** Curried application *)
   | Let of id * t * t
   (** Local let binding, as (var, expr, body). *)
   | Binder of binder * id * t
@@ -49,16 +50,6 @@ exception Type_mismatch of t * t
 
 
 (** {2 Term ids} *)
-
-module Id : sig
-
-  type t = id
-
-  val hash: t -> int
-  val equal : t -> t -> bool
-  val compare : t -> t -> int
-
-end
 
 (** {2 Term inspection} *)
 
