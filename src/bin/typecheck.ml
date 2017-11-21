@@ -2,15 +2,17 @@
 (* Log&Module Init *)
 (* ************************************************************************ *)
 
-module Ast = Dolmen.Term
 module Id = Dolmen.Id
+module Ast = Dolmen.Term
+
+module I = Witan_core.Id
 module Term = Witan_core.Term
 
 let get_loc =
   let default_loc = Dolmen.ParseLocation.mk "<?>" 0 0 0 0 in
   (fun t -> CCOpt.get_or ~default:default_loc t.Ast.loc)
 
-module E = Map.Make(Term)
+module E = Map.Make(Term.Id)
 module R = Hashtbl.Make(Term.Id)
 
 (* Fuzzy search maps *)
@@ -97,7 +99,7 @@ type env = {
   locs : reason E.t;
 
   (* Bound variables, either let-bound, or quantified. *)
-  lets : Term.t     M.t;
+  vars : Term.t M.t;
 
   (* The current builtin symbols *)
   builtins : builtin_symbols;
@@ -116,8 +118,7 @@ and builtin_symbols = env -> Dolmen.Term.t -> Dolmen.Id.t -> Ast.t list -> Term.
 (* ************************************************************************ *)
 
 (* Global identifier table; stores declared types and aliases.
-   Ttype location table: stores reasons for typing of type constructors
-   Const location table: stores reasons for typing of constants *)
+   global locations : stores reason for typing of identifiers *)
 let global_env = H.create ()
 let global_locs = R.create 4013
 
@@ -126,70 +127,42 @@ let find_global name =
   with Not_found -> `Not_found
 
 (* Symbol declarations *)
-let decl_ty_cstr id c reason =
+let decl_id id c reason =
+  (* TODO: uncomment
   if H.mem global_env id then
     Util.warn ~section
       "Symbol '%a' has already been defined, overwriting previous definition"
       Id.print id;
-  H.add global_env id (`Ty c);
-  R.add ttype_locs c reason;
-  Util.debug ~section
-    "New type constructor : @[<hov>%a@]" Expr.Print.const_ttype c
-
-let decl_term id c reason =
-  if H.mem global_env id then
-    Util.warn ~section
-      "Symbol '%a' has already been defined, overwriting previous definition"
-      Id.print id;
-  H.add global_env id (`Term c);
-  S.add const_locs c reason;
-  Util.debug ~section "New constant : @[<hov>%a@]" Expr.Print.const_ty c
+  *)
+  H.add global_env id (`Id c);
+  R.add global_locs c reason
 
 (* Symbol definitions *)
-let def_ty id args body =
+let def_id id args body =
+  (* TODO: uncomment
   if H.mem global_env id then
     Util.warn ~section
       "Symbol '%a' has already been defined, overwriting previous definition"
       Id.print id;
-  H.add global_env id (`Ty_alias (args, body));
-  Util.debug ~section "@[<hov 4>New type alias:@ @[<hov>%a(%a)@] =@ %a@]"
-    Id.print id
-        (CCFormat.list Expr.Print.id_ttype) args
-        Expr.Print.ty body
+  *)
+  H.add global_env id (`Alias (args, body))
 
-let def_term id ty_args args body =
-  if H.mem global_env id then
-    Util.warn ~section
-      "Symbol '%a' has already been defined, overwriting previous definition"
-      Id.print id;
-  H.add global_env id (`Term_alias (ty_args, args, body));
-  Util.debug ~section "@[<hov 4>New term alias:@ @[<hov>%a(%a;%a)@] =@ %a@]"
-    Id.print id
-        (CCFormat.list Expr.Print.id_ttype) ty_args
-        (CCFormat.list Expr.Print.id_ty) args
-        Expr.Print.term body
 
 (* Local Environment *)
 (* ************************************************************************ *)
 
 (* Make a new empty environment *)
 let empty_env
-    ?(expect=Nothing)
-    ?(status=Expr.Status.hypothesis)
-    ?(infer_hook=(fun _ _ -> ()))
+    ?(expect=None)
     ?(explain=`No)
     builtins = {
-  type_locs = E.empty;
-  term_locs = F.empty;
-  type_vars = M.empty;
-  term_vars = M.empty;
-  term_lets = M.empty;
-  prop_lets = M.empty;
-  builtins; expect; infer_hook; status; explain;
+  locs = E.empty;
+  vars = M.empty;
+  builtins; expect; explain;
 }
 
 let expect ?(force=false) env expect =
-  if env.expect = Nothing && not force then env
+  if env.expect = None && not force then env
   else { env with expect = expect }
 
 (* Generate new fresh names for shadowed variables *)
@@ -197,42 +170,19 @@ let new_name pre =
   let i = ref 0 in
   (fun () -> incr i; pre ^ (string_of_int !i))
 
-let new_ty_name = new_name "ty#"
-let new_term_name = new_name "term#"
+let new_term_name = new_name "t#"
 
 (* Add local variables to environment *)
-let add_type_var env id v loc =
-  let v' =
-    if M.mem id env.type_vars then
-      Expr.Id.ttype (new_ty_name ())
-    else
-      v
-  in
-  Util.debug ~section "New binding: @[<hov>%a ->@ %a@]"
-    Id.print id Expr.Print.id_ttype v';
-  v', { env with
-        type_vars = M.add id v' env.type_vars;
-        type_locs = E.add v' (Declared loc) env.type_locs;
-      }
-
-let add_type_vars env l =
-  let l', env' = List.fold_left (fun (l, acc) (id, v, loc) ->
-      let v', acc' = add_type_var acc id v loc in
-      v' :: l, acc') ([], env) l in
-  List.rev l', env'
-
 let add_term_var env id v loc =
   let v' =
-    if M.mem id env.type_vars then
-      Expr.Id.ty (new_term_name ()) Expr.(v.id_type)
+    if M.mem id env.vars then
+      I.mk (new_term_name ()) (I.ty v)
     else
       v
   in
-  Util.debug ~section "New binding: @[<hov>%a ->@ %a@]"
-    Id.print id Expr.Print.id_ty v';
   v', { env with
-        term_vars = M.add id v' env.term_vars;
-        term_locs = F.add v' (Declared loc) env.term_locs;
+        vars = M.add id v' env.vars;
+        locs = E.add v' (Declared loc) env.locs;
       }
 
 let find_var env name =
