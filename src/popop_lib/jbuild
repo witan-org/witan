@@ -1,0 +1,12 @@
+(jbuild_version 1)
+
+; library to replace by containers
+(library
+  ((name witan_popop_lib)
+   (public_name witan.popop_lib)
+   (synopsis "Temporary for witan (intended to be replaced by another library)")
+   (libraries ())
+   (flags (:standard -w +a-4-42-44-48-50-58-32-60-40-9@8 -color always))
+   (ocamlopt_flags (:standard -O3 -bin-annot
+                    -unbox-closures -unbox-closures-factor 20))
+  ))

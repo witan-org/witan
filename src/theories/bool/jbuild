@@ -4,8 +4,8 @@
   ((name witan_theories_bool)
    (public_name witan.theories.bool)
    (synopsis "theories for witan")
-   (libraries (containers zarith ocamlgraph witan.core witan.stdlib))
-   (flags (:standard -w +a-4-42-44-48-50-58-32-60-40-9@8 -color always -open Witan_stdlib))
+   (libraries (containers zarith ocamlgraph witan.core witan.stdlib witan.popop_lib))
+   (flags (:standard -w +a-4-42-44-48-50-58-32-60-40-9@8 -color always -open Witan_stdlib -open Witan_popop_lib))
    (ocamlopt_flags (:standard -O3 -bin-annot
                     -unbox-closures -unbox-closures-factor 20))
   ))

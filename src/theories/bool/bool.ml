@@ -20,7 +20,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Witan_stdlib
 open Stdlib
 open Witan_core
 open Solver

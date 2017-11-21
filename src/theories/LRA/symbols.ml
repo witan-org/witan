@@ -1,5 +1,8 @@
 open Format
-    
+
+(* These constructor are not used *)
+[@@@ warning "-38"]
+
 type Syntax.Symbols.t +=
   | CstRat of Q.t
   | Ge | Le | Gt | Lt
