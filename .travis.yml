@@ -16,12 +16,16 @@ addons:
     packages:
       - opam
       - time
+cache:
+  directories:
+    - $HOME/.opam
 before_install:
   - export OPAMYES=1
   - export OPAMVERBOSE=1
   - opam init
   - opam switch ${OCAML_VERSION}
   - eval `opam config env`
+  - opam pin add --dev-repo dolmen
   - opam pin add --no-action witan .
   - opam install --deps-only witan
 install:

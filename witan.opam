@@ -21,6 +21,9 @@ remove: [
 ]
 depends: [
   "containers"
+  "dolmen"
+  "cmdliner"
+  "gen"
   "jbuilder" {build}
 ]
 available: [

@@ -3,7 +3,7 @@
 
 J?=3
 TIMEOUT?=30
-TARGETS=src/main.exe
+TARGETS=src/bin/witan.exe
 OPTS= -j $(J)
 
 build:
@@ -17,6 +17,7 @@ build-dev:
 
 clean:
 	jbuilder clean
+	cd tests && $(MAKE) clean
 
 install: build-install
 	jbuilder install
@@ -27,9 +28,11 @@ uninstall:
 doc:
 	jbuilder build @doc
 
-test:
+test: build
 	@echo "run API tests…"
-	jbuilder runtest
+	@jbuilder runtest
+	@echo "run BIN tests…"
+	@cd tests && $(MAKE) --no-print-directory
 
 reinstall: | uninstall install
 
