@@ -26,6 +26,8 @@ module Create : sig
   type 'b event =
     (** the domain dom of the class is watched *)
     | EventDom      : Cl.t * 'a dom  * 'b -> 'b event
+    (** the value of the class is watched *)
+    | EventValue    : Cl.t * 'a value  * 'b -> 'b event
     (** we want to register this class *)
     | EventRegCl  : Cl.t           * 'b -> 'b event
     (** Warn when the class is not the representant of its eq-class anymore *)

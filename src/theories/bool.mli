@@ -24,7 +24,7 @@ open Witan_core
 
 type t
 val sem: t Sem.t
-val dom: bool Dom.t
+val dom: bool Value.t
 
 val _true : Cl.t
 val _false : Cl.t
@@ -46,7 +46,7 @@ val is_false : Solver.d -> Cl.t -> bool
     current constraints or due to incompletness *)
 val is_unknown : Solver.d -> Cl.t -> bool
 
-val true_is_false : Solver.d -> Cl.t -> Explanation.pexp -> 'a
+(* val true_is_false : Solver.d -> Cl.t -> Explanation.pexp -> 'a *)
 
 val th_register: Solver.d -> unit
 val th_register_alone: Solver.d -> unit

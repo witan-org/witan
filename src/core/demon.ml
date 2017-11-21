@@ -30,6 +30,7 @@ let debug = Debug.register_info_flag
 module Create = struct
     type 'b event =
     | EventDom      : Cl.t * 'a dom  * 'b -> 'b event
+    | EventValue    : Cl.t * 'a value * 'b -> 'b event
     | EventRegCl  : Cl.t           * 'b -> 'b event
     | EventChange   : Cl.t           * 'b -> 'b event
     | EventRegSem :        'a sem  * 'b -> 'b event
@@ -38,6 +39,8 @@ module Create = struct
     let pp fmt = function
       | EventDom      (cl, dom, _) ->
         Format.fprintf fmt "dom:%a of %a" Dom.pp dom Cl.pp cl
+      | EventValue    (cl, value, _) ->
+        Format.fprintf fmt "value:%a of %a" Value.pp value Cl.pp cl
       | EventRegCl  (cl, _)    ->
         Format.fprintf fmt "registration of %a" Cl.pp cl
       | EventChange   (cl, _)    ->
@@ -265,6 +268,8 @@ module Key = struct
         match ev with
         | Create.EventDom (cl,dom,data) ->
           Solver.Delayed.attach_dom t cl dom dem.dk_id (k,data)
+        | Create.EventValue (cl,value,data) ->
+          Solver.Delayed.attach_value t cl value dem.dk_id (k,data)
         | Create.EventChange (cl,data) ->
           Solver.Delayed.attach_cl t cl dem.dk_id (k,data)
         | Create.EventRegCl (cl,data) ->
@@ -452,6 +457,8 @@ module Fast = struct
     List.iter (function
         | EventDom      (cl,dom,data) ->
           Solver.Delayed.attach_dom d cl dom dem.dk_id data
+        | EventValue    (cl,value,data) ->
+          Solver.Delayed.attach_value d cl value dem.dk_id data
         | EventRegCl  (cl,data) ->
           Solver.Delayed.attach_reg_cl d cl dem.dk_id data
         | EventChange   (cl,data) ->

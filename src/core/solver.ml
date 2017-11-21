@@ -1082,11 +1082,17 @@ module Delayed = struct
     assert (d.env.current_delayed == d);
     assert (is_registered d cl);
     set_sem_pending d pexp cl clsem
-  let set_value  d pexp cl clvalue =
-    Debug.dprintf4 debug "[Solver] @[add_pending_set_value for %a and %a@]"
+  let set_clvalue  d pexp cl clvalue =
+    Debug.dprintf4 debug "[Solver] @[add_pending_set_clvalue for %a and %a@]"
       Cl.pp cl ClValue.pp clvalue;
     assert (d.env.current_delayed == d);
     assert (is_registered d cl);
+    set_value_pending d pexp cl clvalue
+  let set_value (type a)  d pexp (value : a value) cl v =
+    Debug.dprintf4 debug_few
+      "[Solver] @[set_dom for %a with %a@]"
+      Cl.pp cl (print_value value) v;
+    let clvalue = ClValue.index value v (Cl.ty cl) in
     set_value_pending d pexp cl clvalue
   let set_dom d pexp dom cl v =
     Debug.dprintf4 debug_few
@@ -1303,9 +1309,8 @@ module type Ro = sig
   val is_equal      : t -> Cl.t -> Cl.t -> bool
   val find_def  : t -> Cl.t -> Cl.t
 
-  (** {4 The classes must have been marked has registered} *)
   val get_dom   : t -> 'a dom -> Cl.t -> 'a option
-    (** dom of the representative class *)
+  val get_value : t -> 'a value -> Cl.t -> 'a option
 
   val find      : t -> Cl.t -> Cl.t
   val is_repr      : t -> Cl.t -> bool

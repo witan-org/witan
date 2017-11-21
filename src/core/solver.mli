@@ -72,7 +72,9 @@ module type Ro = sig
   val is_equal      : t -> Cl.t -> Cl.t -> bool
   val find_def  : t -> Cl.t -> Cl.t
   val get_dom   : t -> 'a dom -> Cl.t -> 'a option
-    (** dom of the representative class *)
+    (** dom of the class *)
+  val get_value   : t -> 'a value -> Cl.t -> 'a option
+    (** value of the class *)
 
   (** {4 The classes must have been marked has registered} *)
 
@@ -107,7 +109,10 @@ module Delayed : sig
   val set_sem  : t -> Explanation.pexp -> Cl.t -> ClSem.t -> unit
   (** attach a sem to an equivalence class *)
 
-  val set_value: t -> Explanation.pexp -> Cl.t -> ClValue.t -> unit
+  val set_clvalue: t -> Explanation.pexp -> Cl.t -> ClValue.t -> unit
+  (** attach value to an equivalence class *)
+
+  val set_value: t -> Explanation.pexp -> 'a value -> Cl.t -> 'a -> unit
   (** attach value to an equivalence class *)
 
   val set_dom_premerge  : t -> 'a dom -> Cl.t -> 'a -> unit

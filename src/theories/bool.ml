@@ -33,7 +33,13 @@ let debug = Debug.register_info_flag
 
 let ty_ctr = Ty.Constr.create "Bool"
 let ty = Ty.ctr ty_ctr
-let dom : bool Dom.t = Dom.create_key "bool"
+let dom : bool Value.t = Value.create_key "bool"
+
+module BoolValue = Value.Register(struct
+    include DBool
+    let key = dom
+  end)
+
 let cl_true = Cl.fresh "⊤" ty
 let cl_false = Cl.fresh "⊥" ty
 
@@ -49,11 +55,12 @@ let with_other = ref false
 *)
 
 
-let is env cl = Solver.Delayed.get_dom env dom cl
+let is env cl = Solver.Delayed.get_value env dom cl
 let is_true  env cl = Cl.equal cl cl_true || is env cl = Some true
 let is_false env cl = Cl.equal cl cl_false || is env cl = Some false
 let is_unknown env cl = is env cl = None
 
+(*
 module D = struct
   type t = bool
   let merged b1 b2 = Opt.equal (==) b1 b2
@@ -74,12 +81,12 @@ module D = struct
       Delayed.merge env pexp cl
         (if b then cl_true else cl_false)
     else
-      match Delayed.get_dom env dom cl with
+      match Delayed.get_value env dom cl with
       | Some b' when DBool.equal b b' -> ()
       | Some _ ->
         true_is_false env cl pexp
       | None ->
-        Delayed.set_dom env pexp dom cl b
+        Delayed.set_value env pexp dom cl b
 
   let merge d pexp ((b1: t option),cl1) ((b2: t option),cl2) _ =
       match b1,b2 with
@@ -97,9 +104,19 @@ module D = struct
   let key = dom
 end
 
+
 let true_is_false = D.true_is_false
 let set_bool = D.set_bool
 module DE = RegisterDom(D)
+*)
+
+
+let set_bool env pexp cl b =
+  if !with_other then
+    Delayed.merge env pexp cl
+      (if b then cl_true else cl_false)
+  else
+    Delayed.set_value env pexp dom cl b
 
 type t =
   { topnot: bool;
@@ -174,7 +191,7 @@ module Th = struct
   exception Found of Cl.t * bool
   let find_not_known d l =
     IArray.iter (fun (cl,b) ->
-      match Delayed.get_dom d dom cl with
+      match Delayed.get_value d dom cl with
       | Some _ -> ()
       | None -> raise (Found (cl,b))
     ) l
@@ -182,7 +199,7 @@ module Th = struct
   let _bcp d l absorbent =
     try
       let res = IArray.fold (fun acc cl ->
-        match Delayed.get_dom d dom cl, acc with
+        match Delayed.get_value d dom cl, acc with
         | Some b, _ when b = absorbent -> raise (TopKnown absorbent)
         | Some _, _ -> acc
         | None, Some _ -> raise Exit
@@ -225,9 +242,9 @@ module DaemonPropaNot = struct
   let throttle = 100
   let wakeup d =
     function
-    | Events.Fired.EventDom(_,dom',((_,cl,ncl) as x)) ->
-      assert (Dom.equal dom dom');
-      begin match Delayed.get_dom d dom cl with
+    | Events.Fired.EventValue(_,dom',((_,cl,ncl) as x)) ->
+      assert (Value.equal dom dom');
+      begin match Delayed.get_value d dom cl with
         | None -> raise Impossible
         | Some b ->
           let pexp = Delayed.mk_pexp d expprop (ExpNot(x)) in
@@ -249,8 +266,8 @@ module DaemonPropaNot = struct
             (ExpNot((v,cl,own))) in
         set_bool d pexp own (not b)
       | None ->
-        let events = [Demon.Create.EventDom(own,dom,(v,own,cl));
-                      Demon.Create.EventDom(cl,dom,(v,cl,own))] in
+        let events = [Demon.Create.EventValue(own,dom,(v,own,cl));
+                      Demon.Create.EventValue(cl,dom,(v,cl,own))] in
         Demon.Fast.attach d key events
 
 end
@@ -282,18 +299,18 @@ module DaemonPropa = struct
     let pexp exp = Delayed.mk_pexp d expprop exp in
     let set_dom_up_true d own leaf _ =
       let b = (not v.topnot) in
-      match Delayed.get_dom d dom own with
+      match Delayed.get_value d dom own with
       | Some b' when b' == b -> ()
       | _ -> set_bool d (pexp (ExpUp(clsem,leaf))) own b in
     let merge_bcp cl sign =
       Debug.dprintf2 debug "[Bool] @[merge_bcp %a@]" Cl.pp cl;
-      match Delayed.get_dom d dom own with
+      match Delayed.get_value d dom own with
       | Some b' ->
         let b = mulbool sign (mulbool b' v.topnot) in
         let pexp = pexp (ExpBCP(clsem,cl,BCPOwnKnown)) in
         set_bool d pexp cl b
       | None -> (** merge *)
-        match Delayed.get_dom d dom cl with
+        match Delayed.get_value d dom cl with
         | Some b' ->
           let b = mulbool sign (mulbool b' v.topnot) in
           let pexp = pexp (ExpBCP(clsem,cl,BCPLeavesKnown)) in
@@ -310,7 +327,7 @@ module DaemonPropa = struct
         (merge_bcp cl sign; raise Exit)
       else
         let cl,sign = IArray.get v.lits pos in
-        match Delayed.get_dom d dom cl with
+        match Delayed.get_value d dom cl with
         | None -> cl,pos
         | Some b when mulbool b sign (** true absorbent of or *) ->
           set_dom_up_true d own cl b; raise Exit
@@ -321,11 +338,11 @@ module DaemonPropa = struct
       let dir = if watched < next then 1 else -1 in
       let clwatched, watched = find_watch dir watched next in
       let clnext   , next    = find_watch (-dir) next watched in
-      let events = [Demon.Create.EventDom(clwatched,dom,
+      let events = [Demon.Create.EventValue(clwatched,dom,
                                           Lit(clsem,watched,next))] in
       let events =
         if first then
-          Demon.Create.EventDom(clnext,dom,
+          Demon.Create.EventValue(clnext,dom,
                                        Lit(clsem,next,watched))::events
         else events in
       Demon.Fast.attach d key events;
@@ -336,10 +353,10 @@ module DaemonPropa = struct
     let v = ThE.sem clsem in
     let own = ThE.cl clsem in
     let pexp exp = Delayed.mk_pexp d expprop exp in
-    begin match Delayed.get_dom d dom own with
+    begin match Delayed.get_value d dom own with
     | None -> assert (first);
       Demon.Fast.attach d key
-        [Demon.Create.EventDom(own, dom, All clsem)];
+        [Demon.Create.EventValue(own, dom, All clsem)];
       true
     (** \/ c1 c2 = false ==> c1 = false /\ c2 = false *)
     | Some b when not (mulbool v.topnot b) ->
@@ -358,11 +375,11 @@ module DaemonPropa = struct
       wakeup_lit ~first:true d clsem 0 last
 
   let wakeup d = function
-    | Events.Fired.EventDom(_,dom',Lit(clsem,watched,next)) ->
-      assert( Dom.equal dom dom' );
+    | Events.Fired.EventValue(_,dom',Lit(clsem,watched,next)) ->
+      assert( Value.equal dom dom' );
       ignore (wakeup_lit ~first:false d clsem watched next)
-    | Events.Fired.EventDom(_ownr,dom',All clsem) ->
-      assert( Dom.equal dom dom' );
+    | Events.Fired.EventValue(_ownr,dom',All clsem) ->
+      assert( Value.equal dom dom' );
       (** use this own because the other is the representant *)
       ignore (wakeup_own ~first:false d clsem)
     | _ -> raise UnwaitedEvent
@@ -410,9 +427,6 @@ let th_register' with_other_theories env =
     DaemonInit.key [Demon.Create.EventRegSem(sem,())];
   Delayed.register env cl_true;
   Delayed.register env cl_false;
-  let pexp = Explanation.pexpfact in
-  Delayed.set_dom env pexp dom cl_true true;
-  Delayed.set_dom env pexp dom cl_false false;
   ()
 
 let th_register_alone = th_register' false
