@@ -25,6 +25,7 @@ depends: [
   "cmdliner"
   "gen"
   "jbuilder" {build}
+  "zarith"
 ]
 available: [
   ocaml-version >= "4.03.0"
