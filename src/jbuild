@@ -8,6 +8,7 @@
                witan.theories.LRA
                witan.theories.ite
                witan.theories.arrays
+               witan.theories.bitvectors
    ))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 -color always -open "Witan_open.Open"))
    (ocamlopt_flags (:standard -O3 -color always

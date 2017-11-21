@@ -1,20 +1,20 @@
 open Format
 open Syntax
-    
-type Sorts.t += Rat
+
+type Sorts.t += BV of int
 
 exception Unknown
 
 let equal _ s1 s2 =
   match s1, s2 with
-  | Rat, Rat -> true
+  | BV i, BV j -> i = j
   | _ -> raise Unknown
 
 let compare _ s1 s2 =
   match s1, s2 with
-  | Rat, Rat -> 0
+  | BV i, BV j -> compare i j
   | _ -> raise Unknown
 
 let pp _ fmt = function
-  | Rat  -> fprintf fmt "{\\mathbb Q}"
+  | BV i -> fprintf fmt "\"BV_{%i}\"" i
   | _ -> raise Unknown

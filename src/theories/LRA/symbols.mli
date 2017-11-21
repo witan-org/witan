@@ -1,4 +1,4 @@
-open Witan_core
+open Syntax
 
 type Symbols.t +=
   | Ge | Le | Gt | Lt

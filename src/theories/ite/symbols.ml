@@ -1,6 +1,7 @@
 open Format
+open Syntax
 
-type Witan_core.Symbols.t += ITE of Witan_core.Sorts.t
+type Symbols.t += ITE of Sorts.t
 
 exception Unknown
 
@@ -13,7 +14,7 @@ let compare compare_sorts s1 s2 = match s1,s2 with
   | _ -> raise Unknown
 
 let arity = function
-  | ITE so -> so, [Witan_core.Sorts.Prop; so; so]
+  | ITE so -> so, [Syntax.Sorts.Prop; so; so]
   | _ -> raise Unknown
 
 let pp_latex fmt = function

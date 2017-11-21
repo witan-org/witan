@@ -1,10 +1,10 @@
 (jbuild_version 1)
 
 (library
-  ((name witan_theories_arrays)
-   (public_name witan.theories.arrays)
-   (synopsis "solver for arrays")
-   (libraries (containers witan_open witan_core))
+  ((name syntax)
+   (public_name witan.syntax)
+   (synopsis "initial syntax for sorts and symbols")
+   (libraries (containers witan_open))
    (preprocess (pps (ppx_deriving.std)))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 -color always -open "Witan_open.Open"))
    (ocamlopt_flags (:standard -O3 -bin-annot

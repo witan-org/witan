@@ -1,5 +1,5 @@
 open Format
-open Witan_core
+open Syntax
 
 type Sorts.t += Array of {indices:Sorts.t; values:Sorts.t}
 

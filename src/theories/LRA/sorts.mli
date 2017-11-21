@@ -2,7 +2,7 @@
 (* This is the collection of known sorts *)
 (*****************************************)
 
-open Witan_core
+open Syntax
 
 type Sorts.t += Rat
 

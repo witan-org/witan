@@ -1,6 +1,6 @@
 open Format
-
-type Witan_core.Symbols.t +=
+    
+type Syntax.Symbols.t +=
   | CstRat of Q.t
   | Ge | Le | Gt | Lt
   | Plus | Minus | Times | Divide | Op
@@ -32,7 +32,7 @@ let compare _ s1 s2 =
 
 let arity = function
   | CstRat _                      -> Sorts.Rat, []
-  | Ge | Le | Gt | Lt             -> Witan_core.Sorts.Prop, [Sorts.Rat; Sorts.Rat]
+  | Ge | Le | Gt | Lt             -> Syntax.Sorts.Prop, [Sorts.Rat; Sorts.Rat]
   | Plus | Minus | Times | Divide -> Sorts.Rat, [Sorts.Rat; Sorts.Rat]
   | Op                            -> Sorts.Rat, [Sorts.Rat]
   | _ -> raise Unknown

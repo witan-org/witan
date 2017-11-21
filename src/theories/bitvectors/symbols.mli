@@ -1,6 +1,9 @@
 open Syntax
 
-type Symbols.t += ITE of Sorts.t
+type Symbols.t +=
+  | Extract of { hi:int; lo:int; length:int }
+  | Conc of int*int
+  | CstBV of String.t
 
 exception Unknown
 
