@@ -32,8 +32,8 @@ exception Type_mismatch of t * t
 (* ************************************************************************ *)
 
 (** Wrapper around the id module to be given to functor such as Map/Set
-    which expect a non-polymorphic type *)
-module TId = struct
+    which expect a non-polymorphic type. *)
+module Tmp = struct
   type t = id
   let hash = Id.hash
   let equal = Id.equal
@@ -96,7 +96,7 @@ let equal t t' = compare t t' = 0
 (* Bound variables *)
 (* ************************************************************************ *)
 
-module S = Set.Make(TId)
+module S = Set.Make(Tmp)
 
 let rec free_vars acc t =
   match t.term with
@@ -150,7 +150,7 @@ let rec bind b v body =
 (* Typing and application *)
 (* ************************************************************************ *)
 
-module Subst = Map.Make(TId)
+module Subst = Map.Make(Tmp)
 
 let extract_fun_ty t =
   match t.ty with
@@ -411,4 +411,9 @@ let false_term = const false_id
 let equal_term = const equal_id
 let imply_term = const imply_id
 let equiv_term = const equiv_id
+
+(* Module alias *)
+(* ************************************************************************ *)
+
+module Id = Tmp
 

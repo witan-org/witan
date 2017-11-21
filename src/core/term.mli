@@ -51,6 +51,16 @@ exception Type_mismatch of t * t
 
 (** {2 Term ids} *)
 
+module Id : sig
+  type t = id
+  val hash : t -> int
+  val equal : t -> t -> bool
+  val compare : t -> t -> int
+end
+(** Adequate module defining term dientifiers for functor instanciation such
+    as Set/Map/etc... *)
+
+
 (** {2 Term inspection} *)
 
 val hash : t -> int
