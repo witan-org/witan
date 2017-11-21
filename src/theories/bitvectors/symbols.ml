@@ -37,7 +37,7 @@ let arity = function
   | CstBV s               -> Sorts.BV(String.length s), []
   | _ -> raise Unknown
 
-let pp_latex fmt = function
+let pp_latex _pp_sorts fmt = function
   | Extract{hi;lo;_} when hi = lo -> fprintf fmt "\\mbox{\\small extract}_{%i}" hi
   | Extract{hi;lo;_} -> fprintf fmt "\\mbox{\\small extract}_{%i:%i}" hi lo
   | Conc(_,_)   -> fprintf fmt "\\circl"
@@ -45,7 +45,7 @@ let pp_latex fmt = function
   | _ -> raise Unknown
 
 
-let pp_utf8 fmt = function
+let pp_utf8 _pp_sorts fmt = function
   | Extract{hi;lo;_} when hi = lo -> fprintf fmt "ex[%i]" hi
   | Extract{hi;lo;_} -> fprintf fmt "ex[%i:%i]" hi lo
   | Conc(_,_)   -> fprintf fmt "⚬"

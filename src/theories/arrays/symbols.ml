@@ -38,13 +38,13 @@ let arity = function
   | Diff  {indices;values} -> indices, [Sorts.Array{indices;values}; Sorts.Array{indices;values};]
   | _ -> raise Unknown
 
-let pp_latex fmt = function
+let pp_latex _pp_sorts fmt = function
   | Select _ -> fprintf fmt "\\mbox{\\small select}"
   | Store _  -> fprintf fmt "\\mbox{\\small store}"
   | Diff _   -> fprintf fmt "\\mbox{\\small diff}"
   | _ -> raise Unknown
 
-let pp_utf8 fmt = function
+let pp_utf8 _pp_sorts fmt = function
   | Select _ -> fprintf fmt "select"
   | Store _  -> fprintf fmt "store"
   | Diff _   -> fprintf fmt "diff"

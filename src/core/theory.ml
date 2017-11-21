@@ -14,7 +14,7 @@ module type S = sig
     val equal   : (Sorts.t -> Sorts.t -> bool) -> Symbols.t -> Symbols.t -> bool
     val compare : (Sorts.t -> Sorts.t -> int) -> Symbols.t -> Symbols.t -> int
     val arity   : Symbols.t -> Symbols.arity
-    val pp : Format.formatter -> Symbols.t -> unit
+    val pp : (Format.formatter -> Sorts.t -> unit) -> Format.formatter -> Symbols.t -> unit
   end
 
   module SemanticTerms : sig

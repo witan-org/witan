@@ -17,11 +17,11 @@ let arity = function
   | ITE so -> so, [Syntax.Sorts.Prop; so; so]
   | _ -> raise Unknown
 
-let pp_latex fmt = function
+let pp_latex _pp_sorts fmt = function
   | ITE _ -> fprintf fmt "\\mbox{if}"
   | _     -> raise Unknown
 
-let pp_utf8 fmt = function
+let pp_utf8 _pp_sorts fmt = function
   | ITE _  -> fprintf fmt "if"
   | _      -> raise Unknown
 

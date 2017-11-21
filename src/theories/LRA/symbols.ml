@@ -37,7 +37,7 @@ let arity = function
   | Op                            -> Sorts.Rat, [Sorts.Rat]
   | _ -> raise Unknown
 
-let pp_latex fmt = function
+let pp_latex _pp_sorts fmt = function
   | CstRat i -> fprintf fmt "%a" Q.pp_print i
   | Plus     -> fprintf fmt "+"
   | Minus    -> fprintf fmt "-"
@@ -50,7 +50,7 @@ let pp_latex fmt = function
   | Lt       -> fprintf fmt "<"
   | _ -> raise Unknown
 
-let pp_utf8 fmt = function
+let pp_utf8 _pp_sorts fmt = function
   | CstRat i    -> fprintf fmt "%a" Q.pp_print i
   | Plus        -> fprintf fmt "+"
   | Minus       -> fprintf fmt "-"

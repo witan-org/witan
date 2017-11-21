@@ -4,7 +4,7 @@
 
 type arity = Sorts.t*(Sorts.t list) [@@deriving eq]
 
-type t = .. [@@deriving eq, show, ord]
+type t = ..
 
 type t +=
   (* General *)
@@ -18,4 +18,7 @@ type t +=
 
 exception Unknown
 
+val equal   : (Sorts.t -> Sorts.t -> bool) -> t -> t -> bool
+val compare : (Sorts.t -> Sorts.t -> int) -> t -> t -> int
 val arity : t -> arity
+val pp : (Format.formatter -> Sorts.t -> unit) -> Format.formatter -> t -> unit
