@@ -28,7 +28,7 @@ uninstall:
 doc:
 	jbuilder build @doc
 
-test:
+test: build
 	@echo "run API tests…"
 	@jbuilder runtest
 	@echo "run BIN tests…"

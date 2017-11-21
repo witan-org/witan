@@ -18,4 +18,5 @@ let () =
       Format.printf "%a@." Dolmen.Statement.print s
     ) statements;
   (* TODO: Solve, ^^ *)
+  ()
 

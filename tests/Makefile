@@ -9,6 +9,5 @@ clean:
 	cd parsing && $(MAKE) clean
 
 $(BIN):
-	@cd .. && $(MAKE) build --no-print-directory
 	@ln -f -s ../_build/default/src/bin/witan.exe witan.exe
 
