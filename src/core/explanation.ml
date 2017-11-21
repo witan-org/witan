@@ -36,9 +36,9 @@ let debug = Debug.register_flag (** not info just because duplicate of solver *)
   ~desc:"for@ the@ trail."
   "Explanation.core"
 
-module Exp = Typedef.Make_key(struct end)
-module Con = Typedef.Make_key(struct end)
-module Cho = Typedef.Make_key2(struct end)
+module Exp = Keys.Make_key(struct end)
+module Con = Keys.Make_key(struct end)
+module Cho = Keys.Make_key2(struct end)
 
 type 'a exp = 'a Exp.k
 type 'a con = 'a Con.k
@@ -55,7 +55,7 @@ module Age = struct
 end
 type age = Age.t (* position in the trail *)
 
-module Tag = Typedef.Make_key(struct end)
+module Tag = Keys.Make_key(struct end)
 type 'a tag = 'a Tag.k
 
 module Tags : sig

@@ -23,6 +23,8 @@
 open Explanation
 open Typedef
 
+
+
 exception NotNormalized
 
 type exp_same_sem =
@@ -42,9 +44,9 @@ module Events : sig
       (** a new semantical term 'a point to this class (not complete) *)
     | EventSem    : Cl.t * 'a sem  * 'a * 'b -> 'b event
       (** we want to register a class *)
-    | EventReg  : Cl.t *                'b -> 'b event
+    | EventReg  : Cl.t *                  'b -> 'b event
       (** we want to register this class *)
-    | EventRegCl: Cl.t *                'b -> 'b event
+    | EventRegCl: Cl.t *                  'b -> 'b event
       (** This class is not the representant of its eq-class anymore *)
     | EventChange : Cl.t *                'b -> 'b event
     (** a new semantical term 'a appear *)

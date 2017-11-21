@@ -23,7 +23,7 @@
 open Typedef
 
 
-module Tag: Key
+module Tag: Keys.Key
 type 'a tag = 'a Tag.k
 
 module Tags : sig
@@ -50,9 +50,9 @@ type age = Age.t
 
 
 
-module Exp: Key
-module Con: Key
-module Cho: Key2
+module Exp: Keys.Key
+module Con: Keys.Key
+module Cho: Keys.Key2
 
 type 'a exp = 'a Exp.k
 type 'a con = 'a Con.k

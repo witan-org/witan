@@ -20,25 +20,33 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+(** Module for shuffling arbitrary choices. *)
+
+(** {1 Initialization } *)
+
 val set_shuffle: int array option -> unit
-(** if None is given shuffling is disable (default) *)
+(** if None is given shuffling is disable (default). The functions are
+    the identity *)
 
 val is_shuffle: unit -> bool
 
+(** {1 Shuffling on common types } *)
+
 val shuffle2: ('a * 'a) -> ('a * 'a)
-(* uniform *)
+(** [shuffle p] invert or keep identical the elements of the pair.
+    Uniform *)
 
 val shuffle3: ('a * 'a * 'a) -> ('a * 'a * 'a)
-(* uniform *)
+(** uniform *)
 
 val shufflel: 'a list -> 'a list
-(* not uniform *)
+(** not uniform *)
 
 val seq2: ('a -> 'b) -> ('a * 'a) -> ('b * 'b)
-(* uniform *)
+(** uniform *)
 
 val seq3: ('a -> 'b) -> ('a * 'a * 'a) -> ('b * 'b * 'b)
-(* uniform *)
+(** uniform *)
 
 val seql': ('a -> unit) -> 'a list -> unit
 val seql : (unit -> unit) list -> unit

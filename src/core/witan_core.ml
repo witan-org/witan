@@ -28,6 +28,8 @@ module Ty = struct
   include Typedef.Ty
 end
 
+module Keys = Keys
+
 module Cl = struct
   include Typedef.Cl
 end

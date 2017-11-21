@@ -68,148 +68,9 @@ module Ty = struct
 
 end
 
-exception BadCoercion
-
-type (_,_) eq = Eq : ('a,'a) eq
-
-module type Key = sig
-
-  module K: Datatype
-  type 'a k = private K.t
-  val pp: 'a k Pp.pp
-  val compare: 'a k -> 'b k -> int
-  val equal: 'a k -> 'b k -> bool
-  val hash : 'a k -> int
-  val tag: 'a k -> int
-
-  type iter = {iter : 'a. 'a k -> unit}
-  val iter : iter -> unit
-  val hint_size : unit -> int
-
-  module Eq: sig
-    val eq_type : 'a k -> 'b k -> ('a,'b) eq option
-    (** If the two arguments are physically identical then an equality witness
-        between the types is returned *)
-
-    val coerce_type : 'a k -> 'b k -> ('a,'b) eq
-    (** If the two arguments are physically identical then an equality witness
-        between the types is returned otherwise
-        the exception BadCoercion is raised  *)
-
-    val coerce : 'a k -> 'b k -> 'a -> 'b
-    (** If the two arguments are physically identical then covnert the
-        argument otherwise taise BadCoercion *)
-
-  end
-  val create_key: string -> 'a k
-
-  module MkVector(D:sig type ('a,'b) t end)
-    : Vector_hetero.S1 with
-                         type 'a key = 'a k and type ('a,'b) data = ('a,'b) D.t
-
-  module MkMap(D:sig type ('a,'b) t end)
-    : Intmap_hetero.S1 with
-                         type 'a key = 'a k and type ('a,'b) data = ('a,'b) D.t
-
-  module Vector : Vector_hetero.R1 with type 'a key = 'a k
-  module VectorH : Vector_hetero.T1 with type 'a key = 'a k
-  module M : Intmap_hetero.R1 with type 'a key = 'a k
-end
-
-module Make_key(X:sig end): Key = struct
-  module K = Strings.Fresh(struct end)
-
-  type 'a k = K.t (* >= 0 *)
-  let pp fmt x = K.pp fmt x
-  let compare x y   = K.compare x y
-  let equal x y   = K.equal x y
-  let hash  x     = K.hash x
-  let tag (x:K.t) = (x:>int)
-
-  type iter = {iter : 'a. 'a k -> unit}
-  let iter f = K.iter f.iter
-  let hint_size = K.hint_size
-
-  let create_key s = K.create s
-
-  (** the 'a k can be used as equality witness because K gives fresh values *)
-  module Eq = struct
-    let eq_type :
-      type a b. a k -> b k -> (a,b) eq option =
-      fun a b ->
-        if equal a b
-        then Some ((Obj.magic (Eq : (a,a) eq)) : (a,b) eq)
-        else None
-
-    let coerce_type :
-      type a b. a k -> b k -> (a,b) eq =
-      fun a b ->
-        if equal a b
-        then ((Obj.magic (Eq : (a,a) eq)) : (a,b) eq)
-        else raise BadCoercion
-
-    let coerce (type a) (type b) (a:a k) (b:b k) (x:a) : b =
-      match coerce_type a b with
-      | (Eq:(a,b) eq) -> x
-  end
-  module MkVector(D:sig type ('a,'b) t end) =
-    Vector_hetero.Make1(struct type 'a t = 'a k end)(D)
-  module MkMap(D:sig type ('a,'b) t end) =
-    Intmap_hetero.Make1(struct type 'a t = 'a k end)(D)
-  module Vector =
-    Vector_hetero.RMake1(struct type 'a t = 'a k end)
-  module VectorH =
-    Vector_hetero.TMake1(struct type 'a t = 'a k end)
-  module M =
-    Intmap_hetero.RMake1(struct type 'a t = 'a k end)
-
-end
-
-module Make_key2(X:sig end) = struct
-  module K = Strings.Fresh(struct end)
-
-  type ('k,'d) k = K.t (* >= 0 *)
-  let pp fmt x = K.pp fmt x
-  let equal = K.equal
-  let hash  x     = K.hash x
-
-  type iter = {iter : 'k 'd. ('k,'d) k -> unit}
-  let iter f = K.iter f.iter
-
-  let create_key s = K.create s
-
-  (** the ('k,'d) k can be used as equality witness because K gives
-      fresh values *)
-  module Eq = struct
-
-    let eq_type :
-      type a1 b1 a2 b2. (a1,b1) k -> (a2,b2) k
-      -> ((a1,a2) eq * (b1,b2) eq) option =
-      fun a b ->
-        if equal a b
-        then let eq1 = (Obj.magic (Eq : (a1,a1) eq) : (a1,a2) eq) in
-          let eq2 = (Obj.magic (Eq : (b1,b1) eq) : (b1,b2) eq) in
-          Some (eq1,eq2)
-        else None
-
-    let coerce_type :
-      type a1 b1 a2 b2. (a1,b1) k -> (a2,b2) k
-      -> ((a1,a2) eq * (b1,b2) eq) =
-      fun a b ->
-        if equal a b
-        then let eq1 = (Obj.magic (Eq : (a1,a1) eq) : (a1,a2) eq) in
-          let eq2 = (Obj.magic (Eq : (b1,b1) eq) : (b1,b2) eq) in
-          (eq1,eq2)
-        else raise BadCoercion
-
-  end
-  module MkVector(D:sig type ('k,'d,'b) t end) =
-    Vector_hetero.Make2(struct type ('k,'d) t = ('k,'d) k end)(D)
-end
-
-module Dom = Make_key(struct end)
-module Sem = Make_key(struct end)
-module Value = Make_key(struct end)
+module Dom = Keys.Make_key(struct end)
+module Sem = Keys.Make_key(struct end)
+module Value = Keys.Make_key(struct end)
 
 type 'a dom = 'a Dom.k
 
@@ -263,7 +124,7 @@ let print_value (type a) (k : a value) fmt s =
 
 (** Dem *)
 
-module Dem = Make_key2(struct end)
+module Dem = Keys.Make_key2(struct end)
 
 type ('k,'d) dem = ('k,'d) Dem.k
 
@@ -425,14 +286,14 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
         | Sem(_,tya,sema,va), Sem(_,tyb,semb,vb) ->
           match Sem.Eq.coerce_type sema D.key,
                 Sem.Eq.coerce_type semb D.key with
-          | Eq, Eq  ->
+          | Keys.Eq, Keys.Eq  ->
              Ty.equal tya tyb && D.equal va vb
 
       let hash: t -> int = fun a ->
         match a with
         | Sem(_,tya,sema,va) ->
           match Sem.Eq.coerce_type sema D.key with
-          | Eq ->
+          | Keys.Eq ->
             Hashcons.combine (Ty.hash tya) (D.hash va)
 
       let set_tag: int -> t -> t = fun tag x ->
@@ -477,7 +338,7 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
   let sem : t -> D.t = function
     | Cl.Sem(_,_,sem,v) ->
       match Sem.Eq.coerce_type sem D.key with
-      | Eq -> v
+      | Keys.Eq -> v
 
   let ty = ClSem.ty
 
@@ -556,14 +417,14 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
         | Value(_,tya,valuea,va), Value(_,tyb,valueb,vb) ->
           match Value.Eq.coerce_type valuea D.key,
                 Value.Eq.coerce_type valueb D.key with
-          | Eq, Eq  ->
+          | Keys.Eq, Keys.Eq  ->
              Ty.equal tya tyb && D.equal va vb
 
       let hash: t -> int = fun a ->
         match a with
         | Value(_,tya,valuea,va) ->
           match Value.Eq.coerce_type valuea D.key with
-          | Eq ->
+          | Keys.Eq ->
             Hashcons.combine (Ty.hash tya) (D.hash va)
 
       let set_tag: int -> t -> t = fun tag x ->
@@ -608,7 +469,7 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
   let value : t -> D.t = function
     | Cl.Value(_,_,value,v) ->
       match Value.Eq.coerce_type value D.key with
-      | Eq -> v
+      | Keys.Eq -> v
 
   let ty = ClValue.ty
 
@@ -632,39 +493,8 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
 end
 
 
-module Env = Make_key(struct end)
+module Env = Keys.Make_key(struct end)
 type 'a env = 'a Env.k
-
-module type Key2 = sig
-  module K: Datatype
-  type ('k,'d) k = private K.t
-  (** kind of daemon for semantic value of type 'a *)
-  val pp: ('k,'d) k Pp.pp
-  val equal: ('k1,'d1) k -> ('k2,'d2) k -> bool
-  val hash : ('k,'d) k -> int
-
-  type iter = {iter : 'k 'd. ('k,'d) k -> unit}
-  val iter : iter -> unit
-
-  val create_key: string -> ('k,'d) k
-
-  module Eq: sig
-    val eq_type : ('a1,'b1) k -> ('a2,'b2) k
-      -> (('a1,'a2) eq * ('b1,'b2) eq) option
-    (** If the two arguments are physically identical then an equality witness
-        between the types is returned *)
-
-    val coerce_type : ('a1,'b1) k -> ('a2,'b2) k
-      -> ('a1,'a2) eq * ('b1,'b2) eq
-      (** If the two arguments are physically identical then an equality witness
-          between the types is returned otherwise
-          the exception BadCoercion is raised  *)
-  end
-  module MkVector(D:sig type ('k,'d,'b) t end)
-    : Vector_hetero.S2 with type ('k,'d) key = ('k,'d) k
-                       and type ('k,'d,'b) data = ('k,'d,'b) D.t
-end
-
 
 module Print = struct (** Cutting the knot for pp *)
   (* type psem = { mutable psem : 'a. ('a sem -> 'a Pp.pp)} *)

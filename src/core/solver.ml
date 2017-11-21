@@ -787,7 +787,7 @@ module Delayed = struct
       ~map:(function
           | Events.Wait.Event(dem',event) ->
             match Dem.Eq.coerce_type dem dem' with
-            | Typedef.Eq, Typedef.Eq -> (event:k)
+            | Keys.Eq, Keys.Eq -> (event:k)
         )
        (Cl.M.find_def [] cl d.env.event_reg)
 
@@ -801,7 +801,7 @@ module Delayed = struct
       ~map:(function
           | Events.Wait.Event(dem',event) ->
             match Dem.Eq.coerce_type dem dem' with
-            | Typedef.Eq, Typedef.Eq -> (event:k)
+            | Keys.Eq, Keys.Eq -> (event:k)
         )
        (Cl.M.find_def Bag.empty cl d.env.event)
 
