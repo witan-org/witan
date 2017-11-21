@@ -11,3 +11,5 @@ _build/
 # test result files
 *.res
 
+# old versions of files
+*~
