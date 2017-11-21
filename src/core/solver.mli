@@ -26,7 +26,8 @@ open Typedef
 exception NotNormalized
 
 type exp_same_sem =
-| ExpSameSem : pexp * Cl.t * ClSem.t -> exp_same_sem
+| ExpSameSem   : pexp * Cl.t * ClSem.t -> exp_same_sem
+| ExpSameValue : pexp * Cl.t * ClValue.t -> exp_same_sem
 
 val exp_same_sem : exp_same_sem Explanation.exp
 
@@ -36,7 +37,9 @@ module Events : sig
     type 'b event =
       (** the domain dom of the class change *)
     | EventDom    : Cl.t * 'a dom  *      'b -> 'b event
-      (** a new semantical value 'a point to this class (not complete) *)
+      (** the value of the class has been set *)
+    | EventValue    : Cl.t * 'a value  *  'b -> 'b event
+      (** a new semantical term 'a point to this class (not complete) *)
     | EventSem    : Cl.t * 'a sem  * 'a * 'b -> 'b event
       (** we want to register a class *)
     | EventReg  : Cl.t *                'b -> 'b event
@@ -44,8 +47,10 @@ module Events : sig
     | EventRegCl: Cl.t *                'b -> 'b event
       (** This class is not the representant of its eq-class anymore *)
     | EventChange : Cl.t *                'b -> 'b event
-    (** a new semantical value 'a appear *)
+    (** a new semantical term 'a appear *)
     | EventRegSem : ClSem.t * 'b -> 'b event
+    (** a new value 'a appear *)
+    | EventRegValue : ClValue.t * 'b -> 'b event
 
     val pp: 'b event Pp.pp
     val get_data: 'b event -> 'b
@@ -102,6 +107,9 @@ module Delayed : sig
   val set_sem  : t -> Explanation.pexp -> Cl.t -> ClSem.t -> unit
   (** attach a sem to an equivalence class *)
 
+  val set_value: t -> Explanation.pexp -> Cl.t -> ClValue.t -> unit
+  (** attach value to an equivalence class *)
+
   val set_dom_premerge  : t -> 'a dom -> Cl.t -> 'a -> unit
     (** [set_dom_premerge d cl] must be used only during the merge of two class
         [cl1] and [cl2], with one of them being [cl].
@@ -117,6 +125,8 @@ module Delayed : sig
   (** {3 Attach Event} *)
   val attach_dom: t -> Cl.t -> 'a dom -> ('event,'r) dem -> 'event -> unit
     (** wakeup when the dom change *)
+  val attach_value: t -> Cl.t -> 'a value -> ('event,'r) dem -> 'event -> unit
+    (** wakeup when a value is attached to this equivalence class *)
   val attach_reg_cl: t -> Cl.t -> ('event,'r) dem -> 'event -> unit
     (** wakeup when this cl is registered *)
   val attach_reg_sem: t -> 'a sem -> ('event,'r) dem -> 'event -> unit
@@ -232,6 +242,8 @@ val make_decisions : Delayed.t -> attached_daemons -> unit
 
 val get_dom   : t -> 'a dom -> Cl.t -> 'a option
     (** dom of the representative class *)
+val get_value : t -> 'a value -> Cl.t -> 'a option
+    (** value of the representative class *)
 
 val find      : t -> Cl.t -> Cl.t
 val is_equal  : t -> Cl.t -> Cl.t -> bool

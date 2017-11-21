@@ -440,6 +440,9 @@ let add_pexp_dom_premerge t dom ~clto ~clfrom ~clfrom0 =
       (t.age,clfrom0,Cl.M.find clfrom cm) cm in
   Dom.Vector.set t.domhist dom cm
 
+let add_pexp_value _t _pexp _dom ~cl:_ ~cl0:_ =
+  assert false (** TODO nearly all this module will change*)
+
 (*
   let age = Cl.M.find_def Age.bef cl (Dom.Vector.get t.dom dom) in
   if age <= t.last_dec

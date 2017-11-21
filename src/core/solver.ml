@@ -35,12 +35,23 @@ let debug_few = Debug.register_info_flag
 
 let stats_set_dom =
   Debug.register_stats_int ~name:"Solver.set_dom/merge" ~init:0
+let stats_set_value =
+  Debug.register_stats_int ~name:"Solver.set_value/merge" ~init:0
 
 type exp_same_sem =
-| ExpSameSem : pexp * Cl.t * ClSem.t -> exp_same_sem
+| ExpSameSem   : pexp * Cl.t * ClSem.t -> exp_same_sem
+| ExpSameValue : pexp * Cl.t * ClValue.t -> exp_same_sem
 
 let exp_same_sem : exp_same_sem Explanation.exp =
-  Explanation.Exp.create_key "Solver.same_sem_exp"
+  Explanation.Exp.create_key "Solver.exp_same_sem"
+
+(** TODO choose an appropriate data *)
+let exp_init_value : unit Explanation.exp =
+  Explanation.Exp.create_key "Solver.exp_init_value"
+
+(** TODO choose an appropriate data *)
+let exp_diff_value : pexp Explanation.exp =
+  Explanation.Exp.create_key "Solver.exp_diff_value"
 
 module VEnv = Env.MkVector(struct type ('a,'b) t = 'a Pp.pp end)
 let defined_env = VEnv.create 8
@@ -76,7 +87,9 @@ module Events = struct
     type 'b event =
       (** the domain dom of the class change *)
     | EventDom    : Cl.t * 'a dom  *      'b -> 'b event
-      (** a new semantical value 'a point to this class (not complete) *)
+      (** the value of the class has been set *)
+    | EventValue    : Cl.t * 'a value  *  'b -> 'b event
+      (** a new semantical term 'a point to this class (not complete) *)
     | EventSem    : Cl.t * 'a sem  * 'a * 'b -> 'b event
       (** we want to register a class *)
     | EventReg    : Cl.t *                'b -> 'b event
@@ -84,13 +97,17 @@ module Events = struct
     | EventRegCl  : Cl.t *                'b -> 'b event
       (** This class is not the representant of its eq-class anymore *)
     | EventChange : Cl.t *                'b -> 'b event
-    (** a new semantical value 'a appear *)
+    (** a new semantical term 'a appear *)
     | EventRegSem : ClSem.t * 'b -> 'b event
+    (** a new value 'a appear *)
+    | EventRegValue : ClValue.t * 'b -> 'b event
 
     type 'a translate = { translate : 'd. 'a -> 'd -> 'd event}
 
     let translate_dom =
       {translate = fun (cl,dom) data -> EventDom(cl,dom,data)}
+    let translate_value =
+      {translate = fun (cl,value) data -> EventValue(cl,value,data)}
     (* let translate_sem = *)
     (*   {translate = fun (cl,sem,s) data -> EventSem(cl,sem,s,data)} *)
     let translate_reg =
@@ -101,10 +118,14 @@ module Events = struct
       {translate = fun cl data -> EventChange(cl,data)}
     let translate_regsem =
       {translate = fun clsem data -> EventRegSem(clsem,data)}
+    let translate_regvalue =
+      {translate = fun clval data -> EventRegValue(clval,data)}
 
     let pp fmt = function
       | EventDom      (cl, dom, _) ->
         Format.fprintf fmt "dom:%a of %a" Dom.pp dom Cl.pp cl
+      | EventValue    (cl, value, _) ->
+        Format.fprintf fmt "value:%a of %a" Value.pp value Cl.pp cl
       | EventSem      (cl, sem, v, _) ->
         Format.fprintf fmt "sem:%a of %a with %a"
           Sem.pp sem Cl.pp cl (print_sem sem) v
@@ -116,18 +137,28 @@ module Events = struct
         Format.fprintf fmt "changecl of %a" Cl.pp cl
       | EventRegSem (clsem, _) ->
         let cl = Only_for_solver.cl_of_clsem clsem in
-        match Only_for_solver.sem_of_cl clsem with
+        begin match Only_for_solver.sem_of_cl clsem with
         | Only_for_solver.Sem(sem,v) ->
           Format.fprintf fmt "registration of sem:%a of %a with %a"
             Sem.pp sem Cl.pp cl (print_sem sem) v
+        end
+      | EventRegValue (clvalue, _) ->
+        let cl = Only_for_solver.cl_of_clvalue clvalue in
+        begin match Only_for_solver.value_of_cl clvalue with
+        | Only_for_solver.Value(value,v) ->
+          Format.fprintf fmt "registration of value:%a of %a with %a"
+            Value.pp value Cl.pp cl (print_value value) v
+        end
 
     let get_data = function
       | EventDom      (_, _ , d)   -> d
+      | EventValue    (_, _ , d)   -> d
       | EventSem      (_, _, _, d) -> d
       | EventReg    (_, d)       -> d
       | EventRegCl  (_, d)       -> d
       | EventChange   (_, d)       -> d
       | EventRegSem (_, d) -> d
+      | EventRegValue (_,d) -> d
 
 
     type 'b t = 'b event list
@@ -186,7 +217,20 @@ module VDomTable = Dom.MkVector
   (struct type ('a,'delayed) t =
             (module DomTable' with type D.t = 'a and type delayed = 'delayed)
    end)
+
 module VSemTable = Sem.Vector
+
+module type ValueTable = sig
+  module D : Typedef.Value
+  val table : D.t Cl.M.t
+  val events : Events.Wait.t Bag.t Cl.M.t
+  val reg_events : Events.Wait.t list
+end
+
+module VValueTable = Value.MkVector
+  (struct type ('a,'unit) t =
+            (module ValueTable with type D.t = 'a)
+   end)
 
 (** Environnement *)
 
@@ -201,6 +245,7 @@ type t = {
           (** extensible "number of fields" *)
           dom   : delayed_t VDomTable.t;
           sem   : semtable VSemTable.t;
+          value : unit VValueTable.t;
           envs  : unit Env.VectorH.t;
           trail : Explanation.t;
   mutable current_delayed  : delayed_t; (** For assert-check *)
@@ -264,6 +309,7 @@ let new_t () = {
   event_any_reg = [];
   dom = VDomTable.create 5;
   sem = VSemTable.create 5;
+  value = VValueTable.create 5;
   envs = Env.VectorH.create 5;
   trail = Explanation.create ();
   current_delayed = dumb_delayed;
@@ -278,6 +324,7 @@ let new_handler t =
   event_any_reg = t.event_any_reg;
   dom = VDomTable.copy t.dom;
   sem = VSemTable.copy t.sem;
+  value = VValueTable.copy t.value;
   envs = Env.VectorH.copy t.envs;
   trail = Explanation.new_handler t.trail;
   current_delayed = t.current_delayed;
@@ -384,6 +431,26 @@ let get_table_sem : t -> 'a sem -> semtable = fun t k ->
   then begin Sem.Vector.set t.sem k []; [] end
   else Sem.Vector.get t.sem k
 
+let get_table_value : t -> 'a value -> (module ValueTable with type D.t = 'a)
+  = fun (type a) t k ->
+  assert (if value_uninitialized k
+    then raise UnregisteredKey else true);
+  VValueTable.inc_size k t.value;
+  if VValueTable.is_uninitialized t.value k then
+    let value = get_value k in
+    let module ValueTable = struct
+      module D = (val value : Value with type t = a)
+      let table = Cl.M.empty
+      let events = Cl.M.empty
+      let reg_events = []
+    end in
+    (module ValueTable : ValueTable with type D.t = a)
+  else
+    (module (val VValueTable.get t.value k
+        : ValueTable with type D.t = a)
+        : ValueTable with type D.t = a)
+
+
 exception UninitializedEnv of Env.K.t
 
 exception NotNormalized
@@ -423,6 +490,15 @@ let get_direct_dom (type a) t (dom : a dom) cl =
 let get_dom t dom cl =
   let cl = find_def t cl in
   get_direct_dom t dom cl
+
+let get_direct_value (type a) t (value : a value) cl =
+  let module ValueTable =
+    (val (get_table_value t value) : ValueTable with type D.t = a) in
+  Cl.M.find_opt cl ValueTable.table
+
+let get_value t value cl =
+  let cl = find_def t cl in
+  get_direct_value t value cl
 
 (** {2 For debugging and display} *)
 let _print_env fmt t =
@@ -553,26 +629,12 @@ module Delayed = struct
 
   let is_registered t cl = Cl.M.mem cl t.env.repr
 
-  let add_pending_merge (t : t) pexp cl cl' =
-    Debug.dprintf4 debug "[Solver] @[add_pending_merge for %a and %a@]"
-      Cl.pp cl Cl.pp cl';
-    assert (is_registered t cl);
-    assert (is_registered t cl');
-    assert (not (Cl.equal (find t cl) (find t cl')));
-    assert (Ty.equal (Cl.ty cl) (Cl.ty cl'));
-    Queue.add (Merge (pexp,cl,cl')) t.todo_merge
-
   let new_pending_daemon (type k) (type d) t (dem:(k,d) dem) runable =
     let module Dem = (val get_dem dem) in
     let daemonkey = DaemonKey(dem, runable) in
     if Dem.immediate
     then Queue.push (RunDem daemonkey) t.todo_immediate_dem
     else t.sched_daemon daemonkey
-
-
-  let get_dom t dom cl =
-    assert (is_current_env t);
-    get_dom t.env dom cl
 
   let wakeup_event translate t info wevent =
     match wevent with
@@ -589,7 +651,6 @@ module Delayed = struct
       in
       f t dem event
 
-
   let wakeup_events_list translate t events info =
     match events with
     | None | Some [] ->
@@ -604,6 +665,73 @@ module Delayed = struct
     if is_empty then Debug.dprintf0 debug "[Solver] @[No scheduling@]"
     else Bag.iter (wakeup_event translate t info) (Opt.get events)
 
+  let set_value_direct (type a) t pexp (value : a value) cl0 new_v =
+    Debug.incr stats_set_value;
+    let cl = find t cl0 in
+    let module ValueTable = (val (get_table_value t.env value)) in
+    let events = Cl.M.find_opt cl ValueTable.events in
+    let new_table = Cl.M.add cl new_v ValueTable.table in
+    let module ValueTable' = struct
+      include ValueTable
+      let table = new_table
+    end in
+    VValueTable.set t.env.value value (module ValueTable');
+    Explanation.add_pexp_value t.env.trail pexp value ~cl ~cl0;
+    wakeup_events_bag Events.Fired.translate_value t events (cl,value)
+
+  let merge_values t pexp cl0 cl0' =
+    let cl  = find t cl0 in
+    let cl' = find t cl0'  in
+    let iteri (type a) value valuetable =
+      let module ValueTable =
+        (val valuetable : ValueTable with type D.t = a) in
+      let old_s = Cl.M.find_opt cl ValueTable.table in
+      let old_s'  = Cl.M.find_opt cl'  ValueTable.table in
+      Debug.dprintf12 debug_few
+        "[Solver] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
+        Cl.pp cl Cl.pp cl0
+        (Pp.option ValueTable.D.pp) old_s
+        Cl.pp cl' Cl.pp cl0'
+        (Pp.option ValueTable.D.pp) old_s';
+      match old_s, old_s' with
+      | None, None   -> ()
+      | Some v, None ->
+        set_value_direct t pexp value cl0' v
+      | None, Some v' ->
+        set_value_direct t pexp value cl0  v'
+      | Some v, Some v' ->
+        if ValueTable.D.equal v v'
+        then
+          (* already same value. Does that really happen? *)
+          ()
+        else
+          let pexp =
+            mk_pexp t.env.trail exp_diff_value pexp in
+          raise (Contradiction(pexp))
+    in
+    VValueTable.iter_initializedi {VValueTable.iteri} t.env.value
+
+  let add_pending_merge (t : t) pexp cl cl' =
+    Debug.dprintf4 debug "[Solver] @[add_pending_merge for %a and %a@]"
+      Cl.pp cl Cl.pp cl';
+    assert (is_registered t cl);
+    assert (is_registered t cl');
+    assert (not (Cl.equal (find t cl) (find t cl')));
+    assert (Ty.equal (Cl.ty cl) (Cl.ty cl'));
+    (*  Immediately merge values *)
+    merge_values t pexp cl cl';
+    (* Add the actual merge for later *)
+    Queue.add (Merge (pexp,cl,cl')) t.todo_merge
+
+
+  let get_dom t dom cl =
+    assert (is_current_env t);
+    get_dom t.env dom cl
+
+  let get_value t value cl =
+    assert (is_current_env t);
+    get_value t.env value cl
+
 
   let attach_dom (type a) t cl (dom : a dom) dem event =
     let cl = find_def t cl in
@@ -616,6 +744,16 @@ module Delayed = struct
       let events = Cl.M.add_change Bag.elt Bag.add cl event events
     end in
     VDomTable.set t.env.dom dom (module DomTable')
+
+  let attach_value (type a) t cl (value : a value) dem event =
+    let cl = find_def t cl in
+    let event = Events.Wait.Event (dem,event) in
+    let module ValueTable = (val (get_table_value t.env value)) in
+    let module ValueTable' = struct
+      include ValueTable
+      let events = Cl.M.add_change Bag.elt Bag.add cl event events
+    end in
+    VValueTable.set t.env.value value (module ValueTable)
 
   let attach_cl t cl dem event =
     let cl = find_def t cl in
@@ -709,16 +847,25 @@ module Delayed = struct
           (Some [Events.Wait.Event(dem,event)])
           cl;
       | Only_for_solver.Sem clsem ->
-        match Only_for_solver.sem_of_cl clsem with
+        begin match Only_for_solver.sem_of_cl clsem with
         | Only_for_solver.Sem(sem,_) ->
           let reg_events = get_table_sem t.env sem in
           wakeup_events_list Events.Fired.translate_regsem
             t (Some reg_events) (clsem)
+        end
+      | Only_for_solver.Value clvalue ->
+        begin match Only_for_solver.value_of_cl clvalue with
+        | Only_for_solver.Value(value,v) ->
+          let module V = (val get_table_value t.env value) in
+          let reg_events = V.reg_events in
+          wakeup_events_list Events.Fired.translate_regvalue
+            t (Some reg_events) (clvalue);
+          set_value_direct t (assert false (** TODO *)) value cl v
+        end
     end
 
-  let set_sem_pending t pexp cl0 clsem =
+  let set_semvalue_pending t pexp cl0 cl0' =
     let cl = find t cl0 in
-    let cl0' = ClSem.cl clsem in
     assert (Ty.equal (Cl.ty cl) (Cl.ty cl0'));
     begin
       if not (is_registered t cl0') then begin
@@ -729,12 +876,11 @@ module Delayed = struct
            termination.
         *)
         t.env.repr <- Cl.M.add cl0' cl t.env.repr;
-        let pexp = mk_pexp t.env.trail exp_same_sem
-            (ExpSameSem(pexp,cl0,clsem)) in
-        add_pexp_cl t.env.trail pexp ~inv:true
+        let pexp = pexp () in
+        Explanation.add_pexp_cl t.env.trail pexp ~inv:true
           ~other_cl:cl0' ~other_cl0:cl0'
           ~repr_cl:cl ~repr_cl0:cl0;
-        add_merge_dom_no
+        Explanation.add_merge_dom_no
           t.env.trail ~inv:true
           ~other_cl:cl0' ~other_cl0:cl0'
           ~repr_cl:cl ~repr_cl0:cl0;
@@ -749,10 +895,23 @@ module Delayed = struct
         ()
       else
         (** merge cl and cl0' *)
-        let pexp = mk_pexp t.env.trail exp_same_sem
-            (ExpSameSem(pexp,cl0,clsem)) in
+        let pexp = pexp () in
         add_pending_merge t pexp cl0 cl0'
     end
+
+  let set_sem_pending t pexp cl0 clsem =
+    let cl0' = ClSem.cl clsem in
+    let pexp () =
+      mk_pexp t.env.trail exp_same_sem
+        (ExpSameSem(pexp,cl0,clsem)) in
+    set_semvalue_pending t pexp cl0 cl0'
+
+  let set_value_pending t pexp cl0 clvalue =
+    let cl0' = ClValue.cl clvalue in
+    let pexp () =
+      mk_pexp t.env.trail exp_same_sem
+        (ExpSameValue(pexp,cl0,clvalue)) in
+    set_semvalue_pending t pexp cl0 cl0'
 
   let set_dom_pending (type a) t pexp (dom : a dom) cl0 new_v =
     Debug.incr stats_set_dom;
@@ -789,7 +948,7 @@ module Delayed = struct
 (*
   merge:
   1) choose the representative between cl1 and cl2
-  2) "Merge" the semantical value and create new pending merge if the resulting
+  2) "Merge" the semantical term and create new pending merge if the resulting
      sematical value already exists. Add pending event for the modification of
      the representative
   3) Merge the dom and add the pending event
@@ -801,22 +960,22 @@ module Delayed = struct
   let merge_dom_pending (type a) t pexp (dom : a dom) other_cl0 repr_cl0 inv =
     let other_cl = find t other_cl0 in
     let repr_cl  = find t repr_cl0  in
-      let module DomTable = (val (get_table_dom t.env dom)) in
-      let old_other_s = Cl.M.find_opt other_cl DomTable.table in
-      let old_repr_s = Cl.M.find_opt repr_cl  DomTable.table in
-      Debug.dprintf12 debug_few
-        "[Solver] @[merge dom (%a(%a),%a)@ and (%a(%a),%a)@]"
-        Cl.pp other_cl Cl.pp other_cl0
-        (Pp.option DomTable.D.pp) old_other_s
-        Cl.pp repr_cl Cl.pp repr_cl0
-        (Pp.option DomTable.D.pp) old_repr_s;
-        match old_other_s, old_repr_s with
-        | None, None   -> ()
-        | _ ->
-          DomTable.D.merge t pexp
-            (old_other_s,other_cl0)
-            (old_repr_s,repr_cl0)
-            inv
+    let module DomTable = (val (get_table_dom t.env dom)) in
+    let old_other_s = Cl.M.find_opt other_cl DomTable.table in
+    let old_repr_s = Cl.M.find_opt repr_cl  DomTable.table in
+    Debug.dprintf12 debug_few
+      "[Solver] @[merge dom (%a(%a),%a)@ and (%a(%a),%a)@]"
+      Cl.pp other_cl Cl.pp other_cl0
+      (Pp.option DomTable.D.pp) old_other_s
+      Cl.pp repr_cl Cl.pp repr_cl0
+      (Pp.option DomTable.D.pp) old_repr_s;
+    match old_other_s, old_repr_s with
+    | None, None   -> ()
+    | _ ->
+      DomTable.D.merge t pexp
+        (old_other_s,other_cl0)
+        (old_repr_s,repr_cl0)
+        inv
 
 
   let merge_dom ?(dry_run=false) t pexp other_cl0 repr_cl0 inv =
@@ -923,6 +1082,12 @@ module Delayed = struct
     assert (d.env.current_delayed == d);
     assert (is_registered d cl);
     set_sem_pending d pexp cl clsem
+  let set_value  d pexp cl clvalue =
+    Debug.dprintf4 debug "[Solver] @[add_pending_set_value for %a and %a@]"
+      Cl.pp cl ClValue.pp clvalue;
+    assert (d.env.current_delayed == d);
+    assert (is_registered d cl);
+    set_value_pending d pexp cl clvalue
   let set_dom d pexp dom cl v =
     Debug.dprintf4 debug_few
       "[Solver] @[set_dom for %a with %a@]"
@@ -1104,6 +1269,10 @@ let find t cl =
 let get_dom t dom cl =
   assert (t.current_delayed == dumb_delayed);
   get_dom t dom cl
+
+let get_value t value cl =
+  assert (t.current_delayed == dumb_delayed);
+  get_value t value cl
 
 let get_trail t =
   assert (t.current_delayed == dumb_delayed ||

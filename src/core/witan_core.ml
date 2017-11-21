@@ -42,6 +42,16 @@ module Dom = struct
   module Register = Solver.RegisterDom
 end
 
+module Value = struct
+  include Typedef.Value
+  type 'a t = 'a k
+  let print = Typedef.print_value
+
+  module type Value = Typedef.Value
+
+  module Register = Typedef.RegisterValue
+end
+
 module Sem = struct
   include Typedef.Sem
   type 'a t = 'a k

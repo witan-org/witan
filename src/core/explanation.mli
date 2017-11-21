@@ -178,7 +178,8 @@ val add_merge_dom_all:
     pexp apply *)
 val add_pexp_dom:
   t -> pexp -> 'b dom -> cl:Cl.t -> cl0:Cl.t -> unit
-(** The value must be the old value *)
+val add_pexp_value:
+  t -> pexp -> 'b value -> cl:Cl.t -> cl0:Cl.t -> unit
 
 
 val add_pexp_dom_premerge:

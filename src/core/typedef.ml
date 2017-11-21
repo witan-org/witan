@@ -209,15 +209,17 @@ end
 
 module Dom = Make_key(struct end)
 module Sem = Make_key(struct end)
+module Value = Make_key(struct end)
 
 type 'a dom = 'a Dom.k
+
+(** sem *)
 type 'a sem = 'a Sem.k
 
 module type Sem = sig
   include Stdlib.Datatype
   val key: t sem
 end
-
 
 module VSem = Sem.MkVector
   (struct type ('a,'unedeed) t =
@@ -235,6 +237,32 @@ let print_sem (type a) (k : a sem) fmt s =
   let module S = (val sem : Sem with type t = a) in
   S.pp fmt s
 
+(** value *)
+type 'a value = 'a Value.k
+
+module type Value = sig
+  include Stdlib.Datatype
+  val key: t value
+end
+
+module VValue = Value.MkVector
+  (struct type ('a,'unedeed) t =
+            (module Value with type t = 'a)
+   end)
+
+let defined_value : unit VValue.t = VValue.create 8
+let value_uninitialized value = VValue.is_uninitialized defined_value value
+let get_value k =
+  assert (if value_uninitialized k then raise UnregisteredKey else true);
+  VValue.get defined_value k
+
+let print_value (type a) (k : a value) fmt s =
+  let value = get_value k in
+  let module S = (val value : Value with type t = a) in
+  S.pp fmt s
+
+(** Dem *)
+
 module Dem = Make_key2(struct end)
 
 type ('k,'d) dem = ('k,'d) Dem.k
@@ -245,14 +273,17 @@ module Cl = struct
     | Fresh: int * Ty.t -> [>`Fresh] r
     | Fresh_to_reg: int * Ty.t * ('event,'r) dem * 'event -> [>`Fresh] r
     | Sem  : int * Ty.t * 'a sem * 'a -> [>`Sem] r
+    | Value  : int * Ty.t * 'a value * 'a -> [>`Value] r
 
-  type t' = [ `Fresh | `Sem] r
+  type t' = [ `Fresh | `Sem | `Value] r
   type clsem = [`Sem] r
+  type clvalue = [`Value] r
 
   let tag: t' -> int = function
     | Fresh(tag,_) -> tag
     | Fresh_to_reg(tag,_,_,_) -> tag
     | Sem(tag,_,_,_) -> tag
+    | Value(tag,_,_,_) -> tag
 
   let names = Simple_vector.create 100
   let used_names : (* next id to use *) int DStr.H.t = DStr.H.create 100
@@ -294,6 +325,7 @@ module Cl = struct
   let ty = function | Fresh (_,ty)
                     | Fresh_to_reg (_,ty,_,_)
                     | Sem(_,ty,_,_) -> ty
+                    | Value(_,ty,_,_) -> ty
 
   module SemIndex = Sem.MkVector
       (struct type ('a,'unedeed) t = 'a -> Ty.t -> clsem end)
@@ -304,14 +336,32 @@ module Cl = struct
     assert (if sem_uninitialized sem then raise UnregisteredKey else true);
     (SemIndex.get semindex sem) v ty
 
+  module ValueIndex = Value.MkVector
+      (struct type ('a,'unedeed) t = 'a -> Ty.t -> clvalue end)
+
+  let valueindex : unit ValueIndex.t = ValueIndex.create 8
+
+  let clvalue value v ty : clvalue =
+    assert (if value_uninitialized value then raise UnregisteredKey else true);
+    (ValueIndex.get valueindex value) v ty
+
   (** Just used for checking the typability *)
-  let _cl : clsem -> t = function
+  let _of_clsem : clsem -> t = function
     | Sem(tag,ty,sem,v) -> Sem(tag,ty,sem,v)
 
   (** IF the previous function is typable this one is correct:
       I'm not able to defined is without obj.magic
   *)
   let of_clsem : clsem -> t = Obj.magic
+
+  (** Just used for checking the typability *)
+  let _of_clvalue : clvalue -> t = function
+    | Value(tag,ty,value,v) -> Value(tag,ty,value,v)
+
+  (** IF the previous function is typable this one is correct:
+      I'm not able to defined is without obj.magic
+  *)
+  let of_clvalue : clvalue -> t = Obj.magic
 
   let index sem v ty = of_clsem (clsem sem v ty)
 
@@ -450,6 +500,138 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
 
 end
 
+module ClValue = struct
+  include Stdlib.MakeMSH(struct
+      type t = Cl.clvalue
+      let tag: t -> int = function
+        | Cl.Value(tag,_,_,_) -> tag
+      let pp fmt : t -> unit = function
+        | Cl.Value(_,_,value,v) -> print_value value fmt v
+    end)
+
+  let index = Cl.clvalue
+  let cl = Cl.of_clvalue
+  let ty : t -> Ty.t = function
+    | Cl.Value(_,ty,_,_) -> ty
+
+
+end
+
+module type RegisteredValue = sig
+  type s
+  val key: s value
+  (** clvalue *)
+  include Datatype
+
+  val index: s -> Ty.t -> t
+  (** Return a clvalue from a valueantical value *)
+
+  val cl: t -> Cl.t
+  (** Return a class from a clvalue *)
+
+  val ty: t -> Ty.t
+  (** Return the type from a clvalue *)
+
+  val value: t -> s
+  (** Return the value from a clvalue *)
+
+  val clvalue: t -> ClValue.t
+  val of_clvalue: ClValue.t -> t option
+
+  val coerce_clvalue: ClValue.t -> t
+
+end
+
+module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
+
+  module HC = Hashcons.MakeTag(struct
+      open Cl
+      type t = clvalue
+
+      let next_tag = Cl.next_tag
+      let incr_tag = Cl.incr_tag
+
+      let equal: t -> t -> bool = fun a b ->
+        match a, b with
+        | Value(_,tya,valuea,va), Value(_,tyb,valueb,vb) ->
+          match Value.Eq.coerce_type valuea D.key,
+                Value.Eq.coerce_type valueb D.key with
+          | Eq, Eq  ->
+             Ty.equal tya tyb && D.equal va vb
+
+      let hash: t -> int = fun a ->
+        match a with
+        | Value(_,tya,valuea,va) ->
+          match Value.Eq.coerce_type valuea D.key with
+          | Eq ->
+            Hashcons.combine (Ty.hash tya) (D.hash va)
+
+      let set_tag: int -> t -> t = fun tag x ->
+        match x with
+        | Value(_,ty,value,v) -> Value(tag,ty,value,v)
+
+      let tag: t -> int = function
+        | Value(tag,_,_,_) -> tag
+
+      let pp fmt x =
+        Format.pp_print_char fmt '@';
+        Format.pp_print_string fmt (Simple_vector.get names (tag x))
+    end)
+
+  include HC
+
+  type s = D.t
+  let key = D.key
+
+  let tag: t -> int = function
+    | Cl.Value(tag,_,_,_) -> tag
+
+  let index v ty =
+    let cl =
+      HC.hashcons3
+        (fun tag value v ty -> Cl.Value(tag,ty,value,v))
+        D.key v ty in
+    let i = tag cl in
+    Simple_vector.inc_size (i+1) Cl.names;
+    begin
+      if Simple_vector.is_uninitialized Cl.names i then
+        let s = Strings.find_new_name Cl.used_names ""
+        (** TODO use Value.pp or Value.print_debug *) in
+        Debug.dprintf3 debug_create "[Solver] @[index %a into @@%s@]"
+          D.pp v s;
+        Simple_vector.set Cl.names i s
+    end;
+    cl
+
+  let cl = Cl.of_clvalue
+
+  let value : t -> D.t = function
+    | Cl.Value(_,_,value,v) ->
+      match Value.Eq.coerce_type value D.key with
+      | Eq -> v
+
+  let ty = ClValue.ty
+
+  let clvalue: t -> ClValue.t = fun x -> x
+
+  let of_clvalue: ClValue.t -> t option = function
+    | Cl.Value(_,_,value',_) as v when Value.equal value' D.key -> Some v
+    | _ -> None
+
+  let coerce_clvalue: ClValue.t -> t = function
+    | Cl.Value(_,_,value',_) as v -> assert (Value.equal value' D.key); v
+
+  let () =
+    VValue.inc_size D.key defined_value;
+    assert (if not (VValue.is_uninitialized defined_value D.key)
+      then raise AlreadyRegisteredKey else true);
+    let value = (module D: Value with type t = D.t) in
+    VValue.set defined_value D.key value;
+    Cl.ValueIndex.set Cl.valueindex D.key (fun v ty -> index v ty)
+
+end
+
+
 module Env = Make_key(struct end)
 type 'a env = 'a Env.k
 
@@ -513,30 +695,36 @@ module Only_for_solver = struct
     | Sem: 'a sem * 'a  -> sem_of_cl
 
   let clsem: Cl.t -> ClSem.t option = function
-    | Cl.Fresh _ | Cl.Fresh_to_reg _ -> None
+    | Cl.Fresh _ | Cl.Fresh_to_reg _ | Cl.Value _ -> None
     | Cl.Sem _ as x -> Some (Obj.magic x: ClSem.t)
 
   let sem_of_cl: ClSem.t -> sem_of_cl = function
     | Cl.Sem (_,_,sem,v) -> Sem(sem,v)
 
-  (** Just used for checking the typability *)
-  let _cl_of_clsem : ClSem.t -> Cl.t = function
-    | Cl.Sem(tag,ty,sem,v) -> Cl.Sem(tag,ty,sem,v)
+  type value_of_cl =
+    | Value: 'a value * 'a  -> value_of_cl
 
-  (** IF the previous function is typable this one is correct:
-      I'm not able to defined is without obj.magic
-  *)
-  let cl_of_clsem : ClSem.t -> Cl.t = Obj.magic
+  let clvalue: Cl.t -> ClValue.t option = function
+    | Cl.Fresh _ | Cl.Fresh_to_reg _ | Cl.Sem _ -> None
+    | Cl.Value _ as x -> Some (Obj.magic x: ClValue.t)
+
+  let value_of_cl: ClValue.t -> value_of_cl = function
+    | Cl.Value (_,_,value,v) -> Value(value,v)
+
+  let cl_of_clsem : ClSem.t -> Cl.t = ClSem.cl
+  let cl_of_clvalue : ClValue.t -> Cl.t = ClValue.cl
 
   type opened_cl =
     | Fresh: opened_cl
     | Fresh_to_reg: ('event,'r) dem * 'event -> opened_cl
     | Sem  : ClSem.t -> opened_cl
+    | Value  : ClValue.t -> opened_cl
 
   let open_cl = function
     | Cl.Fresh _ -> Fresh
     | Cl.Fresh_to_reg(_,_,dem,event) -> Fresh_to_reg(dem,event)
     | Cl.Sem _ as x -> Sem (Obj.magic x: ClSem.t)
+    | Cl.Value _ as x -> Value (Obj.magic x: ClValue.t)
 end
 
 

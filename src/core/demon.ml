@@ -209,11 +209,13 @@ module Key = struct
         let open Solver.Events.Fired in
         match event with
         | EventDom      (a, b , (k,d))   -> k, EventDom(a, b, d)
+        | EventValue    (a, b , (k,d))   -> k, EventValue(a, b, d)
         | EventSem      (a, b, c, (k,d)) -> k, EventSem(a, b, c, d)
         | EventReg      (a, (k,d))       -> k, EventReg(a, d)
         | EventRegCl    (a, (k,d))       -> k, EventRegCl(a, d)
         | EventChange   (a, (k,d))       -> k, EventChange(a, d)
-        | EventRegSem (a, (k,d))       -> k, EventRegSem(a, d) in
+        | EventRegSem (a, (k,d))         -> k, EventRegSem(a, d)
+        | EventRegValue (a, (k,d))       -> k, EventRegValue(a, d) in
       update_state k event
 
 

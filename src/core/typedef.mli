@@ -139,9 +139,11 @@ module Make_key2(X:sig end): Key2
 
 
 module Sem: Key
+module Value: Key
 module Dom: Key
 
 type 'a dom = 'a Dom.k
+
 type 'a sem = 'a Sem.k
 
 module type Sem = sig
@@ -153,6 +155,19 @@ end
 val get_sem: 'a sem -> (module Sem with type t = 'a)
 val sem_uninitialized: 'a sem -> bool
 val print_sem : 'a sem -> 'a Pp.pp
+
+type 'a value = 'a Value.k
+
+module type Value = sig
+  include Datatype
+
+  val key: t value
+end
+
+val get_value: 'a value -> (module Value with type t = 'a)
+val value_uninitialized: 'a value -> bool
+val print_value : 'a value -> 'a Pp.pp
+
 
 module Env: Key
 type 'a env = 'a Env.k
@@ -173,7 +188,7 @@ module Cl : sig
   val ty: t -> Ty.t
 
   val index: 'a sem -> 'a -> Ty.t -> t
-  (** Return the corresponding cl from a semantical value *)
+  (** Return the corresponding cl from a semantical term *)
 end
 
 module ClSem: sig
@@ -181,7 +196,7 @@ module ClSem: sig
 
 
   val index: 'a sem -> 'a -> Ty.t -> t
-  (** Return the corresponding cl from a semantical value *)
+  (** Return the corresponding cl from a semantical term *)
 
   val cl: t -> Cl.t
 
@@ -197,7 +212,7 @@ module type RegisteredSem = sig
   include Datatype
 
   val index: s -> Ty.t -> t
-  (** Return a clsem from a semantical value *)
+  (** Return a clsem from a semantical term *)
 
   val cl: t -> Cl.t
   (** Return a class from a clsem *)
@@ -217,6 +232,50 @@ end
 
 
 module RegisterSem (D:Sem) : RegisteredSem with type s = D.t
+
+
+module ClValue: sig
+  include Datatype
+
+
+  val index: 'a value -> 'a -> Ty.t -> t
+  (** Return the corresponding cl from a value *)
+
+  val cl: t -> Cl.t
+
+  val ty: t -> Ty.t
+
+end
+
+module type RegisteredValue = sig
+  type s
+  val key: s value
+
+  (** clvalue *)
+  include Datatype
+
+  val index: s -> Ty.t -> t
+  (** Return a clvalue from a valueantical term *)
+
+  val cl: t -> Cl.t
+  (** Return a class from a clvalue *)
+
+  val ty: t -> Ty.t
+  (** Return the type from a clvalue *)
+
+  val value: t -> s
+  (** Return the value from a clvalue *)
+
+  val clvalue: t -> ClValue.t
+  val of_clvalue: ClValue.t -> t option
+
+  val coerce_clvalue: ClValue.t -> t
+
+end
+
+module RegisterValue (D:Value) : RegisteredValue with type s = D.t
+
+
 
 module Print : sig (** Cutting the knot for pp *)
   type pdem_event = { mutable
@@ -252,12 +311,27 @@ module Only_for_solver: sig
     (** give the sem associated with a cl, make sense only for not merged
         class. So only the module solver can use it *)
 
+  type value_of_cl =
+    | Value: 'a value * 'a -> value_of_cl
+
+  val clvalue:
+    Cl.t -> ClValue.t option
+    (** give the value associated with a cl, make sense only for not merged
+        class. So only the module solver can use it *)
+
+  val value_of_cl:
+    ClValue.t -> value_of_cl
+    (** give the value associated with a cl, make sense only for not merged
+        class. So only the module solver can use it *)
+
   val cl_of_clsem: ClSem.t -> Cl.t
+  val cl_of_clvalue: ClValue.t -> Cl.t
 
   type opened_cl =
     | Fresh: opened_cl
     | Fresh_to_reg: ('event,'r) dem * 'event -> opened_cl
     | Sem  : ClSem.t -> opened_cl
+    | Value  : ClValue.t -> opened_cl
 
   val open_cl: Cl.t -> opened_cl
 
