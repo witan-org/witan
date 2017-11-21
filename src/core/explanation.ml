@@ -40,9 +40,9 @@ module Exp = Keys.Make_key(struct end)
 module Con = Keys.Make_key(struct end)
 module Cho = Keys.Make_key2(struct end)
 
-type 'a exp = 'a Exp.k
-type 'a con = 'a Con.k
-type ('a,'b) cho = ('a,'b) Cho.k
+type 'a exp = 'a Exp.t
+type 'a con = 'a Con.t
+type ('a,'b) cho = ('a,'b) Cho.t
 
 module Age = struct
   include DIntOrd
@@ -56,7 +56,7 @@ end
 type age = Age.t (* position in the trail *)
 
 module Tag = Keys.Make_key(struct end)
-type 'a tag = 'a Tag.k
+type 'a tag = 'a Tag.t
 
 module Tags : sig
   type t

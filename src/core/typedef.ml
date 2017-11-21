@@ -72,10 +72,10 @@ module Dom = Keys.Make_key(struct end)
 module Sem = Keys.Make_key(struct end)
 module Value = Keys.Make_key(struct end)
 
-type 'a dom = 'a Dom.k
+type 'a dom = 'a Dom.t
 
 (** sem *)
-type 'a sem = 'a Sem.k
+type 'a sem = 'a Sem.t
 
 module type Sem = sig
   include Stdlib.Datatype
@@ -99,7 +99,7 @@ let print_sem (type a) (k : a sem) fmt s =
   S.pp fmt s
 
 (** value *)
-type 'a value = 'a Value.k
+type 'a value = 'a Value.t
 
 module type Value = sig
   include Stdlib.Datatype
@@ -126,7 +126,7 @@ let print_value (type a) (k : a value) fmt s =
 
 module Dem = Keys.Make_key2(struct end)
 
-type ('k,'d) dem = ('k,'d) Dem.k
+type ('k,'d) dem = ('k,'d) Dem.t
 
 
 module Cl = struct
@@ -494,7 +494,7 @@ end
 
 
 module Env = Keys.Make_key(struct end)
-type 'a env = 'a Env.k
+type 'a env = 'a Env.t
 
 module Print = struct (** Cutting the knot for pp *)
   (* type psem = { mutable psem : 'a. ('a sem -> 'a Pp.pp)} *)

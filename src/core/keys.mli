@@ -20,54 +20,66 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+(** Key generators *)
+
+(** Keys are the main programming tools used for implementing
+    extensible types (sem, value, dom, pexp, ...) *)
+
 open Stdlib
 
+(** {2 Type comparison and coercion } *)
+
 exception BadCoercion
+(** Raised when making a bad coercion *)
+
 type (_,_) eq = Eq : ('a,'a) eq
+(** Proof of type equality *)
+
 
 module type Key = sig
+  (** Key with arity 1 *)
 
   module K: Datatype
-  type 'a k = private K.t
+  type 'a t = private K.t
 
-  val pp: 'a k Pp.pp
-  val compare: 'a k -> 'b k -> int
-  val equal: 'a k -> 'b k -> bool
-  val hash : 'a k -> int
-  val tag: 'a k -> int
+  val pp: 'a t Pp.pp
+  val compare: 'a t -> 'b t -> int
+  val equal: 'a t -> 'b t -> bool
+  val hash : 'a t -> int
+  val tag: 'a t -> int
 
-  type iter = {iter : 'a. 'a k -> unit}
+  type iter = {iter : 'a. 'a t -> unit}
   val iter : iter -> unit
   val hint_size : unit -> int
 
   module Eq: sig
-    val eq_type : 'a k -> 'b k -> ('a,'b) eq option
+    val eq_type : 'a t -> 'b t -> ('a,'b) eq option
     (** If the two arguments are physically identical then an equality witness
         between the types is returned *)
 
-    val coerce_type : 'a k -> 'b k -> ('a,'b) eq
+    val coerce_type : 'a t -> 'b t -> ('a,'b) eq
     (** If the two arguments are physically identical then an equality witness
         between the types is returned otherwise
         the exception BadCoercion is raised  *)
 
-    val coerce : 'a k -> 'b k -> 'a -> 'b
+    val coerce : 'a t -> 'b t -> 'a -> 'b
     (** If the two arguments are physically identical then covnert the
         argument otherwise taise BadCoercion *)
 
   end
-  val create_key: string -> 'a k
+  val create_key: string -> 'a t
 
   module MkVector(D:sig type ('a,'b) t end)
     : Vector_hetero.S1 with
-                         type 'a key = 'a k and type ('a,'b) data = ('a,'b) D.t
+                         type 'a key = 'a t and type ('a,'b) data = ('a,'b) D.t
 
   module MkMap(D:sig type ('a,'b) t end)
     : Intmap_hetero.S1 with
-                         type 'a key = 'a k and type ('a,'b) data = ('a,'b) D.t
+                         type 'a key = 'a t and type ('a,'b) data = ('a,'b) D.t
 
-  module Vector  : Vector_hetero.R1 with type 'a key = 'a k
-  module VectorH : Vector_hetero.T1 with type 'a key = 'a k
-  module M : Intmap_hetero.R1 with type 'a key = 'a k
+  module Vector  : Vector_hetero.R1 with type 'a key = 'a t
+  module VectorH : Vector_hetero.T1 with type 'a key = 'a t
+  module M : Intmap_hetero.R1 with type 'a key = 'a t
 
 end
 
@@ -75,32 +87,34 @@ module Make_key(X:sig end) : Key
 
 
 module type Key2 = sig
-  module K: Datatype
-  type ('k,'d) k = private K.t
-  (** kind of daemon for semantic value of type 'a *)
-  val pp: ('k,'d) k Pp.pp
-  val equal: ('k1,'d1) k -> ('k2,'d2) k -> bool
-  val hash : ('k,'d) k -> int
+  (** Key with arity 2 *)
 
-  type iter = {iter : 'k 'd. ('k,'d) k -> unit}
+  module K: Datatype
+  type ('k,'d) t = private K.t
+  (** kind of daemon for semantic value of type 'a *)
+  val pp: ('k,'d) t Pp.pp
+  val equal: ('k1,'d1) t -> ('k2,'d2) t -> bool
+  val hash : ('k,'d) t -> int
+
+  type iter = {iter : 'k 'd. ('k,'d) t -> unit}
   val iter : iter -> unit
 
-  val create_key: string -> ('k,'d) k
+  val create_key: string -> ('k,'d) t
 
   module Eq: sig
-    val eq_type : ('a1,'b1) k -> ('a2,'b2) k
+    val eq_type : ('a1,'b1) t -> ('a2,'b2) t
       -> (('a1,'a2) eq * ('b1,'b2) eq) option
     (** If the two arguments are physically identical then an equality witness
         between the types is returned *)
 
-    val coerce_type : ('a1,'b1) k -> ('a2,'b2) k
+    val coerce_type : ('a1,'b1) t -> ('a2,'b2) t
       -> ('a1,'a2) eq * ('b1,'b2) eq
       (** If the two arguments are physically identical then an equality witness
           between the types is returned otherwise
           the exception BadCoercion is raised  *)
   end
   module MkVector(D:sig type ('k,'d,'b) t end)
-    : Vector_hetero.S2 with type ('k,'d) key = ('k,'d) k
+    : Vector_hetero.S2 with type ('k,'d) key = ('k,'d) t
                        and type ('k,'d,'b) data = ('k,'d,'b) D.t
 end
 

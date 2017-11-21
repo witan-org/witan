@@ -24,7 +24,7 @@ open Typedef
 
 
 module Tag: Keys.Key
-type 'a tag = 'a Tag.k
+type 'a tag = 'a Tag.t
 
 module Tags : sig
   type t
@@ -54,9 +54,9 @@ module Exp: Keys.Key
 module Con: Keys.Key
 module Cho: Keys.Key2
 
-type 'a exp = 'a Exp.k
-type 'a con = 'a Con.k
-type ('k,'d) cho = ('k,'d) Cho.k
+type 'a exp = 'a Exp.t
+type 'a con = 'a Con.t
+type ('k,'d) cho = ('k,'d) Cho.t
 
 type 'a rescon =
 | GRequested: 'a -> 'a rescon

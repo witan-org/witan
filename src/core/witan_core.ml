@@ -36,7 +36,6 @@ end
 
 module Dom = struct
   include Typedef.Dom
-  type 'a t = 'a k
   let print = Solver.print_dom
 
   module type Dom = Solver.Dom
@@ -46,7 +45,6 @@ end
 
 module Value = struct
   include Typedef.Value
-  type 'a t = 'a k
   let print = Typedef.print_value
 
   module type Value = Typedef.Value
@@ -56,7 +54,6 @@ end
 
 module Sem = struct
   include Typedef.Sem
-  type 'a t = 'a k
   let print = Typedef.print_sem
 
   module type Sem = Typedef.Sem
@@ -67,7 +64,6 @@ end
 
 module Dem = struct
   include Typedef.Dem
-  type ('a,'b) t = ('a,'b) k
 
   module type Dem = Solver.Dem
 

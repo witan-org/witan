@@ -56,9 +56,9 @@ module Sem: Keys.Key
 module Value: Keys.Key
 module Dom: Keys.Key
 
-type 'a dom = 'a Dom.k
+type 'a dom = 'a Dom.t
 
-type 'a sem = 'a Sem.k
+type 'a sem = 'a Sem.t
 
 module type Sem = sig
   include Datatype
@@ -70,7 +70,7 @@ val get_sem: 'a sem -> (module Sem with type t = 'a)
 val sem_uninitialized: 'a sem -> bool
 val print_sem : 'a sem -> 'a Pp.pp
 
-type 'a value = 'a Value.k
+type 'a value = 'a Value.t
 
 module type Value = sig
   include Datatype
@@ -84,10 +84,10 @@ val print_value : 'a value -> 'a Pp.pp
 
 
 module Env: Keys.Key
-type 'a env = 'a Env.k
+type 'a env = 'a Env.t
 
 module Dem: Keys.Key2
-type ('k,'d) dem = ('k,'d) Dem.k
+type ('k,'d) dem = ('k,'d) Dem.t
 
 (** Classes *)
 module Cl : sig
