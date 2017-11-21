@@ -25,6 +25,7 @@ before_install:
   - opam init
   - opam switch ${OCAML_VERSION}
   - eval `opam config env`
+  - opam pin add --dev-repo dolmen
   - opam pin add --no-action witan .
   - opam install --deps-only witan
 install:
