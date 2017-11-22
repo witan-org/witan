@@ -75,7 +75,7 @@ end
 (** {3 Generic Handling of semantical terms} *)
 
 val get_sem: 'a Sem.t -> (module Sem with type t = 'a)
-val sem_uninitialized: 'a Sem.t -> bool
+val is_sem_uninitialized: 'a Sem.t -> bool
 val check_sem_registered: 'a Sem.t -> unit
 val print_sem : 'a Sem.t -> 'a Pp.pp
 
@@ -145,7 +145,7 @@ end
 
 val print_value : 'a Value.t -> 'a Pp.pp
 val get_value: 'a Value.t -> (module Value with type t = 'a)
-val value_uninitialized: 'a Value.t -> bool
+val is_value_uninitialized: 'a Value.t -> bool
 val check_value_registered: 'a Value.t -> unit
 
 (** {3 Module for handling generically values} *)
