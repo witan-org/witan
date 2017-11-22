@@ -441,7 +441,7 @@ let add_pexp_dom_premerge t dom ~clto ~clfrom ~clfrom0 =
   Dom.Vector.set t.domhist dom cm
 
 let add_pexp_value _t _pexp _dom ~node:_ ~cl0:_ =
-  assert false (** TODO nearly all this module will change*)
+  () (** TODO nearly all this module will change*)
 
 (*
   let age = Node.M.find_def Age.bef node (Dom.Vector.get t.dom dom) in

@@ -39,8 +39,13 @@ module BoolValue = Value.Register(struct
     let key = dom
   end)
 
-let cl_true = Node.fresh "⊤" ty
-let cl_false = Node.fresh "⊥" ty
+let value_true = BoolValue.index true ty
+let cl_true = BoolValue.node value_true
+let () = Node.rename cl_true "⊤"
+
+let value_false = BoolValue.index false ty
+let cl_false = BoolValue.node value_false
+let () = Node.rename cl_false "⊤"
 
 let union_disjoint m1 m2 =
   Node.M.union (fun _ b1 b2 -> assert (b1 == b2); Some b1) m1 m2
@@ -241,7 +246,7 @@ module DaemonPropaNot = struct
   let throttle = 100
   let wakeup d =
     function
-    | Events.EventValue(_,dom',((_,node,ncl) as x)) ->
+    | Events.Fired.EventValue(_,dom',((_,node,ncl) as x)) ->
       assert (Value.equal dom dom');
       begin match Delayed.get_value d dom node with
         | None -> raise Impossible
@@ -374,10 +379,10 @@ module DaemonPropa = struct
       wakeup_lit ~first:true d nodesem 0 last
 
   let wakeup d = function
-    | Events.EventValue(_,dom',Lit(nodesem,watched,next)) ->
+    | Events.Fired.EventValue(_,dom',Lit(nodesem,watched,next)) ->
       assert( Value.equal dom dom' );
       ignore (wakeup_lit ~first:false d nodesem watched next)
-    | Events.EventValue(_ownr,dom',All nodesem) ->
+    | Events.Fired.EventValue(_ownr,dom',All nodesem) ->
       assert( Value.equal dom dom' );
       (** use this own because the other is the representant *)
       ignore (wakeup_own ~first:false d nodesem)
@@ -396,7 +401,7 @@ module DaemonInit = struct
   let immediate = false
   let throttle = 100
   let wakeup d = function
-    | Events.EventRegSem(nodesem,()) ->
+    | Events.Fired.EventRegSem(nodesem,()) ->
       begin try
           let nodesem = ThE.coerce_clsem nodesem in
           let v = ThE.sem nodesem in

@@ -82,7 +82,7 @@ watch:
 # file headers
 ###############
 
-WHY3_FILES = $(addprefix src/stdlib/, cmdline.ml cmdline.mli debug.ml	\
+WHY3_FILES = $(addprefix src/popop_lib/, cmdline.ml cmdline.mli debug.ml	\
 	debug.mli exn_printer.ml exn_printer.mli hashcons.ml		\
 	hashcons.mli lists.ml lists.mli loc.ml loc.mli number.ml	\
 	number.mli opt.ml opt.mli plugin.ml plugin.mli pp.ml pp.mli	\
@@ -90,13 +90,13 @@ WHY3_FILES = $(addprefix src/stdlib/, cmdline.ml cmdline.mli debug.ml	\
 	strings.mli sysutil.ml sysutil.mli util.ml util.mli		\
 	warning.ml warning.mli weakhtbl.ml weakhtbl.mli )
 
-OCAML_FILES = $(addprefix src/stdlib/, map_intf.ml exthtbl.ml	\
+OCAML_FILES = $(addprefix src/popop_lib/, map_intf.ml exthtbl.ml	\
 	exthtbl.mli extmap.ml extmap.mli extset.ml extset.mli )
 
-FRAMAC_FILES = $(addprefix src/stdlib/, intmap.ml intmap_hetero.ml	\
+FRAMAC_FILES = $(addprefix src/popop_lib/, intmap.ml intmap_hetero.ml	\
 	intmap.mli intmap_hetero.mli bag.ml bag.mli)
 
-JC_FILES = $(addprefix src/stdlib/, leftistheap.ml leftistheap.mli)
+JC_FILES = $(addprefix src/popop_lib/, leftistheap.ml leftistheap.mli)
 
 WITAN_FILES = Makefile  \
 	$(filter-out $(WHY3_FILES) $(OCAML_FILES) $(FRAMAC_FILES) $(JC_FILES) \

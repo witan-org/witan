@@ -77,7 +77,7 @@ module Demon = Demon
 module Explanation = Explanation
 module Variable = Variable
 
-module Events = Events.Fired
+module Events = Events
 
 exception UnwaitedEvent = Typedef.UnwaitedEvent
 (** Can be raised by daemon when receiving an event that they don't

@@ -585,7 +585,8 @@ module Delayed = struct
           let reg_events = valuetable.reg_events in
           Wait.wakeup_events_list Events.Wait.translate_regvalue
             t (Some reg_events) (nodevalue);
-          set_value_direct t (assert false (** TODO *)) value node v
+          let pexp = Explanation.pexpfact in
+          set_value_direct t pexp value node v
         end
     end
 
