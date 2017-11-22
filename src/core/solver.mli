@@ -20,6 +20,12 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+(** Solver is the main module of core *)
+
+(** The solver contains all the information. It keep track of
+    equivalence classe, values. It take care to schedule event that
+    happened. *)
+
 open Explanation
 open Typedef
 
@@ -33,11 +39,8 @@ val exp_same_sem : exp_same_sem Explanation.exp
 
 exception UninitializedEnv of Env.K.t
 
-module type Ro = sig
+module type Getter = sig
   type t
-  (** {3 Immediate information} *)
-  val register : t -> Cl.t -> unit
-  (** Add a new class to register *)
 
   val is_equal      : t -> Cl.t -> Cl.t -> bool
   val find_def  : t -> Cl.t -> Cl.t
@@ -55,6 +58,14 @@ module type Ro = sig
 
   val get_env : t -> 'a Env.t -> 'a
   val set_env: t -> 'a Env.t -> 'a -> unit
+
+end
+
+module type Ro = sig
+  include Getter
+
+  val register : t -> Cl.t -> unit
+  (** Add a new class to register *)
 
   val is_current_env: t -> bool
 
@@ -148,7 +159,7 @@ end
 module RegisterDom (D:Dom) : sig end
 
 (** {2 External use of the solver} *)
-type t
+include Getter
 
 val new_t    : unit -> t
 
@@ -178,27 +189,15 @@ val flush: Delayed.t -> unit
 val make_decisions : Delayed.t -> attached_daemons -> unit
 *)
 
-val get_dom   : t -> 'a dom -> Cl.t -> 'a option
-    (** dom of the representative class *)
-val get_value : t -> 'a value -> Cl.t -> 'a option
-    (** value of the representative class *)
-
-val find      : t -> Cl.t -> Cl.t
-val is_equal  : t -> Cl.t -> Cl.t -> bool
-
 val get_trail : t -> Explanation.t
 val new_dec : t -> Explanation.dec
 val current_age : t -> Explanation.Age.t
 val current_nbdec : t -> int
 
-(** for conflict *)
-val get_direct_dom   : t -> 'a dom -> Cl.t -> 'a option
-    (** dom of the class directly (the last time modified) *)
-
 (** {2 Implementation Specifics } *)
 (** Because this module is implemented with persistent datastructure *)
 
-val new_handler: t -> t
+val new_handle: t -> t
 (** Modification in one of the environnement doesn't modify the other *)
 
 (** Debug *)

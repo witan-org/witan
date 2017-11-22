@@ -187,7 +187,7 @@ let new_t () = {
   current_delayed = dumb_delayed;
   }
 
-let new_handler t =
+let new_handle t =
   assert (t.current_delayed == dumb_delayed);
   {
   repr  = t.repr;
@@ -337,6 +337,26 @@ let get_value t value cl =
   let cl = find_def t cl in
   get_direct_value t value cl
 
+let get_env : type a. t -> a Env.t -> a
+  = fun t k ->
+    Env.check_is_registered k;
+    Env.VectorH.inc_size k t.envs;
+    if Env.VectorH.is_uninitialized t.envs k then
+      raise (UninitializedEnv (k :> Env.K.t))
+    else
+      Env.VectorH.get t.envs k
+
+let set_env : type a. t -> a Env.t -> a -> unit
+  = fun t k ->
+    Env.check_is_registered k;
+    Env.VectorH.inc_size k t.envs;
+    Env.VectorH.set t.envs k
+
+
+let is_registered t cl =
+  Cl.M.mem cl t.repr
+
+
 (** {2 For debugging and display} *)
 let _print_env fmt t =
   let printd (type a) _ fmt domtable =
@@ -464,7 +484,9 @@ module Delayed = struct
     is_equal t.env cl1 cl2
 
 
-  let is_registered t cl = Cl.M.mem cl t.env.repr
+  let is_registered t cl =
+    assert (is_current_env t);
+    is_registered t.env cl
 
   let set_value_direct (type a) t pexp (value : a value) cl0 new_v =
     Debug.incr stats_set_value;
@@ -533,6 +555,13 @@ module Delayed = struct
     assert (is_current_env t);
     get_value t.env value cl
 
+  let get_env t env =
+    assert (is_current_env t);
+    get_env t.env env
+
+  let set_env t env v =
+    assert (is_current_env t);
+    set_env t.env env v
 
   let attach_dom (type a) t cl (dom : a dom) dem event =
     let cl = find_def t cl in
@@ -1016,21 +1045,6 @@ module Delayed = struct
     d.env.current_delayed <- unsat_delayed;
     raise (Contradiction pexp)
 
-  let get_env : type a. t -> a Env.t -> a
-    = fun t k ->
-      Env.check_is_registered k;
-      Env.VectorH.inc_size k t.env.envs;
-      if Env.VectorH.is_uninitialized t.env.envs k then
-        raise (UninitializedEnv (k :> Env.K.t))
-      else
-        Env.VectorH.get t.env.envs k
-
-  let set_env : type a. t -> a Env.t -> a -> unit
-    = fun t k ->
-      Env.check_is_registered k;
-      Env.VectorH.inc_size k t.env.envs;
-      Env.VectorH.set t.env.envs k
-
 end
 
 let new_delayed ~sched_daemon ~sched_decision t =
@@ -1079,14 +1093,31 @@ let get_value t value cl =
   assert (t.current_delayed == dumb_delayed);
   get_value t value cl
 
+let get_env t env =
+  assert (t.current_delayed == dumb_delayed);
+  get_env t env
+
+let set_env t env v =
+  assert (t.current_delayed == dumb_delayed);
+  set_env t env v
+
+let is_repr t cl =
+  assert (t.current_delayed == dumb_delayed);
+  is_repr t cl
+
+let find_def t cl =
+  assert (t.current_delayed == dumb_delayed);
+  find_def t cl
+
 let get_trail t =
   assert (t.current_delayed == dumb_delayed ||
           t.current_delayed == unsat_delayed);
   t.trail
 
+
 let new_dec t =
   assert (t.current_delayed == dumb_delayed);
-  let t' = new_handler t in
+  let t' = new_handle t in
   Explanation.new_dec
     {dom_before_last_dec = (fun dom cl -> get_dom t' dom cl)}
     t.trail
@@ -1099,17 +1130,18 @@ let get_direct_dom t dom cl =
           t.current_delayed == unsat_delayed);
   get_direct_dom t dom cl
 
-module type Ro = sig
+
+module type Getter = sig
   type t
-  (** {3 Immediate information} *)
-  val register : t -> Cl.t -> unit
-  (** Add a new class to register *)
 
   val is_equal      : t -> Cl.t -> Cl.t -> bool
   val find_def  : t -> Cl.t -> Cl.t
-
   val get_dom   : t -> 'a dom -> Cl.t -> 'a option
-  val get_value : t -> 'a value -> Cl.t -> 'a option
+    (** dom of the class *)
+  val get_value   : t -> 'a value -> Cl.t -> 'a option
+    (** value of the class *)
+
+  (** {4 The classes must have been marked has registered} *)
 
   val find      : t -> Cl.t -> Cl.t
   val is_repr      : t -> Cl.t -> bool
@@ -1118,6 +1150,14 @@ module type Ro = sig
 
   val get_env : t -> 'a Env.t -> 'a
   val set_env: t -> 'a Env.t -> 'a -> unit
+
+end
+
+module type Ro = sig
+  include Getter
+
+  (** {3 Immediate information} *)
+  val register : t -> Cl.t -> unit
 
   val is_current_env: t -> bool
 
