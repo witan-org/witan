@@ -31,7 +31,6 @@ before_install:
   - opam install --deps-only witan
   - opam install ounit
 install:
-  - make build
+  - make build-dev
 script:
-  - make test
-
+  - make test-dev

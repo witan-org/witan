@@ -20,7 +20,7 @@
 #  for more details (enclosed in the file licenses/LGPLv2.1).            #
 ##########################################################################
 
-.PHONY: clean build build-dev
+.PHONY: clean build build-dev test test-dev
 
 J?=3
 TIMEOUT?=30
@@ -56,6 +56,12 @@ doc:
 test: build
 	@echo "run API tests…"
 	@jbuilder runtest
+	@echo "run BIN tests…"
+	@cd tests && $(MAKE) --no-print-directory
+
+test-dev: build-dev
+	@echo "run API tests…"
+	@jbuilder runtest --dev
 	@echo "run BIN tests…"
 	@cd tests && $(MAKE) --no-print-directory
 
