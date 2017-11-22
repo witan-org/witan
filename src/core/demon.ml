@@ -30,10 +30,10 @@ let debug = Debug.register_info_flag
 module Create = struct
     type 'b event =
     | EventDom      : Node.t * 'a Dom.t  * 'b -> 'b event
-    | EventValue    : Node.t * 'a value * 'b -> 'b event
+    | EventValue    : Node.t * 'a Value.t * 'b -> 'b event
     | EventRegCl  : Node.t           * 'b -> 'b event
     | EventChange   : Node.t           * 'b -> 'b event
-    | EventRegSem :        'a sem  * 'b -> 'b event
+    | EventRegSem :        'a Sem.t  * 'b -> 'b event
 
 
     let pp fmt = function
@@ -81,7 +81,7 @@ module Key = struct
                                           and type info = 'i)
 
   type ('k,'d,'i) t = {
-    dk_id : ('k * 'd, 'k) Typedef.dem;
+    dk_id : ('k * 'd, 'k) Dem.t;
     dk_data : ('k,'d,'i) demtable Env.t;
   }
 
@@ -331,7 +331,7 @@ end
 module Fast = struct
 
   type 'd t = {
-    dk_id : ('d, unit) Typedef.dem;
+    dk_id : ('d, unit) Dem.t;
     dk_data : 'd Events.Fired.event list Env.t;
     (** for throttling *)
     mutable dk_remaining: int; (** 0 if the demon is not the current one *)

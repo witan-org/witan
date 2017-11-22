@@ -38,21 +38,6 @@ let stats_set_dom =
 let stats_set_value =
   Debug.register_stats_int ~name:"Solver.set_value/merge" ~init:0
 
-type exp_same_sem =
-| ExpSameSem   : pexp * Node.t * NodeSem.t -> exp_same_sem
-| ExpSameValue : pexp * Node.t * NodeValue.t -> exp_same_sem
-
-let exp_same_sem : exp_same_sem Explanation.exp =
-  Explanation.Exp.create_key "Solver.exp_same_sem"
-
-(** TODO choose an appropriate data *)
-let exp_init_value : unit Explanation.exp =
-  Explanation.Exp.create_key "Solver.exp_init_value"
-
-(** TODO choose an appropriate data *)
-let exp_diff_value : pexp Explanation.exp =
-  Explanation.Exp.create_key "Solver.exp_diff_value"
-
 module DecTag = DInt
 
 type 'a domtable = {
@@ -390,7 +375,7 @@ module Delayed = struct
     assert (is_current_env t);
     is_registered t.env node
 
-  let set_value_direct (type a) t pexp (value : a value) node0 new_v =
+  let set_value_direct (type a) t pexp (value : a Value.t) node0 new_v =
     Debug.incr stats_set_value;
     let node = find t node0 in
     let valuetable = get_table_value t.env value in
@@ -407,7 +392,7 @@ module Delayed = struct
   let merge_values t pexp node0 node0' =
     let node  = find t node0 in
     let node' = find t node0'  in
-    let iteri (type a) (value:a value) (valuetable:a valuetable) =
+    let iteri (type a) (value:a Value.t) (valuetable:a valuetable) =
       let old_s = Node.M.find_opt node valuetable.table in
       let old_s'  = Node.M.find_opt node'  valuetable.table in
       let module Value = (val (Typedef.get_value value)) in
@@ -475,7 +460,7 @@ module Delayed = struct
     in
     VDomTable.set t.env.dom dom domtable
 
-  let attach_value (type a) t node (value : a value) dem event =
+  let attach_value (type a) t node (value : a Value.t) dem event =
     let node = find_def t node in
     let event = Events.Wait.Event (dem,event) in
     let valuetable = (get_table_value t.env value) in
@@ -499,14 +484,14 @@ module Delayed = struct
       t.env.event_reg <-
         Node.M.add_change Lists.singleton Lists.add node event t.env.event_reg
 
-  let attach_reg_sem (type a) t (sem : a sem) dem event =
+  let attach_reg_sem (type a) t (sem : a Sem.t) dem event =
     let event = Events.Wait.Event (dem,event) in
     let reg_events = get_table_sem t.env sem in
     let reg_events = event::reg_events in
     Sem.Vector.set t.env.sem sem reg_events
 
   let attached_reg_node
-      (type k) (type d) d node (dem:(k,d) dem) : k Enum.t =
+      (type k) (type d) d node (dem:(k,d) Dem.t) : k Enum.t =
     Enum.from_list
       ~filter:(function
           | Events.Wait.Event(dem',_) ->
@@ -520,7 +505,7 @@ module Delayed = struct
        (Node.M.find_def [] node d.env.event_reg)
 
   let attached_node
-    (type k) (type d) d node (dem:(k,d) dem) : k Enum.t =
+    (type k) (type d) d node (dem:(k,d) Dem.t) : k Enum.t =
     Enum.from_bag
       ~filter:(function
           | Events.Wait.Event(dem',_) ->
@@ -804,7 +789,7 @@ module Delayed = struct
     assert (d.env.current_delayed == d);
     assert (is_registered d node);
     set_value_pending d pexp node nodevalue
-  let set_value (type a)  d pexp (value : a value) node v =
+  let set_value (type a)  d pexp (value : a Value.t) node v =
     Debug.dprintf4 debug_few
       "[Solver] @[set_dom for %a with %a@]"
       Node.pp node (print_value value) v;
@@ -1022,7 +1007,7 @@ module type Getter = sig
   val find_def  : t -> Node.t -> Node.t
   val get_dom   : t -> 'a Dom.t -> Node.t -> 'a option
     (** dom of the nodeass *)
-  val get_value   : t -> 'a value -> Node.t -> 'a option
+  val get_value   : t -> 'a Value.t -> Node.t -> 'a option
     (** value of the nodeass *)
 
   (** {4 The nodeasses must have been marked has registered} *)

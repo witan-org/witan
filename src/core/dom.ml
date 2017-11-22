@@ -60,7 +60,7 @@ module Make(S:sig type delayed type pexp end) = struct
     let () =
       VDom.inc_size D.key defined_dom;
       assert (if not (VDom.is_uninitialized defined_dom D.key)
-              then raise AlreadyRegisteredKey else true);
+              then raise Keys.AlreadyRegisteredKey else true);
       let dom = (module D: Dom with type t = D.t) in
       VDom.set defined_dom D.key dom
 
@@ -68,7 +68,7 @@ module Make(S:sig type delayed type pexp end) = struct
 
   let check_is_registered dom =
     assert (if VDom.is_uninitialized defined_dom dom
-            then raise UnregisteredKey else true)
+            then raise Keys.UnregisteredKey else true)
 
   let well_initialized () =
     let well_initialized = ref true in
@@ -87,7 +87,7 @@ module Make(S:sig type delayed type pexp end) = struct
 
   let get_dom k =
     assert (if VDom.is_uninitialized defined_dom k
-            then raise UnregisteredKey else true);
+            then raise Keys.UnregisteredKey else true);
     VDom.get defined_dom k
 
   let get_dom_with_prefix_to_remove = get_dom

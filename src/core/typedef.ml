@@ -24,8 +24,6 @@ open Stdlib
 
 exception BrokenInvariant of string
 exception SolveSameRepr
-exception UnregisteredKey
-exception AlreadyRegisteredKey
 exception UnwaitedEvent
 exception AlreadyDead
 exception AlreadyRedirected
@@ -54,9 +52,9 @@ module VSem = Sem.MkVector
 let defined_sem : unit VSem.t = VSem.create 8
 let sem_uninitialized sem = VSem.is_uninitialized defined_sem sem
 let check_sem_registered k =
-  assert (if sem_uninitialized k then raise UnregisteredKey else true)
+  assert (if sem_uninitialized k then raise Keys.UnregisteredKey else true)
 let get_sem k =
-  assert (if sem_uninitialized k then raise UnregisteredKey else true);
+  check_sem_registered k;
   VSem.get defined_sem k
 
 let print_sem (type a) (k : a sem) fmt s =
@@ -80,10 +78,10 @@ module VValue = Value.MkVector
 let defined_value : unit VValue.t = VValue.create 8
 let value_uninitialized value = VValue.is_uninitialized defined_value value
 let check_value_registered k =
-  assert (if value_uninitialized k then raise UnregisteredKey else true)
+  assert (if value_uninitialized k then raise Keys.UnregisteredKey else true)
 
 let get_value k =
-  assert (if value_uninitialized k then raise UnregisteredKey else true);
+  check_value_registered k;
   VValue.get defined_value k
 
 let print_value (type a) (k : a value) fmt s =
@@ -163,7 +161,7 @@ module Node = struct
   let semindex : unit SemIndex.t = SemIndex.create 8
 
   let nodesem sem v ty : nodesem =
-    assert (if sem_uninitialized sem then raise UnregisteredKey else true);
+    check_sem_registered sem;
     (SemIndex.get semindex sem) v ty
 
   module ValueIndex = Value.MkVector
@@ -172,7 +170,7 @@ module Node = struct
   let valueindex : unit ValueIndex.t = ValueIndex.create 8
 
   let nodevalue value v ty : nodevalue =
-    assert (if value_uninitialized value then raise UnregisteredKey else true);
+    check_value_registered value;
     (ValueIndex.get valueindex value) v ty
 
   (** Just used for checking the typability *)
@@ -193,7 +191,8 @@ module Node = struct
   *)
   let of_nodevalue : nodevalue -> t = Obj.magic
 
-  let index sem v ty = of_nodesem (nodesem sem v ty)
+  let index_sem   sem v ty = of_nodesem (nodesem sem v ty)
+  let index_value sem v ty = of_nodevalue (nodevalue sem v ty)
 
 end
 
@@ -323,7 +322,7 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
   let () =
     VSem.inc_size D.key defined_sem;
     assert (if not (VSem.is_uninitialized defined_sem D.key)
-      then raise AlreadyRegisteredKey else true);
+      then raise Keys.AlreadyRegisteredKey else true);
     let sem = (module D: Sem with type t = D.t) in
     VSem.set defined_sem D.key sem;
     Node.SemIndex.set Node.semindex D.key (fun v ty -> index v ty)
@@ -454,35 +453,10 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
   let () =
     VValue.inc_size D.key defined_value;
     assert (if not (VValue.is_uninitialized defined_value D.key)
-      then raise AlreadyRegisteredKey else true);
+      then raise Keys.AlreadyRegisteredKey else true);
     let value = (module D: Value with type t = D.t) in
     VValue.set defined_value D.key value;
     Node.ValueIndex.set Node.valueindex D.key (fun v ty -> index v ty)
-
-end
-
-
-module Print = struct (** Cutting the knot for pp *)
-  (* type psem = { mutable psem : 'a. ('a sem -> 'a Pp.pp)} *)
-
-  (* let psem : psem = *)
-  (*   {psem = fun _ _ _ -> assert false} (\** called too early *\) *)
-  (* let sem sem fmt s = psem.psem sem fmt s *)
-
-  type pdem_event = { mutable
-      pdem_event : 'k 'd. ('k,'d) dem -> 'k Pp.pp}
-
-  let pdem_event : pdem_event =
-    {pdem_event = fun _ _ _ -> assert false} (** called too early *)
-  let dem_event dem fmt s = pdem_event.pdem_event dem fmt s
-
-  type pdem_runable = { mutable
-      pdem_runable : 'k 'd. ('k,'d) dem -> 'd Pp.pp}
-
-  let pdem_runable : pdem_runable =
-    {pdem_runable = fun _ _ _ -> assert false} (** called too early *)
-  let dem_runable dem fmt s = pdem_runable.pdem_runable dem fmt s
-
 
 end
 
@@ -535,4 +509,3 @@ let check_initialization () =
     end};
 
   !well_initialized
-

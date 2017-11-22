@@ -61,14 +61,9 @@ type age = Age.t
 
 module Exp: Keys.Key
 module Con: Keys.Key
-module Cho: Keys.Key2
-
-type 'a exp = 'a Exp.t
-type 'a con = 'a Con.t
-type ('k,'d) cho = ('k,'d) Cho.t
 
 type pexp =
-| Pexp: age * 'a exp * 'a * tags -> pexp
+| Pexp: age * 'a Exp.t * 'a * tags -> pexp
 (** An explanation. The age indicate the state to consider *)
 
 
@@ -90,7 +85,7 @@ val mk_pexp:
   t ->
   ?age:age (* in which age it should be evaluated *) ->
   ?tags:tags ->
-  'a exp -> 'a -> pexp
+  'a Exp.t -> 'a -> pexp
 (** create a new explanation using by default the current age *)
 
 val add_pexp_equal:
@@ -101,15 +96,37 @@ val add_pexp_equal:
     and node2 (the order is important) *)
 
 val add_pexp_value:
-  t -> pexp -> 'b value -> node:Node.t -> node_repr:Node.t -> unit
+  t -> pexp -> 'b Value.t -> node:Node.t -> node_repr:Node.t -> unit
 (** Add in the trail the explanation for the setting of a value to a node *)
 
-type chogen =
-  | GCho: ('k,'d) cho * 'k -> chogen
+(** {2 Predefined explanation} *)
 
-val expfact: unit exp
+val expfact: unit Exp.t
 val pexpfact: pexp
+(** No need of any explanation it is a fact. Perhaps should be avoided
+    for proof generation *)
 
+type exp_same_sem =
+| ExpSameSem   : pexp * Node.t * NodeSem.t -> exp_same_sem
+| ExpSameValue : pexp * Node.t * NodeValue.t -> exp_same_sem
+
+val exp_same_sem : exp_same_sem Exp.t
+(** Two nodes have been merged because they shared the same semantical
+    terms or value *)
+
+val exp_diff_value: pexp Exp.t
+(** A contradiction have been reached because the given explanation
+    makes one equivalence class be associated to two different values *)
+
+(** {2 Generic choices} *)
+
+(** It is perhaps not needed but the decisions are abstracted *)
+
+module Cho: Keys.Key2
+
+(** Generic decision *)
+type chogen =
+  | GCho: ('k,'d) Cho.t * 'k -> chogen
 
 
 (** {2 Explanation for domains, currently not used } *)

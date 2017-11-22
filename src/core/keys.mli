@@ -27,6 +27,15 @@
 
 open Stdlib
 
+(** {2 Exceptions} *)
+
+(** the key shouldn't be used before its registration and shouldn't be
+    registered again *)
+
+exception UnregisteredKey
+exception AlreadyRegisteredKey
+
+
 (** {2 Type comparison and coercion } *)
 
 exception BadCoercion

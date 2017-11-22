@@ -27,13 +27,13 @@ module Create : sig
     (** the domain dom of the class is watched *)
     | EventDom      : Node.t * 'a Dom.t  * 'b -> 'b event
     (** the value of the class is watched *)
-    | EventValue    : Node.t * 'a value  * 'b -> 'b event
+    | EventValue    : Node.t * 'a Value.t  * 'b -> 'b event
     (** we want to register this class *)
     | EventRegCl  : Node.t           * 'b -> 'b event
     (** Warn when the class is not the representant of its eq-class anymore *)
     | EventChange   : Node.t           * 'b -> 'b event
     (** a new semantical value 'a appear *)
-    | EventRegSem :        'a sem  * 'b -> 'b event
+    | EventRegSem :        'a Sem.t  * 'b -> 'b event
 
 
   val pp: 'b event Pp.pp

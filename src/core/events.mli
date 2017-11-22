@@ -27,9 +27,9 @@ module Fired : sig
     (** the domain dom of the class change *)
     | EventDom    : Node.t * 'a Dom.t  *      'b -> 'b event
     (** the value of the node has been set *)
-    | EventValue    : Node.t * 'a value  *  'b -> 'b event
+    | EventValue    : Node.t * 'a Value.t  *  'b -> 'b event
     (** a new semantical term 'a point to this class (not complete) *)
-    | EventSem    : Node.t * 'a sem  * 'a * 'b -> 'b event
+    | EventSem    : Node.t * 'a Sem.t  * 'a * 'b -> 'b event
     (** we want to register a class *)
     | EventReg  : Node.t *                  'b -> 'b event
     (** we want to register this class *)
@@ -50,24 +50,24 @@ end
 
 module Wait : sig
   type t =
-    | Event: ('k,'d) dem * 'k -> t
+    | Event: ('k,'d) Dem.t * 'k -> t
 
 
   type _ enqueue =
     | EnqRun: 'r -> 'r enqueue
     | EnqAlready: _ enqueue
-    | EnqRedirected: ('e,'r) dem * 'e -> _ enqueue
+    | EnqRedirected: ('e,'r) Dem.t * 'e -> _ enqueue
     | EnqStopped: _ enqueue
 
   type daemon_key =
-    | DaemonKey: ('k,'runable) dem * 'runable -> daemon_key
+    | DaemonKey: ('k,'runable) Dem.t * 'runable -> daemon_key
 
   val pp: t Pp.pp
 
   type 'a translate = { translate : 'd. 'a -> 'd -> 'd Fired.event}
 
   val translate_dom : (Node.t * 'a Dom.t) translate
-  val translate_value : (Node.t * 'a value) translate
+  val translate_value : (Node.t * 'a Value.t) translate
   val translate_reg : Node.t translate
   val translate_regnode : Node.t translate
   val translate_change : Node.t translate
@@ -86,7 +86,7 @@ module Wait : sig
       type event
       val print_event : event Pp.pp
       val enqueue : delayed_ro -> event Fired.event -> runable enqueue
-      val key : (event, runable) dem
+      val key : (event, runable) Dem.t
       val immediate : bool
     end
 
@@ -96,13 +96,13 @@ module Wait : sig
 
     module RegisterDem : functor (D : Dem) -> sig  end
 
-    val get_dem : ('a, 'b) dem -> ('a, 'b, unit) VDem.data
+    val get_dem : ('a, 'b) Dem.t -> ('a, 'b, unit) VDem.data
 
-    val print_dem_event : ('a, 'b) dem -> Format.formatter -> 'a -> unit
+    val print_dem_event : ('a, 'b) Dem.t -> Format.formatter -> 'a -> unit
 
-    val print_dem_runable : ('a, 'b) dem -> Format.formatter -> 'b -> unit
+    val print_dem_runable : ('a, 'b) Dem.t -> Format.formatter -> 'b -> unit
 
-    val new_pending_daemon : delayed -> ('a, 'b) dem -> 'b -> unit
+    val new_pending_daemon : delayed -> ('a, 'b) Dem.t -> 'b -> unit
 
     val wakeup_event : 'a translate -> delayed -> 'a -> t -> unit
 

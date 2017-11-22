@@ -51,7 +51,7 @@ val is_unknown : Solver.d -> Node.t -> bool
 val th_register: Solver.d -> unit
 val th_register_alone: Solver.d -> unit
 
-val chobool: (Node.t,bool) Explanation.cho
+val chobool: (Node.t,bool) Explanation.Cho.t
 
 val make_dec: Variable.make_dec
 

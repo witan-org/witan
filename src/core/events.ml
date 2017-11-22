@@ -24,14 +24,36 @@ open Typedef
 
 let debug = Debug.register_info_flag ~desc:"for the events" "Solver.events"
 
+
+
+module Print = struct (** Cutting the knot for pp *)
+
+  type pdem_event = { mutable
+      pdem_event : 'k 'd. ('k,'d) Dem.t -> 'k Pp.pp}
+
+  let pdem_event : pdem_event =
+    {pdem_event = fun _ _ _ -> assert false} (** called too early *)
+  let dem_event dem fmt s = pdem_event.pdem_event dem fmt s
+
+  type pdem_runable = { mutable
+      pdem_runable : 'k 'd. ('k,'d) Dem.t -> 'd Pp.pp}
+
+  let pdem_runable : pdem_runable =
+    {pdem_runable = fun _ _ _ -> assert false} (** called too early *)
+  let dem_runable dem fmt s = pdem_runable.pdem_runable dem fmt s
+
+
+end
+
+
 module Fired = struct
   type 'b event =
     (** the domain dom of the class change *)
     | EventDom    : Node.t * 'a Dom.t  *      'b -> 'b event
     (** the value of the class has been set *)
-    | EventValue    : Node.t * 'a value  *  'b -> 'b event
+    | EventValue    : Node.t * 'a Value.t  *  'b -> 'b event
     (** a new semantical term 'a point to this class (not complete) *)
-    | EventSem    : Node.t * 'a sem  * 'a * 'b -> 'b event
+    | EventSem    : Node.t * 'a Sem.t  * 'a * 'b -> 'b event
     (** we want to register a class *)
     | EventReg    : Node.t *                'b -> 'b event
     (** we want to register this class *)
@@ -87,11 +109,11 @@ end
 
 module Wait = struct
   type t =
-    | Event: ('k,'d) dem * 'k -> t
+    | Event: ('k,'d) Dem.t * 'k -> t
 
   let pp fmt = function
     | Event (dem, event) ->
-      let f (type k) (type d) (dem:(k,d) dem) (event : k) =
+      let f (type k) (type d) (dem:(k,d) Dem.t) (event : k) =
         Format.fprintf fmt "Demon %a event %a"
           Dem.pp dem (Print.dem_event  dem) event
       in
@@ -100,11 +122,11 @@ module Wait = struct
   type _ enqueue =
     | EnqRun: 'r -> 'r enqueue
     | EnqAlready: _ enqueue
-    | EnqRedirected: ('e,'r) dem * 'e -> _ enqueue
+    | EnqRedirected: ('e,'r) Dem.t * 'e -> _ enqueue
     | EnqStopped: _ enqueue
 
   type daemon_key =
-    | DaemonKey: ('k,'runable) dem * 'runable -> daemon_key
+    | DaemonKey: ('k,'runable) Dem.t * 'runable -> daemon_key
 
 
   type 'a translate = { translate : 'd. 'a -> 'd -> 'd Fired.event}
@@ -139,7 +161,7 @@ module Wait = struct
       type event
       val print_event : event Pp.pp
       val enqueue : delayed_ro -> event Fired.event -> runable enqueue
-      val key : (event, runable) dem
+      val key : (event, runable) Dem.t
       val immediate : bool
     end
 
@@ -149,13 +171,13 @@ module Wait = struct
 
     module RegisterDem : functor (D : Dem) -> sig  end
 
-    val get_dem : ('a, 'b) dem -> ('a, 'b, unit) VDem.data
+    val get_dem : ('a, 'b) Dem.t -> ('a, 'b, unit) VDem.data
 
-    val print_dem_event : ('a, 'b) dem -> Format.formatter -> 'a -> unit
+    val print_dem_event : ('a, 'b) Dem.t -> Format.formatter -> 'a -> unit
 
-    val print_dem_runable : ('a, 'b) dem -> Format.formatter -> 'b -> unit
+    val print_dem_runable : ('a, 'b) Dem.t -> Format.formatter -> 'b -> unit
 
-    val new_pending_daemon : delayed -> ('a, 'b) dem -> 'b -> unit
+    val new_pending_daemon : delayed -> ('a, 'b) Dem.t -> 'b -> unit
 
     val wakeup_event : 'a translate -> delayed -> 'a -> t -> unit
 
@@ -190,7 +212,7 @@ module Wait = struct
       val print_event: event Pp.pp
       val enqueue: delayed_ro -> event Fired.event -> runable enqueue
 
-      val key: (event,runable) dem
+      val key: (event,runable) Dem.t
       val immediate: bool
 
     end
@@ -206,7 +228,7 @@ module Wait = struct
       let () =
         VDem.inc_size D.key defined_dem;
         assert (if not (VDem.is_uninitialized defined_dem D.key)
-                then raise AlreadyRegisteredKey else true);
+                then raise Keys.AlreadyRegisteredKey else true);
         let dem =
           (module D: Dem with type event = D.event and type runable = D.runable) in
         VDem.set defined_dem D.key dem
@@ -215,22 +237,22 @@ module Wait = struct
 
     let get_dem k =
       assert (if VDem.is_uninitialized defined_dem k
-              then raise UnregisteredKey else true);
+              then raise Keys.UnregisteredKey else true);
       VDem.get defined_dem k
 
-    let print_dem_event (type k) (type d) (k : (k,d) dem) fmt s =
+    let print_dem_event (type k) (type d) (k : (k,d) Dem.t) fmt s =
       let module S = (val get_dem k) in
       S.print_event fmt s
 
     let () = Print.pdem_event.Print.pdem_event <- print_dem_event
 
-    let print_dem_runable (type k) (type d) (k : (k,d) dem) fmt s =
+    let print_dem_runable (type k) (type d) (k : (k,d) Dem.t) fmt s =
       let module S = (val get_dem k) in
       S.print_runable fmt s
 
     let () = Print.pdem_runable.Print.pdem_runable <- print_dem_runable
 
-    let new_pending_daemon (type k) (type d) t (dem:(k,d) dem) runable =
+    let new_pending_daemon (type k) (type d) t (dem:(k,d) Dem.t) runable =
       let module Dem = (val get_dem dem) in
       let daemonkey = DaemonKey(dem, runable) in
       if Dem.immediate
@@ -240,7 +262,7 @@ module Wait = struct
     let wakeup_event translate t info wevent =
       match wevent with
       | Event (dem,event) ->
-        let rec f : type event r. S.delayed -> (event,r) dem -> event -> unit =
+        let rec f : type event r. S.delayed -> (event,r) Dem.t -> event -> unit =
           fun t dem event ->
             let module Dem = (val get_dem dem) in
             let event = translate.translate info event in

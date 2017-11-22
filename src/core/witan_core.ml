@@ -32,15 +32,6 @@ module Node = struct
   include Typedef.Node
 end
 
-module Value = struct
-  include Typedef.Value
-  let print = Typedef.print_value
-
-  module type Value = Typedef.Value
-
-  module Register = Typedef.RegisterValue
-end
-
 module Sem = struct
   include Typedef.Sem
   let print = Typedef.print_sem
@@ -50,6 +41,21 @@ module Sem = struct
 
   module Register = Typedef.RegisterSem
 end
+
+module NodeSem = Typedef.NodeSem
+
+
+module Value = struct
+  include Typedef.Value
+  let print = Typedef.print_value
+
+  module type Value = Typedef.Value
+
+  module Register = Typedef.RegisterValue
+end
+
+module NodeValue = Typedef.NodeValue
+
 
 module Dom = struct
   include Dom
@@ -69,6 +75,8 @@ module Dem = struct
 end
 
 module Env = Env
+
+module Exp = Explanation.Exp
 
 module Solver = Solver
 module Demon = Demon

@@ -35,8 +35,6 @@ module Exp = Keys.Make_key(struct end)
 module Con = Keys.Make_key(struct end)
 module Cho = Keys.Make_key2(struct end)
 
-type 'a exp = 'a Exp.t
-type 'a con = 'a Con.t
 type ('a,'b) cho = ('a,'b) Cho.t
 
 type chogen =
@@ -86,7 +84,7 @@ let age_of_dec x = x
 let print_dec = Age.pp
 
 type pexp =
-| Pexp: age * 'a exp * 'a * tags -> pexp
+| Pexp: age * 'a Exp.t * 'a * tags -> pexp
 
 type t = {
   mutable last_dec : Age.t;
@@ -127,7 +125,7 @@ let mk_pexp:
   t ->
   ?age:age (* in which age it should be evaluated *) ->
   ?tags:tags ->
-  'a exp -> 'a -> pexp =
+  'a Exp.t -> 'a -> pexp =
   fun t ?(age=t.age) ?(tags=Tags.empty) exp e ->
     Pexp(age,exp,e,tags)
 
@@ -144,7 +142,7 @@ let add_pexp_equal:
     (* TODO add perhaps more precise information *)
 
 let add_pexp_value:
-  t -> pexp -> 'b value -> node:Node.t -> node_repr:Node.t -> unit =
+  t -> pexp -> 'b Value.t -> node:Node.t -> node_repr:Node.t -> unit =
   fun t pexp _ ~node:_ ~node_repr:_ ->
     add_pexp t pexp
 
@@ -175,5 +173,16 @@ let add_pexp_dom_premerge:
     assert false (** TODO when domain will be needed *)
 
 
-let expfact : unit exp = Exp.create_key "Explanation.fact"
+let expfact : unit Exp.t = Exp.create_key "Explanation.fact"
 let pexpfact = Pexp(Age.bef,expfact,(),Tags.empty)
+
+type exp_same_sem =
+| ExpSameSem   : pexp * Node.t * NodeSem.t -> exp_same_sem
+| ExpSameValue : pexp * Node.t * NodeValue.t -> exp_same_sem
+
+let exp_same_sem : exp_same_sem Exp.t =
+  Exp.create_key "Solver.exp_same_sem"
+
+(** TODO choose an appropriate data *)
+let exp_diff_value : pexp Exp.t =
+  Exp.create_key "Solver.exp_diff_value"

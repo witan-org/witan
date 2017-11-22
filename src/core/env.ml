@@ -29,15 +29,15 @@ module VEnv = Env.MkVector(struct type ('a,'b) t = 'a Pp.pp end)
 let defined_env = VEnv.create 8
 let print_env k =
   assert (if VEnv.is_uninitialized defined_env k
-    then raise Typedef.UnregisteredKey else true);
+    then raise Keys.UnregisteredKey else true);
   VEnv.get defined_env k
 
 let register_env pp env =
   VEnv.inc_size env defined_env;
   assert (if not (VEnv.is_uninitialized defined_env env)
-          then raise Typedef.AlreadyRegisteredKey else true);
+          then raise Keys.AlreadyRegisteredKey else true);
   VEnv.set defined_env env pp
 
 let check_is_registered k =
   assert (if VEnv.is_uninitialized defined_env k
-          then raise Typedef.UnregisteredKey else true);
+          then raise Keys.UnregisteredKey else true);

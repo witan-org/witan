@@ -20,9 +20,11 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+(** Define the Node, and the related types semantic terms and value *)
+
 open Stdlib
 
-(** {2 General caml types } *)
+(** {2 General exceptions (to move away) } *)
 
 exception BrokenInvariant of string
 exception SolveSameRepr
@@ -30,81 +32,82 @@ exception UnwaitedEvent
 exception AlreadyDead
 exception AlreadyRedirected
 
-(** the key shouldn't be used before its registration and shouldn't be
-    registered again *)
-exception UnregisteredKey
-exception AlreadyRegisteredKey
 
 module Sem: Keys.Key
 module Value: Keys.Key
-
-type 'a sem = 'a Sem.t
-
-module type Sem = sig
-  include Datatype
-
-  val key: t sem
-end
-
-val get_sem: 'a sem -> (module Sem with type t = 'a)
-val sem_uninitialized: 'a sem -> bool
-val check_sem_registered: 'a sem -> unit
-val print_sem : 'a sem -> 'a Pp.pp
-
-type 'a value = 'a Value.t
-
-module type Value = sig
-  include Datatype
-
-  val key: t value
-end
-
-val get_value: 'a value -> (module Value with type t = 'a)
-val value_uninitialized: 'a value -> bool
-val check_value_registered: 'a value -> unit
-val print_value : 'a value -> 'a Pp.pp
-
 module Dem: Keys.Key2
-type ('k,'d) dem = ('k,'d) Dem.t
 
-(** Classes *)
+(** Node *)
+
 module Node : sig
   include Datatype
 
-  val fresh: ?to_reg:(('event,'r) dem * 'event) -> string -> Ty.t -> t
-  (** the string is used as the prefix for the debug output *)
+  val fresh: ?to_reg:(('event,'r) Dem.t * 'event) -> string -> Ty.t -> t
+  (** The string is used as the prefix for the debug output. [?to_reg]
+      allows to have an event emitted when this class is registered in
+      a solver.
+  *)
 
   val rename: t -> string -> unit
-  (** to use with care *)
+  (** Change the pretty printed string for this node, to use with care
+      preferably at the start *)
 
   val ty: t -> Ty.t
+  (** Return the type of a node *)
 
-  val index: 'a sem -> 'a -> Ty.t -> t
+  val index_sem: 'a Sem.t -> 'a -> Ty.t -> t
   (** Return the corresponding node from a semantical term *)
+
+  val index_value: 'a Value.t -> 'a -> Ty.t -> t
+  (** Return the corresponding node from a value *)
 end
+
+(** {2 Semantical terms } *)
+
+(** Basically a semantic terms is just something with an ordering. For
+    each semantic terms a unique node is associated. *)
+module type Sem = sig
+  include Datatype
+
+  val key: t Sem.t
+end
+
+(** {3 Generic Handling of semantical terms} *)
+
+val get_sem: 'a Sem.t -> (module Sem with type t = 'a)
+val sem_uninitialized: 'a Sem.t -> bool
+val check_sem_registered: 'a Sem.t -> unit
+val print_sem : 'a Sem.t -> 'a Pp.pp
 
 module NodeSem: sig
   include Datatype
 
 
-  val index: 'a sem -> 'a -> Ty.t -> t
+  val index: 'a Sem.t -> 'a -> Ty.t -> t
   (** Return the corresponding node from a semantical term *)
 
   val node: t -> Node.t
+  (** Returns the node associated to this semantical term *)
 
   val ty: t -> Ty.t
+  (** Returns the type of the semantical term *)
 
 end
 
+(** {3 Construction of a semantical terms } *)
+
+(** Result of the registration of a semantical term *)
 module type RegisteredSem = sig
   type s
-  val key: s sem
+  (** the user given type *)
+
+  val key: s Sem.t
 
   (** nodesem *)
   include Datatype
 
   val index: s -> Ty.t -> t
-  (** Return a nodesem from a semantical term *)
+  (** Return a semantical term from the user type *)
 
   val node: t -> Node.t
   (** Return a class from a nodesem *)
@@ -117,20 +120,41 @@ module type RegisteredSem = sig
 
   val nodesem: t -> NodeSem.t
   val of_nodesem: NodeSem.t -> t option
+  (** Return the user type if the NodeSem belongs to this module *)
 
   val coerce_nodesem: NodeSem.t -> t
+  (** Return the user type. Raise if the NodeSem does not belong to this
+      module *)
 
 end
 
-
 module RegisterSem (D:Sem) : RegisteredSem with type s = D.t
 
+(** {2 Values } *)
+
+(** Basically a value is just something with an ordering. For each
+    value a unique node is associated. The difference with semantic
+    terms is that only one value of a kind can be in an equivalence
+    class. The solver keep track of which value is associated to an
+    equivalence class (like it does for domains) *)
+module type Value = sig
+  include Datatype
+
+  val key: t Value.t
+end
+
+val print_value : 'a Value.t -> 'a Pp.pp
+val get_value: 'a Value.t -> (module Value with type t = 'a)
+val value_uninitialized: 'a Value.t -> bool
+val check_value_registered: 'a Value.t -> unit
+
+(** {3 Module for handling generically values} *)
 
 module NodeValue: sig
   include Datatype
 
 
-  val index: 'a value -> 'a -> Ty.t -> t
+  val index: 'a Value.t -> 'a -> Ty.t -> t
   (** Return the corresponding node from a value *)
 
   val node: t -> Node.t
@@ -139,9 +163,11 @@ module NodeValue: sig
 
 end
 
+(** {3 For building a particular value} *)
+
 module type RegisteredValue = sig
   type s
-  val key: s value
+  val key: s Value.t
 
   (** nodevalue *)
   include Datatype
@@ -167,31 +193,13 @@ end
 
 module RegisterValue (D:Value) : RegisteredValue with type s = D.t
 
-
-
-module Print : sig (** Cutting the knot for pp *)
-  type pdem_event = { mutable
-      pdem_event : 'k 'd. ('k,'d) dem -> 'k Pp.pp}
-
-  val pdem_event : pdem_event
-  val dem_event : ('k,'d) dem -> 'k Pp.pp
-
-  type pdem_runable =
-    { mutable pdem_runable : 'k 'd. ('k,'d) dem -> 'd Pp.pp}
-
-  val pdem_runable : pdem_runable
-  val dem_runable : ('k,'d) dem -> 'd Pp.pp
-
-
-end
-
 val check_initialization: unit -> bool
-(** Check if the initialization of all the dom, sem and dem have been done *)
+(** Check if the initialization of all the sem and value have been done *)
 
-(** Only for Solver *)
+(** {2 Only for the solver } *)
 module Only_for_solver: sig
   type sem_of_node =
-    | Sem: 'a sem * 'a -> sem_of_node
+    | Sem: 'a Sem.t * 'a -> sem_of_node
 
   val nodesem:
     Node.t -> NodeSem.t option
@@ -204,7 +212,7 @@ module Only_for_solver: sig
         class. So only the module solver can use it *)
 
   type value_of_node =
-    | Value: 'a value * 'a -> value_of_node
+    | Value: 'a Value.t * 'a -> value_of_node
 
   val nodevalue:
     Node.t -> NodeValue.t option
@@ -221,7 +229,7 @@ module Only_for_solver: sig
 
   type opened_node =
     | Fresh: opened_node
-    | Fresh_to_reg: ('event,'r) dem * 'event -> opened_node
+    | Fresh_to_reg: ('event,'r) Dem.t * 'event -> opened_node
     | Sem  : NodeSem.t -> opened_node
     | Value  : NodeValue.t -> opened_node
 

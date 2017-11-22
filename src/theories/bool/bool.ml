@@ -41,16 +41,14 @@ module BoolValue = Value.Register(struct
 
 let value_true = BoolValue.index true ty
 let cl_true = BoolValue.node value_true
-let () = Node.rename cl_true "⊤"
 
 let value_false = BoolValue.index false ty
 let cl_false = BoolValue.node value_false
-let () = Node.rename cl_false "⊤"
 
 let union_disjoint m1 m2 =
   Node.M.union (fun _ b1 b2 -> assert (b1 == b2); Some b1) m1 m2
 
-let index sem v = Node.index sem v ty
+let index sem v = Node.index_sem sem v ty
 
 let with_other = ref false
 (** TODO not a global variable...
@@ -230,8 +228,7 @@ type expprop =
 | ExpNot  of (Th.t * Node.t * Node.t)
 (* | ExpNot  of Th.t * Node.t * Node.t (* t <> not t or t = not (not t) *) *)
 
-let expprop : expprop Explanation.exp =
-  Explanation.Exp.create_key "Bool.prop"
+let expprop : expprop Exp.t = Exp.create_key "Bool.prop"
 
 module DaemonPropaNot = struct
 
