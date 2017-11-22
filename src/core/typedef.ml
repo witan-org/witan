@@ -493,9 +493,6 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
 end
 
 
-module Env = Keys.Make_key(struct end)
-type 'a env = 'a Env.t
-
 module Print = struct (** Cutting the knot for pp *)
   (* type psem = { mutable psem : 'a. ('a sem -> 'a Pp.pp)} *)
 

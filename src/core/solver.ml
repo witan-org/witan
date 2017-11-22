@@ -53,19 +53,6 @@ let exp_init_value : unit Explanation.exp =
 let exp_diff_value : pexp Explanation.exp =
   Explanation.Exp.create_key "Solver.exp_diff_value"
 
-module VEnv = Env.MkVector(struct type ('a,'b) t = 'a Pp.pp end)
-let defined_env = VEnv.create 8
-let print_env k =
-  assert (if VEnv.is_uninitialized defined_env k
-    then raise UnregisteredKey else true);
-  VEnv.get defined_env k
-
-let register_env pp env =
-  VEnv.inc_size env defined_env;
-  assert (if not (VEnv.is_uninitialized defined_env env)
-          then raise AlreadyRegisteredKey else true);
-  VEnv.set defined_env env pp
-
 module type Dom' = sig
   type delayed
   type t
@@ -1029,20 +1016,18 @@ module Delayed = struct
     d.env.current_delayed <- unsat_delayed;
     raise (Contradiction pexp)
 
-  let get_env : type a. t -> a env -> a
+  let get_env : type a. t -> a Env.t -> a
     = fun t k ->
-      assert (if VEnv.is_uninitialized defined_env k
-              then raise UnregisteredKey else true);
+      Env.check_is_registered k;
       Env.VectorH.inc_size k t.env.envs;
       if Env.VectorH.is_uninitialized t.env.envs k then
         raise (UninitializedEnv (k :> Env.K.t))
       else
         Env.VectorH.get t.env.envs k
 
-  let set_env : type a. t -> a env -> a -> unit
+  let set_env : type a. t -> a Env.t -> a -> unit
     = fun t k ->
-      assert (if VEnv.is_uninitialized defined_env k
-              then raise UnregisteredKey else true);
+      Env.check_is_registered k;
       Env.VectorH.inc_size k t.env.envs;
       Env.VectorH.set t.env.envs k
 
@@ -1131,8 +1116,8 @@ module type Ro = sig
 
   val is_registered : t -> Cl.t -> bool
 
-  val get_env : t -> 'a env -> 'a
-  val set_env: t -> 'a env -> 'a -> unit
+  val get_env : t -> 'a Env.t -> 'a
+  val set_env: t -> 'a Env.t -> 'a -> unit
 
   val is_current_env: t -> bool
 

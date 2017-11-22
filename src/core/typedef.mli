@@ -82,10 +82,6 @@ val get_value: 'a value -> (module Value with type t = 'a)
 val value_uninitialized: 'a value -> bool
 val print_value : 'a value -> 'a Pp.pp
 
-
-module Env: Keys.Key
-type 'a env = 'a Env.t
-
 module Dem: Keys.Key2
 type ('k,'d) dem = ('k,'d) Dem.t
 

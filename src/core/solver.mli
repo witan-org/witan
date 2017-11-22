@@ -53,8 +53,8 @@ module type Ro = sig
 
   val is_registered : t -> Cl.t -> bool
 
-  val get_env : t -> 'a env -> 'a
-  val set_env: t -> 'a env -> 'a -> unit
+  val get_env : t -> 'a Env.t -> 'a
+  val set_env: t -> 'a Env.t -> 'a -> unit
 
   val is_current_env: t -> bool
 
@@ -146,10 +146,6 @@ module type Dom = sig
 end
 
 module RegisterDom (D:Dom) : sig end
-
-
-val register_env: 'a Pp.pp -> 'a env -> unit
-val print_env: 'a env -> 'a Pp.pp
 
 (** {2 External use of the solver} *)
 type t

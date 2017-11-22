@@ -20,65 +20,24 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-(** Witan core: define basic types and the solver *)
+module Env = Keys.Make_key(struct end)
 
-include Std
+include Env
 
-module Ty = struct
-  include Typedef.Ty
-end
 
-module Keys = Keys
+module VEnv = Env.MkVector(struct type ('a,'b) t = 'a Pp.pp end)
+let defined_env = VEnv.create 8
+let print_env k =
+  assert (if VEnv.is_uninitialized defined_env k
+    then raise Typedef.UnregisteredKey else true);
+  VEnv.get defined_env k
 
-module Cl = struct
-  include Typedef.Cl
-end
+let register_env pp env =
+  VEnv.inc_size env defined_env;
+  assert (if not (VEnv.is_uninitialized defined_env env)
+          then raise Typedef.AlreadyRegisteredKey else true);
+  VEnv.set defined_env env pp
 
-module Value = struct
-  include Typedef.Value
-  let print = Typedef.print_value
-
-  module type Value = Typedef.Value
-
-  module Register = Typedef.RegisterValue
-end
-
-module Sem = struct
-  include Typedef.Sem
-  let print = Typedef.print_sem
-
-  module type Sem = Typedef.Sem
-  module type Registered = Typedef.RegisteredSem
-
-  module Register = Typedef.RegisterSem
-end
-
-module Dom = struct
-  include Typedef.Dom
-  let print = Solver.print_dom
-
-  module type Dom = Solver.Dom
-
-  module Register = Solver.RegisterDom
-end
-
-module Dem = struct
-  include Typedef.Dem
-
-  module type Dem = Solver.Wait.Dem
-
-  module Register = Solver.Wait.RegisterDem
-end
-
-module Env = Env
-
-module Solver = Solver
-module Demon = Demon
-module Explanation = Explanation
-module Variable = Variable
-
-module Events = Events.Fired
-
-exception UnwaitedEvent = Typedef.UnwaitedEvent
-(** Can be raised by daemon when receiving an event that they don't
-    waited for. It is the sign of a bug in the core solver *)
+let check_is_registered k =
+  assert (if VEnv.is_uninitialized defined_env k
+          then raise Typedef.UnregisteredKey else true);

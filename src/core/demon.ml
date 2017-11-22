@@ -82,7 +82,7 @@ module Key = struct
 
   type ('k,'d,'i) t = {
     dk_id : ('k * 'd, 'k) Typedef.dem;
-    dk_data : ('k,'d,'i) demtable Typedef.env;
+    dk_data : ('k,'d,'i) demtable Env.t;
   }
 
   let create name = {
@@ -228,7 +228,7 @@ module Key = struct
         Pp.iter2 DT.Key.M.iter Pp.newline Pp.colon
           D.Key.pp print_daemon_state fmt DT.state
       in
-      Solver.register_env print_demtable D.key.dk_data;
+      Env.register_env print_demtable D.key.dk_data;
     (** Interface for generic daemon *)
     let module Dem = struct
       type runable = D.Key.t
@@ -332,7 +332,7 @@ module Fast = struct
 
   type 'd t = {
     dk_id : ('d, unit) Typedef.dem;
-    dk_data : 'd Events.Fired.event list Typedef.env;
+    dk_data : 'd Events.Fired.event list Env.t;
     (** for throttling *)
     mutable dk_remaining: int; (** 0 if the demon is not the current one *)
     dk_current : 'd Events.Fired.event Queue.t; (** empty if idem *)
@@ -430,7 +430,7 @@ module Fast = struct
       let print_demtable fmt d =
         Pp.list Pp.comma Events.Fired.pp fmt d
       in
-      Solver.register_env print_demtable D.key.dk_data;
+      Env.register_env print_demtable D.key.dk_data;
     (** Interface for generic daemon *)
     let module Dem = struct
       type runable = unit
