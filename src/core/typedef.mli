@@ -65,6 +65,7 @@ end
 
 val get_sem: 'a sem -> (module Sem with type t = 'a)
 val sem_uninitialized: 'a sem -> bool
+val check_sem_registered: 'a sem -> unit
 val print_sem : 'a sem -> 'a Pp.pp
 
 type 'a value = 'a Value.t
@@ -77,6 +78,7 @@ end
 
 val get_value: 'a value -> (module Value with type t = 'a)
 val value_uninitialized: 'a value -> bool
+val check_value_registered: 'a value -> unit
 val print_value : 'a value -> 'a Pp.pp
 
 module Dem: Keys.Key2

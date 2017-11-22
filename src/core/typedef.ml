@@ -86,6 +86,8 @@ module VSem = Sem.MkVector
 
 let defined_sem : unit VSem.t = VSem.create 8
 let sem_uninitialized sem = VSem.is_uninitialized defined_sem sem
+let check_sem_registered k =
+  assert (if sem_uninitialized k then raise UnregisteredKey else true)
 let get_sem k =
   assert (if sem_uninitialized k then raise UnregisteredKey else true);
   VSem.get defined_sem k
@@ -110,6 +112,9 @@ module VValue = Value.MkVector
 
 let defined_value : unit VValue.t = VValue.create 8
 let value_uninitialized value = VValue.is_uninitialized defined_value value
+let check_value_registered k =
+  assert (if value_uninitialized k then raise UnregisteredKey else true)
+
 let get_value k =
   assert (if value_uninitialized k then raise UnregisteredKey else true);
   VValue.get defined_value k

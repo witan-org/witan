@@ -30,6 +30,7 @@ module type S1 = sig
 
   val size : 'b t -> int
   val get  : 'b t -> 'a key -> ('a,'b) data
+  val get_def : 'b t -> 'a key -> ('a,'b) data -> ('a,'b) data
   val set  : 'b t -> 'a key -> ('a,'b) data -> unit
 
   val is_uninitialized : 'b t -> 'a key -> bool
@@ -84,6 +85,7 @@ module type S2 = sig
 
   val size : 'b t -> int
   val get  : 'b t -> ('a1,'a2) key -> ('a1,'a2,'b) data
+  val get_def  : 'b t -> ('a1,'a2) key -> ('a1,'a2,'b) data -> ('a1,'a2,'b) data
   val set  : 'b t -> ('a1,'a2) key -> ('a1,'a2,'b) data -> unit
 
   val is_uninitialized : 'b t -> ('a1,'a2) key -> bool
@@ -139,6 +141,7 @@ module type R1 = sig
 
   val size : 'b t -> int
   val get  : 'b t -> 'a key -> 'b
+  val get_def  : 'b t -> 'a key -> 'b -> 'b
   val set  : 'b t -> 'a key -> 'b -> unit
 
   val is_uninitialized : 'b t -> 'a key -> bool
@@ -178,7 +181,7 @@ module RMake1
   (K:sig type 'a t = private int end)
   : R1 with type 'a key = 'a K.t
 
-(** Same as S1 but for ('a,'b) data = 'b *)
+(** Same as S1 but for ('a,'b) data = 'a *)
 module type T1 = sig
   type 'a key
   type 'b t (* used only with 'b = unit *)
@@ -187,6 +190,7 @@ module type T1 = sig
 
   val size : unit t -> int
   val get  : unit t -> 'a key -> 'a
+  val get_def : unit t -> 'a key -> 'a -> 'a
   val set  : unit t -> 'a key -> 'a -> unit
 
   val is_uninitialized : unit t -> 'a key -> bool

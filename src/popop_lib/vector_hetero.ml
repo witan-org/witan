@@ -29,6 +29,7 @@ module type S1 = sig
 
   val size : 'b t -> int
   val get  : 'b t -> 'a key -> ('a,'b) data
+  val get_def : 'b t -> 'a key -> ('a,'b) data -> ('a,'b) data
   val set  : 'b t -> 'a key -> ('a,'b) data -> unit
 
   val is_uninitialized : 'b t -> 'a key -> bool
@@ -92,6 +93,10 @@ module Make1
   let get (type a) t (k : a K.t) =
     let t = open_t t k in
     Simple_vector.get t (k :> int)
+
+  let get_def (type a) t (k : a K.t) def =
+    let t = open_t t k in
+    Simple_vector.get_def t (k :> int) def
 
   let is_uninitialized (type a) t (k : a K.t) =
     let t = open_t t k in
@@ -162,6 +167,7 @@ module type S2 = sig
 
   val size : 'b t -> int
   val get  : 'b t -> ('a1,'a2) key -> ('a1,'a2,'b) data
+  val get_def  : 'b t -> ('a1,'a2) key -> ('a1,'a2,'b) data -> ('a1,'a2,'b) data
   val set  : 'b t -> ('a1,'a2) key -> ('a1,'a2,'b) data -> unit
 
   val is_uninitialized : 'b t -> ('a1,'a2) key -> bool
@@ -220,6 +226,10 @@ module Make2
     let t = open_t t k in
     Simple_vector.get t (k :> int)
 
+  let get_def (type a1) (type a2) t (k : (a1,a2) K.t) def =
+    let t = open_t t k in
+    Simple_vector.get_def t (k :> int) def
+
   let is_uninitialized (type a1) (type a2) t (k : (a1,a2) K.t) =
     let t = open_t t k in
     Simple_vector.size t <= (k :> int) ||
@@ -273,6 +283,7 @@ module type R1 = sig
 
   val size : 'b t -> int
   val get  : 'b t -> 'a key -> 'b
+  val get_def : 'b t -> 'a key -> 'b -> 'b
   val set  : 'b t -> 'a key -> 'b -> unit
 
   val is_uninitialized : 'b t -> 'a key -> bool
@@ -339,6 +350,7 @@ module type T1 = sig
 
   val size : unit t -> int
   val get  : unit t -> 'a key -> 'a
+  val get_def : unit t -> 'a key -> 'a -> 'a
   val set  : unit t -> 'a key -> 'a -> unit
 
   val is_uninitialized : unit t -> 'a key -> bool

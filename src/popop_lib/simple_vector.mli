@@ -27,6 +27,7 @@ val create : int -> 'a t
 
 val size : 'a t -> int
 val get  : 'a t -> int -> 'a
+val get_def : 'a t -> int -> 'a -> 'a
 val set  : 'a t -> int -> 'a -> unit
 
 val is_uninitialized : 'a t -> int -> bool

@@ -186,39 +186,32 @@ let new_handle t =
 let get_table_dom t k =
   VDom.check_is_registered k;
   VDomTable.inc_size k t.dom;
-  if VDomTable.is_uninitialized t.dom k then
+  VDomTable.get_def t.dom k
     { table = Cl.M.empty;
       events = Cl.M.empty }
-  else
-    VDomTable.get t.dom k
 
 let get_table_sem t k =
-  assert (if sem_uninitialized k then raise UnregisteredKey else true);
+  Typedef.check_sem_registered k;
   VSemTable.inc_size k t.sem;
-  if VSemTable.is_uninitialized t.sem k
-  then begin Sem.Vector.set t.sem k []; [] end
-  else Sem.Vector.get t.sem k
+  Sem.Vector.get_def t.sem k []
 
 let get_table_value t k =
-  assert (if value_uninitialized k
-    then raise UnregisteredKey else true);
+  Typedef.check_value_registered k;
   VValueTable.inc_size k t.value;
-  if VValueTable.is_uninitialized t.value k then
+  VValueTable.get_def t.value k
     { table = Cl.M.empty;
       events = Cl.M.empty;
       reg_events = [];
     }
-  else
-    VValueTable.get t.value k
 
 exception UninitializedEnv of Env.K.t
 
-exception NotNormalized
+exception NotRegistered
 
 (** Just used for being able to qualify these function on t *)
 module T = struct
   let rec find t cl =
-    let cl' = Cl.M.find_exn NotNormalized cl t.repr in
+    let cl' = Cl.M.find_exn NotRegistered cl t.repr in
     if Cl.equal cl cl' then cl else
       let r = find t cl' in
       t.repr <- Cl.M.add cl r t.repr;
@@ -388,10 +381,6 @@ module Delayed = struct
     assert (is_current_env t);
     is_repr t.env cl
 
-  (* let is_repr_of t cl1 cl2 = *)
-  (*   try Cl.equal (find t cl2) cl1 *)
-  (*   with NotNormalized -> Cl.equal cl2 cl1 *)
-
   let is_equal t cl1 cl2 =
     assert (is_current_env t);
     is_equal t.env cl1 cl2
@@ -503,14 +492,12 @@ module Delayed = struct
 
   let attach_reg_cl t cl dem event =
     let event = Events.Wait.Event (dem,event) in
-    begin try
-        let cl = find t cl in
-        (** already registered *)
-        Wait.wakeup_events_list Events.Wait.translate_regcl t (Some [event]) cl
-      with NotNormalized ->
-        t.env.event_reg <-
-          Cl.M.add_change Lists.singleton Lists.add cl event t.env.event_reg
-    end
+    match find t cl with
+    | cl -> (** already registered *)
+      Wait.wakeup_events_list Events.Wait.translate_regcl t (Some [event]) cl
+    | exception NotRegistered ->
+      t.env.event_reg <-
+        Cl.M.add_change Lists.singleton Lists.add cl event t.env.event_reg
 
   let attach_reg_sem (type a) t (sem : a sem) dem event =
     let event = Events.Wait.Event (dem,event) in

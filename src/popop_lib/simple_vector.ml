@@ -42,6 +42,11 @@ let get t i =
   assert (r != dumb);
   r
 
+let get_def t i def =
+  assert (i < t.size);
+  let r = t.data.(i) in
+  if r == dumb then def else r
+
 let set t i v =
   assert (i < t.size);
   t.data.(i) <- v

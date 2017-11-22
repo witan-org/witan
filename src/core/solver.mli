@@ -29,7 +29,7 @@
 open Explanation
 open Typedef
 
-exception NotNormalized
+exception NotRegistered
 
 type exp_same_sem =
 | ExpSameSem   : pexp * Cl.t * ClSem.t -> exp_same_sem
