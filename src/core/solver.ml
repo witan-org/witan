@@ -66,17 +66,12 @@ module VDomTable = Dom.MkVector (struct type ('a,'unused) t = 'a domtable end)
 
 module VSemTable = Sem.Vector
 
-module type ValueTable = sig
-  module D : Typedef.Value
-  val table : D.t Cl.M.t
-  val events : Events.Wait.t Bag.t Cl.M.t
-  val reg_events : Events.Wait.t list
-end
-
-module VValueTable = Value.MkVector
-  (struct type ('a,'unit) t =
-            (module ValueTable with type D.t = 'a)
-   end)
+type 'a valuetable = {
+  table : 'a Cl.M.t;
+  events : Events.Wait.t Bag.t Cl.M.t;
+  reg_events : Events.Wait.t list;
+}
+module VValueTable = Value.MkVector (struct type ('a,'unit) t = 'a valuetable end)
 
 (** Environnement *)
 
@@ -189,6 +184,7 @@ let new_handle t =
 (** {2 Table access in the environment } *)
 
 let get_table_dom t k =
+  VDom.check_is_registered k;
   VDomTable.inc_size k t.dom;
   if VDomTable.is_uninitialized t.dom k then
     { table = Cl.M.empty;
@@ -196,32 +192,24 @@ let get_table_dom t k =
   else
     VDomTable.get t.dom k
 
-let get_table_sem : t -> 'a sem -> semtable = fun t k ->
+let get_table_sem t k =
   assert (if sem_uninitialized k then raise UnregisteredKey else true);
   VSemTable.inc_size k t.sem;
   if VSemTable.is_uninitialized t.sem k
   then begin Sem.Vector.set t.sem k []; [] end
   else Sem.Vector.get t.sem k
 
-let get_table_value : t -> 'a value -> (module ValueTable with type D.t = 'a)
-  = fun (type a) t k ->
+let get_table_value t k =
   assert (if value_uninitialized k
     then raise UnregisteredKey else true);
   VValueTable.inc_size k t.value;
   if VValueTable.is_uninitialized t.value k then
-    let value = get_value k in
-    let module ValueTable = struct
-      module D = (val value : Value with type t = a)
-      let table = Cl.M.empty
-      let events = Cl.M.empty
-      let reg_events = []
-    end in
-    (module ValueTable : ValueTable with type D.t = a)
+    { table = Cl.M.empty;
+      events = Cl.M.empty;
+      reg_events = [];
+    }
   else
-    (module (val VValueTable.get t.value k
-        : ValueTable with type D.t = a)
-        : ValueTable with type D.t = a)
-
+    VValueTable.get t.value k
 
 exception UninitializedEnv of Env.K.t
 
@@ -261,10 +249,8 @@ let get_dom t dom cl =
   let cl = find_def t cl in
   get_direct_dom t dom cl
 
-let get_direct_value (type a) t (value : a value) cl =
-  let module ValueTable =
-    (val (get_table_value t value) : ValueTable with type D.t = a) in
-  Cl.M.find_opt cl ValueTable.table
+let get_direct_value t value cl =
+  Cl.M.find_opt cl (get_table_value t value).table
 
 let get_value t value cl =
   let cl = find_def t cl in
@@ -292,7 +278,7 @@ let is_registered t cl =
 
 (** {2 For debugging and display} *)
 let _print_env fmt t =
-  let printd dom fmt domtable =
+  let printd (type a) dom fmt (domtable:a domtable) =
     Format.fprintf fmt "%a:@[%a@]" Dom.pp dom
       (Pp.iter2 Cl.M.iter Pp.newline Pp.colon
          Cl.pp (Bag.pp Pp.comma Events.Wait.pp))
@@ -319,7 +305,7 @@ let output_graph filename t =
     let vertex_name cl = string_of_int (Cl.hash cl)
 
     let pp fmt cl =
-      let iter_dom dom fmt domtable =
+      let iter_dom dom fmt (domtable: _ domtable) =
         try
           let s   = Cl.M.find cl domtable.table in
           Format.fprintf fmt "| {%a | %s}"
@@ -418,31 +404,30 @@ module Delayed = struct
   let set_value_direct (type a) t pexp (value : a value) cl0 new_v =
     Debug.incr stats_set_value;
     let cl = find t cl0 in
-    let module ValueTable = (val (get_table_value t.env value)) in
-    let events = Cl.M.find_opt cl ValueTable.events in
-    let new_table = Cl.M.add cl new_v ValueTable.table in
-    let module ValueTable' = struct
-      include ValueTable
-      let table = new_table
-    end in
-    VValueTable.set t.env.value value (module ValueTable');
+    let valuetable = get_table_value t.env value in
+    let events = Cl.M.find_opt cl valuetable.events in
+    let new_table = Cl.M.add cl new_v valuetable.table in
+    let valuetable = {
+      valuetable with
+      table = new_table
+    } in
+    VValueTable.set t.env.value value valuetable;
     Explanation.add_pexp_value t.env.trail pexp value ~cl ~cl0;
     Wait.wakeup_events_bag Events.Wait.translate_value t events (cl,value)
 
   let merge_values t pexp cl0 cl0' =
     let cl  = find t cl0 in
     let cl' = find t cl0'  in
-    let iteri (type a) value valuetable =
-      let module ValueTable =
-        (val valuetable : ValueTable with type D.t = a) in
-      let old_s = Cl.M.find_opt cl ValueTable.table in
-      let old_s'  = Cl.M.find_opt cl'  ValueTable.table in
+    let iteri (type a) (value:a value) (valuetable:a valuetable) =
+      let old_s = Cl.M.find_opt cl valuetable.table in
+      let old_s'  = Cl.M.find_opt cl'  valuetable.table in
+      let module Value = (val (Typedef.get_value value)) in
       Debug.dprintf12 debug_few
         "[Solver] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
         Cl.pp cl Cl.pp cl0
-        (Pp.option ValueTable.D.pp) old_s
+        (Pp.option (print_value value)) old_s
         Cl.pp cl' Cl.pp cl0'
-        (Pp.option ValueTable.D.pp) old_s';
+        (Pp.option (print_value value)) old_s';
       match old_s, old_s' with
       | None, None   -> ()
       | Some v, None ->
@@ -450,7 +435,7 @@ module Delayed = struct
       | None, Some v' ->
         set_value_direct t pexp value cl0  v'
       | Some v, Some v' ->
-        if ValueTable.D.equal v v'
+        if Value.equal v v'
         then
           (* already same value. Does that really happen? *)
           ()
@@ -504,12 +489,12 @@ module Delayed = struct
   let attach_value (type a) t cl (value : a value) dem event =
     let cl = find_def t cl in
     let event = Events.Wait.Event (dem,event) in
-    let module ValueTable = (val (get_table_value t.env value)) in
-    let module ValueTable' = struct
-      include ValueTable
-      let events = Cl.M.add_change Bag.elt Bag.add cl event events
-    end in
-    VValueTable.set t.env.value value (module ValueTable)
+    let valuetable = (get_table_value t.env value) in
+    let valuetable = {
+      valuetable with
+      events = Cl.M.add_change Bag.elt Bag.add cl event valuetable.events
+    } in
+    VValueTable.set t.env.value value valuetable
 
   let attach_cl t cl dem event =
     let cl = find_def t cl in
@@ -566,7 +551,7 @@ module Delayed = struct
 
 
   let check_no_dom t cl =
-    let foldi acc _dom domtable =
+    let foldi acc _dom (domtable: _ domtable) =
       acc &&
       not (Cl.M.mem cl domtable.table)
     in
@@ -609,8 +594,8 @@ module Delayed = struct
       | Only_for_solver.Value clvalue ->
         begin match Only_for_solver.value_of_cl clvalue with
         | Only_for_solver.Value(value,v) ->
-          let module V = (val get_table_value t.env value) in
-          let reg_events = V.reg_events in
+          let valuetable = get_table_value t.env value in
+          let reg_events = valuetable.reg_events in
           Wait.wakeup_events_list Events.Wait.translate_regvalue
             t (Some reg_events) (clvalue);
           set_value_direct t (assert false (** TODO *)) value cl v
@@ -730,7 +715,7 @@ module Delayed = struct
     let other_cl = find t other_cl0 in
     let repr_cl  = find t repr_cl0  in
     let dom_not_done = ref false in
-    let iteri (type a) (dom : a Dom.t) domtable =
+    let iteri (type a) (dom : a Dom.t) (domtable : a domtable) =
       let other_s = Cl.M.find_opt other_cl domtable.table in
       let repr_s  = Cl.M.find_opt repr_cl  domtable.table in
     let module Dom = (val (VDom.get_dom dom)) in
@@ -769,7 +754,7 @@ module Delayed = struct
     end;
 
     (** move dom events  *)
-    let iteri (type a) (dom : a Dom.t) domtable =
+    let iteri (type a) (dom : a Dom.t) (domtable: a domtable) =
       match Cl.M.find_opt other_cl domtable.events with
       | None -> ()
       | Some other_events ->
