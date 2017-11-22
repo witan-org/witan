@@ -27,7 +27,7 @@ let debug = Debug.register_info_flag ~desc:"for the events" "Solver.events"
 module Fired = struct
   type 'b event =
     (** the domain dom of the class change *)
-    | EventDom    : Cl.t * 'a dom  *      'b -> 'b event
+    | EventDom    : Cl.t * 'a Dom.t  *      'b -> 'b event
     (** the value of the class has been set *)
     | EventValue    : Cl.t * 'a value  *  'b -> 'b event
     (** a new semantical term 'a point to this class (not complete) *)

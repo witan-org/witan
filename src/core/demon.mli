@@ -25,7 +25,7 @@ open Typedef
 module Create : sig
   type 'b event =
     (** the domain dom of the class is watched *)
-    | EventDom      : Cl.t * 'a dom  * 'b -> 'b event
+    | EventDom      : Cl.t * 'a Dom.t  * 'b -> 'b event
     (** the value of the class is watched *)
     | EventValue    : Cl.t * 'a value  * 'b -> 'b event
     (** we want to register this class *)

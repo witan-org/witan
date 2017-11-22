@@ -114,21 +114,19 @@ and action_immediate_dem =
 
 and action_merge_dom =
 | SetMergeDomCl  :
-    pexp * 'a dom * Cl.t * Cl.t * bool -> action_merge_dom
+    pexp * 'a Dom.t * Cl.t * Cl.t * bool -> action_merge_dom
 
 and action_merge =
 | Merge of pexp * Cl.t * Cl.t
 
 and action_ext =
-(* | ExtSetDom      : pexp * 'a dom * Cl.t * 'a        -> action_ext *)
-(* | ExtSetMergeDom : pexp * 'a dom * Cl.t * 'a option -> action_ext *)
-(* | ExtSetSem      : pexp * 'a sem * Cl.t * 'a        -> action_ext *)
-(* | ExtMerge       : pexp * Cl.t * Cl.t -> action_ext *)
 | ExtDem         : Events.Wait.daemon_key  -> action_ext
 
 end
 
 include Def
+
+(** {2 Define events} *)
 
 module WaitDef = struct
   type delayed = delayed_t
@@ -140,6 +138,10 @@ module WaitDef = struct
 end
 module Wait : Events.Wait.S with type delayed = delayed_t and type delayed_ro = delayed_t =
   Events.Wait.Make(WaitDef)
+
+(** {2 Define domain registration} *)
+module VDom = Dom.Make(struct type delayed = delayed_t type pexp = Explanation.pexp end)
+include VDom
 
 let mk_dumb_delayed () = { env = Obj.magic 0;
                            todo_immediate_dem = Queue.create ();
@@ -184,59 +186,9 @@ let new_handle t =
   current_delayed = t.current_delayed;
 }
 
-(** {2 Dom and Sem} *)
-module type Dom = sig
-  type t
-
-  val merged: t option -> t option -> bool
-  val merge: delayed_t ->
-    Explanation.pexp -> t option * Cl.t -> t option * Cl.t ->
-    bool ->
-    unit
-  val pp: Format.formatter  -> t  -> unit
-  val key: t dom
-end
-
-module VDom = Dom.MkVector
-  (struct type ('a,'unedeed) t =
-            (module Dom with type t = 'a)
-   end)
-
-let defined_dom : unit VDom.t = VDom.create 8
-
-module RegisterDom (D:Dom) = struct
-
-  let () =
-    VDom.inc_size D.key defined_dom;
-    assert (if not (VDom.is_uninitialized defined_dom D.key)
-      then raise AlreadyRegisteredKey else true);
-    let dom = (module D: Dom with type t = D.t) in
-    VDom.set defined_dom D.key dom
-
-end
-
-
-let get_dom k =
-  assert (if VDom.is_uninitialized defined_dom k
-    then raise UnregisteredKey else true);
-  VDom.get defined_dom k
-
-let get_dom_with_prefix_to_remove = get_dom
-
-let print_dom (type a) (k : a dom) fmt s =
-  let dom = get_dom k in
-  let module D = (val dom : Dom with type t = a) in
-  D.pp fmt s
-
-let print_dom_opt k fmt = function
-  | None -> Format.pp_print_string fmt "N"
-  | Some s -> print_dom k fmt s
-
-(** {2 Dom Sem continued} *)
+(** {2 Table access in the environment } *)
 
 let get_table_dom t k =
-  assert (if VDom.is_uninitialized defined_dom k
-    then raise UnregisteredKey else true);
   VDomTable.inc_size k t.dom;
   if VDomTable.is_uninitialized t.dom k then
     { table = Cl.M.empty;
@@ -302,7 +254,7 @@ module T = struct
 end
 open T
 
-let get_direct_dom (type a) t (dom : a dom) cl =
+let get_direct_dom (type a) t (dom : a Dom.t) cl =
   Cl.M.find_opt cl (get_table_dom t dom).table
 
 let get_dom t dom cl =
@@ -371,7 +323,7 @@ let output_graph filename t =
         try
           let s   = Cl.M.find cl domtable.table in
           Format.fprintf fmt "| {%a | %s}"
-            Typedef.Dom.pp dom (escape_for_dot (print_dom dom) s);
+            Dom.pp dom (escape_for_dot (VDom.print_dom dom) s);
         with Not_found -> ()
       in
       let print_ty fmt cl =
@@ -538,7 +490,7 @@ module Delayed = struct
     assert (is_current_env t);
     set_env t.env env v
 
-  let attach_dom (type a) t cl (dom : a dom) dem event =
+  let attach_dom (type a) t cl (dom : a Dom.t) dem event =
     let cl = find_def t cl in
     let event = Events.Wait.Event (dem,event) in
     let domtable = get_table_dom t.env dom in
@@ -614,7 +566,7 @@ module Delayed = struct
 
 
   let check_no_dom t cl =
-    let foldi (type a) acc _dom domtable =
+    let foldi acc _dom domtable =
       acc &&
       not (Cl.M.mem cl domtable.table)
     in
@@ -714,7 +666,7 @@ module Delayed = struct
         (ExpSameValue(pexp,cl0,clvalue)) in
     set_semvalue_pending t pexp cl0 cl0'
 
-  let set_dom_pending (type a) t pexp (dom : a dom) cl0 new_v =
+  let set_dom_pending (type a) t pexp (dom : a Dom.t) cl0 new_v =
     Debug.incr stats_set_dom;
     let cl = find t cl0 in
     let domtable = (get_table_dom t.env dom) in
@@ -725,7 +677,7 @@ module Delayed = struct
     Explanation.add_pexp_dom t.env.trail pexp dom ~cl ~cl0;
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (cl,dom)
 
-  let set_dom_premerge_pending (type a) t (dom : a dom)
+  let set_dom_premerge_pending (type a) t (dom : a Dom.t)
       ~from:cl0' cl0 (new_v:a) =
     Debug.incr stats_set_dom;
     let cl' = find t cl0' in
@@ -752,13 +704,13 @@ module Delayed = struct
   let choose_repr a b = Shuffle.shuffle2 (a,b)
 
   (** TODO rename other_cl repr_cl *)
-  let merge_dom_pending (type a) t pexp (dom : a dom) other_cl0 repr_cl0 inv =
+  let merge_dom_pending (type a) t pexp (dom : a Dom.t) other_cl0 repr_cl0 inv =
     let other_cl = find t other_cl0 in
     let repr_cl  = find t repr_cl0  in
     let domtable = (get_table_dom t.env dom) in
     let old_other_s = Cl.M.find_opt other_cl domtable.table in
     let old_repr_s = Cl.M.find_opt repr_cl  domtable.table in
-    let module Dom = (val (get_dom_with_prefix_to_remove dom)) in
+    let module Dom = (val (VDom.get_dom dom)) in
     Debug.dprintf12 debug_few
       "[Solver] @[merge dom (%a(%a),%a)@ and (%a(%a),%a)@]"
       Cl.pp other_cl Cl.pp other_cl0
@@ -778,10 +730,10 @@ module Delayed = struct
     let other_cl = find t other_cl0 in
     let repr_cl  = find t repr_cl0  in
     let dom_not_done = ref false in
-    let iteri (type a) (dom : a dom) domtable =
+    let iteri (type a) (dom : a Dom.t) domtable =
       let other_s = Cl.M.find_opt other_cl domtable.table in
       let repr_s  = Cl.M.find_opt repr_cl  domtable.table in
-    let module Dom = (val (get_dom_with_prefix_to_remove dom)) in
+    let module Dom = (val (VDom.get_dom dom)) in
       if not (Dom.merged other_s repr_s)
       then begin
         dom_not_done := true;
@@ -817,7 +769,7 @@ module Delayed = struct
     end;
 
     (** move dom events  *)
-    let iteri (type a) (dom : a dom) domtable =
+    let iteri (type a) (dom : a Dom.t) domtable =
       match Cl.M.find_opt other_cl domtable.events with
       | None -> ()
       | Some other_events ->
@@ -1094,7 +1046,7 @@ module type Getter = sig
 
   val is_equal      : t -> Cl.t -> Cl.t -> bool
   val find_def  : t -> Cl.t -> Cl.t
-  val get_dom   : t -> 'a dom -> Cl.t -> 'a option
+  val get_dom   : t -> 'a Dom.t -> Cl.t -> 'a option
     (** dom of the class *)
   val get_value   : t -> 'a value -> Cl.t -> 'a option
     (** value of the class *)
@@ -1126,21 +1078,7 @@ type d = Delayed.t
 module Ro : Ro with type t = Delayed.t = Delayed
 
 let check_initialization () =
-  let well_initialized = ref true in
-
-  Dom.iter {Dom.iter = fun dom ->
-    if VDom.is_uninitialized defined_dom dom then begin
-      Format.eprintf
-        "[Warning] The domain %a is not registered" Dom.pp dom;
-      well_initialized := false;
-    end else begin
-      Debug.dprintf2 debug "[Solver] @[domain %a initialized@]"
-        Dom.pp dom;
-    end};
-
-  well_initialized := !well_initialized && Wait.well_initialized ();
-
-  !well_initialized
+  VDom.well_initialized () && Wait.well_initialized ()
 
 let () = Exn_printer.register (fun fmt exn ->
     match exn with

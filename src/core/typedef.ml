@@ -68,11 +68,8 @@ module Ty = struct
 
 end
 
-module Dom = Keys.Make_key(struct end)
 module Sem = Keys.Make_key(struct end)
 module Value = Keys.Make_key(struct end)
-
-type 'a dom = 'a Dom.t
 
 (** sem *)
 type 'a sem = 'a Sem.t

@@ -222,8 +222,8 @@ let show_pexp = Pp.string_of_wnl pp_pexp
 
 type modif =
 | Cl : Cl.t * Cl.t             -> modif (** Just for taking an age *)
-| Dom: Cl.t * 'a dom      * pexp * Cl.t -> modif
-| DomL: Cl.t * 'a dom * 'a option * Age.t * pexp * Cl.t -> modif
+| Dom: Cl.t * 'a Dom.t      * pexp * Cl.t -> modif
+| DomL: Cl.t * 'a Dom.t * 'a option * Age.t * pexp * Cl.t -> modif
 | Dec: dec                       -> modif
 
 let print_modif_ref = ref (fun _ _ -> assert false)
@@ -287,7 +287,7 @@ let print_domhist fmt x =
     fmt x
 
 type dom_before_last_dec =
-  { dom_before_last_dec: 'a. 'a dom -> Cl.t -> 'a option }
+  { dom_before_last_dec: 'a. 'a Dom.t -> Cl.t -> 'a option }
 
 type t = {
   mutable last_dec : Age.t;

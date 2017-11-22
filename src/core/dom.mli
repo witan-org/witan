@@ -20,65 +20,39 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-(** Witan core: define basic types and the solver *)
+open Typedef
 
-include Std
+(** Domains *)
 
-module Ty = struct
-  include Typedef.Ty
+include Keys.Key
+
+type 'a dom = 'a t
+
+(** delayed and pexp are instanciated in Solver *)
+module type Dom_partial = sig
+  type delayed
+  type pexp
+  type t
+
+  val merged: t option -> t option -> bool
+  val merge: delayed ->
+    pexp -> t option * Cl.t -> t option * Cl.t ->
+    bool ->
+    unit
+  val pp: Format.formatter  -> t  -> unit
+  val key: t dom
 end
 
-module Keys = Keys
+module Make (S:sig type delayed type pexp end) : sig
 
-module Cl = struct
-  include Typedef.Cl
+  module type Dom = Dom_partial with type delayed := S.delayed and type pexp := S.pexp
+
+  module RegisterDom(D:Dom) : sig end
+
+  val check_is_registered : 'a dom -> unit
+  val well_initialized : unit -> bool
+  val get_dom : 'a dom -> (module Dom with type t = 'a)
+  val print_dom : 'a dom -> Format.formatter -> 'a -> unit
+  val print_dom_opt : 'a dom -> Format.formatter -> 'a option -> unit
+
 end
-
-module Value = struct
-  include Typedef.Value
-  let print = Typedef.print_value
-
-  module type Value = Typedef.Value
-
-  module Register = Typedef.RegisterValue
-end
-
-module Sem = struct
-  include Typedef.Sem
-  let print = Typedef.print_sem
-
-  module type Sem = Typedef.Sem
-  module type Registered = Typedef.RegisteredSem
-
-  module Register = Typedef.RegisterSem
-end
-
-module Dom = struct
-  include Dom
-  let print = Solver.print_dom
-
-  module type Dom = Solver.Dom
-
-  module Register = Solver.RegisterDom
-end
-
-module Dem = struct
-  include Typedef.Dem
-
-  module type Dem = Solver.Wait.Dem
-
-  module Register = Solver.Wait.RegisterDem
-end
-
-module Env = Env
-
-module Solver = Solver
-module Demon = Demon
-module Explanation = Explanation
-module Variable = Variable
-
-module Events = Events.Fired
-
-exception UnwaitedEvent = Typedef.UnwaitedEvent
-(** Can be raised by daemon when receiving an event that they don't
-    waited for. It is the sign of a bug in the core solver *)

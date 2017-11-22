@@ -25,7 +25,7 @@ open Typedef
 module Fired : sig
   type 'b event =
     (** the domain dom of the class change *)
-    | EventDom    : Cl.t * 'a dom  *      'b -> 'b event
+    | EventDom    : Cl.t * 'a Dom.t  *      'b -> 'b event
     (** the value of the class has been set *)
     | EventValue    : Cl.t * 'a value  *  'b -> 'b event
     (** a new semantical term 'a point to this class (not complete) *)
@@ -66,7 +66,7 @@ module Wait : sig
 
   type 'a translate = { translate : 'd. 'a -> 'd -> 'd Fired.event}
 
-  val translate_dom : (Cl.t * 'a dom) translate
+  val translate_dom : (Cl.t * 'a Dom.t) translate
   val translate_value : (Cl.t * 'a value) translate
   val translate_reg : Cl.t translate
   val translate_regcl : Cl.t translate

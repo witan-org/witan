@@ -75,13 +75,13 @@ type modif =
       but cl1 and cl2 are perhaps not the representative of there class
   *)
 
-| Dom: Cl.t * 'a dom      * pexp * Cl.t -> modif
+| Dom: Cl.t * 'a Dom.t      * pexp * Cl.t -> modif
 (** Cl(clr,dom,pexp,cl) explication why cl1 and cl2 are merged
       but clr is the representative of the equivalence class,
     cl2 can be not the representative.
 *)
 
-| DomL: Cl.t * 'a dom * 'a option * Age.t * pexp * Cl.t -> modif
+| DomL: Cl.t * 'a Dom.t * 'a option * Age.t * pexp * Cl.t -> modif
 (** same as before but the first time in this level *)
 
 | Dec: dec                       -> modif
@@ -126,7 +126,7 @@ type domhist = domhist_node Cl.M.t Dom.Vector.t
 val print_domhist: domhist Pp.pp
 
 type dom_before_last_dec =
-  { dom_before_last_dec: 'a. 'a dom -> Cl.t -> 'a option }
+  { dom_before_last_dec: 'a. 'a Dom.t -> Cl.t -> 'a option }
 
 type t = private {
   mutable last_dec : Age.t;
@@ -177,13 +177,13 @@ val add_merge_dom_all:
 (** cl* representative, cl*_0 the one merged initially on which the
     pexp apply *)
 val add_pexp_dom:
-  t -> pexp -> 'b dom -> cl:Cl.t -> cl0:Cl.t -> unit
+  t -> pexp -> 'b Dom.t -> cl:Cl.t -> cl0:Cl.t -> unit
 val add_pexp_value:
   t -> pexp -> 'b value -> cl:Cl.t -> cl0:Cl.t -> unit
 
 
 val add_pexp_dom_premerge:
-  t -> 'b dom ->
+  t -> 'b Dom.t ->
   clto:Cl.t ->
   clfrom:Cl.t ->
   clfrom0:Cl.t ->
@@ -191,7 +191,7 @@ val add_pexp_dom_premerge:
 
 val trail: t -> modif list
 val last_dec: t -> Age.t
-val dom_before_last_dec: t -> 'a dom -> Cl.t -> 'a option
+val dom_before_last_dec: t -> 'a Dom.t -> Cl.t -> 'a option
 val nbdec: t -> int
 val at_current_level: t -> Age.t -> bool
 val before_first_dec : t -> Age.t -> bool

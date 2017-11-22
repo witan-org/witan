@@ -44,7 +44,7 @@ module type Getter = sig
 
   val is_equal      : t -> Cl.t -> Cl.t -> bool
   val find_def  : t -> Cl.t -> Cl.t
-  val get_dom   : t -> 'a dom -> Cl.t -> 'a option
+  val get_dom   : t -> 'a Dom.t -> Cl.t -> 'a option
     (** dom of the class *)
   val get_value   : t -> 'a value -> Cl.t -> 'a option
     (** value of the class *)
@@ -78,7 +78,7 @@ module Delayed : sig
   include Ro with type t := t
 
   (** {3 Immediate modifications} *)
-  val set_dom  : t -> pexp -> 'a dom -> Cl.t -> 'a -> unit
+  val set_dom  : t -> pexp -> 'a Dom.t -> Cl.t -> 'a -> unit
     (** change the dom of the equivalence class *)
 
   val set_sem  : t -> Explanation.pexp -> Cl.t -> ClSem.t -> unit
@@ -90,20 +90,20 @@ module Delayed : sig
   val set_value: t -> Explanation.pexp -> 'a value -> Cl.t -> 'a -> unit
   (** attach value to an equivalence class *)
 
-  val set_dom_premerge  : t -> 'a dom -> Cl.t -> 'a -> unit
+  val set_dom_premerge  : t -> 'a Dom.t -> Cl.t -> 'a -> unit
     (** [set_dom_premerge d cl] must be used only during the merge of two class
         [cl1] and [cl2], with one of them being [cl].
         The explication is the explication given for the merge
     *)
 
-  val unset_dom  : t -> pexp -> 'a dom -> Cl.t -> unit
+  val unset_dom  : t -> pexp -> 'a Dom.t -> Cl.t -> unit
   (** remove the dom of the equivalence class *)
 
   (** {3 Delayed modifications} *)
   val merge    : t -> Explanation.pexp -> Cl.t -> Cl.t -> unit
 
   (** {3 Attach Event} *)
-  val attach_dom: t -> Cl.t -> 'a dom -> ('event,'r) dem -> 'event -> unit
+  val attach_dom: t -> Cl.t -> 'a Dom.t -> ('event,'r) dem -> 'event -> unit
     (** wakeup when the dom change *)
   val attach_value: t -> Cl.t -> 'a value -> ('event,'r) dem -> 'event -> unit
     (** wakeup when a value is attached to this equivalence class *)
@@ -136,25 +136,7 @@ module Wait : Events.Wait.S with type delayed = Delayed.t and type delayed_ro = 
 
 (** {2 Domains and Semantic Values key creation} *)
 
-module type Dom = sig
-  type t
-
-  val merged: t option -> t option -> bool
-    (** Check if two values of the domain are merged (equal) *)
-
-  val merge:
-    Delayed.t -> pexp ->
-    t option * Cl.t (* cl1 *) ->
-    t option * Cl.t (* cl2 *) ->
-    (** Never with both None *)
-    bool (** true: cl1 will be repr otherwise it is cl2 *) ->
-    unit
-
-  val pp: Format.formatter  -> t  -> unit
-  val key: t dom
-
-
-end
+module type Dom = Dom.Dom_partial with type delayed := Delayed.t and type pexp := Explanation.pexp
 
 module RegisterDom (D:Dom) : sig end
 
@@ -207,5 +189,5 @@ val output_graph : string -> t -> unit
 val check_initialization: unit -> bool
 (** Check if the initialization of all the dom, sem and dem have been done *)
 
-val print_dom: 'a dom -> 'a Pp.pp
-val print_dom_opt: 'a dom -> 'a option Pp.pp
+val print_dom: 'a Dom.t -> 'a Pp.pp
+val print_dom_opt: 'a Dom.t -> 'a option Pp.pp

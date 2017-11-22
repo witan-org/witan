@@ -54,9 +54,6 @@ exception AlreadyRegisteredKey
 
 module Sem: Keys.Key
 module Value: Keys.Key
-module Dom: Keys.Key
-
-type 'a dom = 'a Dom.t
 
 type 'a sem = 'a Sem.t
 

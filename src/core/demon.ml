@@ -29,7 +29,7 @@ let debug = Debug.register_info_flag
 
 module Create = struct
     type 'b event =
-    | EventDom      : Cl.t * 'a dom  * 'b -> 'b event
+    | EventDom      : Cl.t * 'a Dom.t  * 'b -> 'b event
     | EventValue    : Cl.t * 'a value * 'b -> 'b event
     | EventRegCl  : Cl.t           * 'b -> 'b event
     | EventChange   : Cl.t           * 'b -> 'b event
