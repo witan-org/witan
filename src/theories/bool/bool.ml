@@ -241,7 +241,7 @@ module DaemonPropaNot = struct
   let throttle = 100
   let wakeup d =
     function
-    | Events.Fired.EventValue(_,dom',((_,cl,ncl) as x)) ->
+    | Events.EventValue(_,dom',((_,cl,ncl) as x)) ->
       assert (Value.equal dom dom');
       begin match Delayed.get_value d dom cl with
         | None -> raise Impossible
@@ -374,10 +374,10 @@ module DaemonPropa = struct
       wakeup_lit ~first:true d clsem 0 last
 
   let wakeup d = function
-    | Events.Fired.EventValue(_,dom',Lit(clsem,watched,next)) ->
+    | Events.EventValue(_,dom',Lit(clsem,watched,next)) ->
       assert( Value.equal dom dom' );
       ignore (wakeup_lit ~first:false d clsem watched next)
-    | Events.Fired.EventValue(_ownr,dom',All clsem) ->
+    | Events.EventValue(_ownr,dom',All clsem) ->
       assert( Value.equal dom dom' );
       (** use this own because the other is the representant *)
       ignore (wakeup_own ~first:false d clsem)
@@ -396,7 +396,7 @@ module DaemonInit = struct
   let immediate = false
   let throttle = 100
   let wakeup d = function
-    | Events.Fired.EventRegSem(clsem,()) ->
+    | Events.EventRegSem(clsem,()) ->
       begin try
           let clsem = ThE.coerce_clsem clsem in
           let v = ThE.sem clsem in

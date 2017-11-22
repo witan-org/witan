@@ -66,106 +66,6 @@ let register_env pp env =
           then raise AlreadyRegisteredKey else true);
   VEnv.set defined_env env pp
 
-
-module Events = struct
-
-  module Wait = struct
-    type t =
-    | Event: ('k,'d) dem * 'k -> t
-
-    let pp fmt = function
-      | Event (dem, event) ->
-        let f (type k) (type d) (dem:(k,d) dem) (event : k) =
-          Format.fprintf fmt "Demon %a event %a"
-            Dem.pp dem (Print.dem_event  dem) event
-        in
-        f dem event
-  end
-
-
-  module Fired = struct
-    type 'b event =
-      (** the domain dom of the class change *)
-    | EventDom    : Cl.t * 'a dom  *      'b -> 'b event
-      (** the value of the class has been set *)
-    | EventValue    : Cl.t * 'a value  *  'b -> 'b event
-      (** a new semantical term 'a point to this class (not complete) *)
-    | EventSem    : Cl.t * 'a sem  * 'a * 'b -> 'b event
-      (** we want to register a class *)
-    | EventReg    : Cl.t *                'b -> 'b event
-      (** we want to register this class *)
-    | EventRegCl  : Cl.t *                'b -> 'b event
-      (** This class is not the representant of its eq-class anymore *)
-    | EventChange : Cl.t *                'b -> 'b event
-    (** a new semantical term 'a appear *)
-    | EventRegSem : ClSem.t * 'b -> 'b event
-    (** a new value 'a appear *)
-    | EventRegValue : ClValue.t * 'b -> 'b event
-
-    type 'a translate = { translate : 'd. 'a -> 'd -> 'd event}
-
-    let translate_dom =
-      {translate = fun (cl,dom) data -> EventDom(cl,dom,data)}
-    let translate_value =
-      {translate = fun (cl,value) data -> EventValue(cl,value,data)}
-    (* let translate_sem = *)
-    (*   {translate = fun (cl,sem,s) data -> EventSem(cl,sem,s,data)} *)
-    let translate_reg =
-      {translate = fun cl data -> EventReg(cl,data)}
-    let translate_regcl =
-      {translate = fun cl data -> EventRegCl(cl,data)}
-    let translate_change =
-      {translate = fun cl data -> EventChange(cl,data)}
-    let translate_regsem =
-      {translate = fun clsem data -> EventRegSem(clsem,data)}
-    let translate_regvalue =
-      {translate = fun clval data -> EventRegValue(clval,data)}
-
-    let pp fmt = function
-      | EventDom      (cl, dom, _) ->
-        Format.fprintf fmt "dom:%a of %a" Dom.pp dom Cl.pp cl
-      | EventValue    (cl, value, _) ->
-        Format.fprintf fmt "value:%a of %a" Value.pp value Cl.pp cl
-      | EventSem      (cl, sem, v, _) ->
-        Format.fprintf fmt "sem:%a of %a with %a"
-          Sem.pp sem Cl.pp cl (print_sem sem) v
-      | EventReg      (cl, _)    ->
-        Format.fprintf fmt "any registration of %a" Cl.pp cl
-      | EventRegCl    (cl, _)    ->
-        Format.fprintf fmt "registration of %a" Cl.pp cl
-      | EventChange   (cl, _)    ->
-        Format.fprintf fmt "changecl of %a" Cl.pp cl
-      | EventRegSem (clsem, _) ->
-        let cl = Only_for_solver.cl_of_clsem clsem in
-        begin match Only_for_solver.sem_of_cl clsem with
-        | Only_for_solver.Sem(sem,v) ->
-          Format.fprintf fmt "registration of sem:%a of %a with %a"
-            Sem.pp sem Cl.pp cl (print_sem sem) v
-        end
-      | EventRegValue (clvalue, _) ->
-        let cl = Only_for_solver.cl_of_clvalue clvalue in
-        begin match Only_for_solver.value_of_cl clvalue with
-        | Only_for_solver.Value(value,v) ->
-          Format.fprintf fmt "registration of value:%a of %a with %a"
-            Value.pp value Cl.pp cl (print_value value) v
-        end
-
-    let get_data = function
-      | EventDom      (_, _ , d)   -> d
-      | EventValue    (_, _ , d)   -> d
-      | EventSem      (_, _, _, d) -> d
-      | EventReg    (_, d)       -> d
-      | EventRegCl  (_, d)       -> d
-      | EventChange   (_, d)       -> d
-      | EventRegSem (_, d) -> d
-      | EventRegValue (_,d) -> d
-
-
-    type 'b t = 'b event list
-  end
-
-end
-
 module type Dom' = sig
   type delayed
   type t
@@ -177,29 +77,6 @@ module type Dom' = sig
     unit
   val pp: Format.formatter  -> t  -> unit
   val key: t dom
-end
-
-
-type _ enqueue =
-| EnqRun: 'r -> 'r enqueue
-| EnqAlready: _ enqueue
-| EnqRedirected: ('e,'r) dem * 'e -> _ enqueue
-| EnqStopped: _ enqueue
-
-module type Dem' = sig
-  type delayed
-
-  type runable
-  val print_runable: runable Pp.pp
-  val run: delayed -> runable -> runable option
-
-  type event
-  val print_event: event Pp.pp
-  val enqueue: delayed -> event Events.Fired.event -> runable enqueue
-
-  val key: (event,runable) dem
-  val immediate: bool
-
 end
 
 module DecTag = DInt
@@ -251,9 +128,6 @@ type t = {
   mutable current_delayed  : delayed_t; (** For assert-check *)
 }
 
-and daemon_key =
-| DaemonKey: ('k,'runable) dem * 'runable -> daemon_key
-
 (** delayed_t is used *)
 and delayed_t = {
   env : t;
@@ -262,12 +136,12 @@ and delayed_t = {
   mutable todo_delayed_merge : (pexp * Cl.t * Cl.t * bool) option;
   todo_merge : action_merge Queue.t;
   todo_ext_action : action_ext Queue.t;
-  sched_daemon : daemon_key -> unit;
+  sched_daemon : Events.Wait.daemon_key -> unit;
   sched_decision : chogen -> unit;
 }
 
 and action_immediate_dem =
-| RunDem : daemon_key -> action_immediate_dem
+| RunDem : Events.Wait.daemon_key -> action_immediate_dem
 
 and action_merge_dom =
 | SetMergeDomCl  :
@@ -281,11 +155,22 @@ and action_ext =
 (* | ExtSetMergeDom : pexp * 'a dom * Cl.t * 'a option -> action_ext *)
 (* | ExtSetSem      : pexp * 'a sem * Cl.t * 'a        -> action_ext *)
 (* | ExtMerge       : pexp * Cl.t * Cl.t -> action_ext *)
-| ExtDem         : daemon_key  -> action_ext
+| ExtDem         : Events.Wait.daemon_key  -> action_ext
 
 end
 
 include Def
+
+module WaitDef = struct
+  type delayed = delayed_t
+  let schedule_immediate t d = Queue.push (RunDem d) t.todo_immediate_dem
+  let schedule t d = t.sched_daemon d
+
+  type delayed_ro = delayed_t
+  let readonly x = x
+end
+module Wait : Events.Wait.S with type delayed = delayed_t and type delayed_ro = delayed_t =
+  Events.Wait.Make(WaitDef)
 
 let mk_dumb_delayed () = { env = Obj.magic 0;
                            todo_immediate_dem = Queue.create ();
@@ -332,19 +217,13 @@ let new_handler t =
 
 (** {2 Dom and Sem} *)
 module type Dom = Dom' with type delayed := delayed_t
-module type Dem = Dem' with type delayed := delayed_t
 
 module VDom = Dom.MkVector
   (struct type ('a,'unedeed) t =
             (module Dom with type t = 'a)
    end)
 
-module VDem = Dem.MkVector
-  (struct type ('k,'d,'unedeed) t =
-    (module Dem with type event = 'k and type runable = 'd) end)
-
 let defined_dom : unit VDom.t = VDom.create 8
-let defined_dem : unit VDem.t = VDem.create 8
 
 module RegisterDom (D:Dom) = struct
 
@@ -358,27 +237,10 @@ module RegisterDom (D:Dom) = struct
 end
 
 
-module RegisterDem (D:Dem) = struct
-
-  let () =
-    VDem.inc_size D.key defined_dem;
-    assert (if not (VDem.is_uninitialized defined_dem D.key)
-      then raise AlreadyRegisteredKey else true);
-    let dem =
-      (module D: Dem with type event = D.event and type runable = D.runable) in
-    VDem.set defined_dem D.key dem
-
-end
-
 let get_dom k =
   assert (if VDom.is_uninitialized defined_dom k
     then raise UnregisteredKey else true);
   VDom.get defined_dom k
-
-let get_dem k =
-  assert (if VDem.is_uninitialized defined_dem k
-    then raise UnregisteredKey else true);
-  VDem.get defined_dem k
 
 let print_dom (type a) (k : a dom) fmt s =
   let dom = get_dom k in
@@ -388,18 +250,6 @@ let print_dom (type a) (k : a dom) fmt s =
 let print_dom_opt k fmt = function
   | None -> Format.pp_print_string fmt "N"
   | Some s -> print_dom k fmt s
-
-let print_dem_event (type k) (type d) (k : (k,d) dem) fmt s =
-  let module S = (val get_dem k) in
-  S.print_event fmt s
-
-let () = Print.pdem_event.Print.pdem_event <- print_dem_event
-
-let print_dem_runable (type k) (type d) (k : (k,d) dem) fmt s =
-  let module S = (val get_dem k) in
-  S.print_runable fmt s
-
-let () = Print.pdem_runable.Print.pdem_runable <- print_dem_runable
 
 (** {2 Dom Sem continued} *)
 
@@ -629,42 +479,6 @@ module Delayed = struct
 
   let is_registered t cl = Cl.M.mem cl t.env.repr
 
-  let new_pending_daemon (type k) (type d) t (dem:(k,d) dem) runable =
-    let module Dem = (val get_dem dem) in
-    let daemonkey = DaemonKey(dem, runable) in
-    if Dem.immediate
-    then Queue.push (RunDem daemonkey) t.todo_immediate_dem
-    else t.sched_daemon daemonkey
-
-  let wakeup_event translate t info wevent =
-    match wevent with
-    | Events.Wait.Event (dem,event) ->
-      let rec f : type event r. t -> (event,r) dem -> event -> unit =
-        fun t dem event ->
-          let module Dem = (val get_dem dem) in
-          let event = translate.Events.Fired.translate info event in
-          match Dem.enqueue t event with
-          | EnqStopped -> () (** todo remove from the list of event *)
-          | EnqAlready -> ()
-          | EnqRedirected(dem,event) -> f t dem event
-          | EnqRun runable -> new_pending_daemon t dem runable
-      in
-      f t dem event
-
-  let wakeup_events_list translate t events info =
-    match events with
-    | None | Some [] ->
-      Debug.dprintf0 debug "[Solver] @[No scheduling@]"
-    | Some events ->
-      List.iter (wakeup_event translate t info) events
-
-  let wakeup_events_bag translate t events info =
-    let is_empty = match events with
-      | None -> true
-      | Some events -> Bag.is_empty events in
-    if is_empty then Debug.dprintf0 debug "[Solver] @[No scheduling@]"
-    else Bag.iter (wakeup_event translate t info) (Opt.get events)
-
   let set_value_direct (type a) t pexp (value : a value) cl0 new_v =
     Debug.incr stats_set_value;
     let cl = find t cl0 in
@@ -677,7 +491,7 @@ module Delayed = struct
     end in
     VValueTable.set t.env.value value (module ValueTable');
     Explanation.add_pexp_value t.env.trail pexp value ~cl ~cl0;
-    wakeup_events_bag Events.Fired.translate_value t events (cl,value)
+    Wait.wakeup_events_bag Events.Wait.translate_value t events (cl,value)
 
   let merge_values t pexp cl0 cl0' =
     let cl  = find t cl0 in
@@ -765,7 +579,7 @@ module Delayed = struct
     begin try
         let cl = find t cl in
         (** already registered *)
-        wakeup_events_list Events.Fired.translate_regcl t (Some [event]) cl
+        Wait.wakeup_events_list Events.Wait.translate_regcl t (Some [event]) cl
       with NotNormalized ->
         t.env.event_reg <-
           Cl.M.add_change Lists.singleton Lists.add cl event t.env.event_reg
@@ -835,22 +649,22 @@ module Delayed = struct
       (** reg_cl *)
       let new_events, cl_events = Cl.M.find_remove cl t.env.event_reg in
       t.env.event_reg <- new_events;
-      wakeup_events_list Events.Fired.translate_regcl t cl_events cl;
+      Wait.wakeup_events_list Events.Wait.translate_regcl t cl_events cl;
       (** reg *)
-      wakeup_events_list Events.Fired.translate_reg
+      Wait.wakeup_events_list Events.Wait.translate_reg
         t (Some t.env.event_any_reg) cl;
       (** reg_sem *)
       match Only_for_solver.open_cl cl with
       | Only_for_solver.Fresh -> ()
       | Only_for_solver.Fresh_to_reg(dem,event) ->
-        wakeup_events_list Events.Fired.translate_regcl t
+        Wait.wakeup_events_list Events.Wait.translate_regcl t
           (Some [Events.Wait.Event(dem,event)])
           cl;
       | Only_for_solver.Sem clsem ->
         begin match Only_for_solver.sem_of_cl clsem with
         | Only_for_solver.Sem(sem,_) ->
           let reg_events = get_table_sem t.env sem in
-          wakeup_events_list Events.Fired.translate_regsem
+          Wait.wakeup_events_list Events.Wait.translate_regsem
             t (Some reg_events) (clsem)
         end
       | Only_for_solver.Value clvalue ->
@@ -858,7 +672,7 @@ module Delayed = struct
         | Only_for_solver.Value(value,v) ->
           let module V = (val get_table_value t.env value) in
           let reg_events = V.reg_events in
-          wakeup_events_list Events.Fired.translate_regvalue
+          Wait.wakeup_events_list Events.Wait.translate_regvalue
             t (Some reg_events) (clvalue);
           set_value_direct t (assert false (** TODO *)) value cl v
         end
@@ -886,7 +700,7 @@ module Delayed = struct
           ~repr_cl:cl ~repr_cl0:cl0;
         (** wakeup the daemons register_cl *)
         let event, other_event = Cl.M.find_remove cl0' t.env.event in
-        wakeup_events_bag Events.Fired.translate_change t other_event cl0';
+        Wait.wakeup_events_bag Events.Wait.translate_change t other_event cl0';
         t.env.event <- event
       end
       (** cl' is already registered *)
@@ -925,7 +739,7 @@ module Delayed = struct
     end in
     VDomTable.set t.env.dom dom (module DomTable');
     Explanation.add_pexp_dom t.env.trail pexp dom ~cl ~cl0;
-    wakeup_events_bag Events.Fired.translate_dom t events (cl,dom)
+    Wait.wakeup_events_bag Events.Wait.translate_dom t events (cl,dom)
 
   let set_dom_premerge_pending (type a) t (dom : a dom)
       ~from:cl0' cl0 (new_v:a) =
@@ -942,7 +756,7 @@ module Delayed = struct
     VDomTable.set t.env.dom dom (module DomTable');
     Explanation.add_pexp_dom_premerge t.env.trail dom
       ~clfrom:cl' ~clfrom0:cl0' ~clto:cl;
-    wakeup_events_bag Events.Fired.translate_dom t events (cl0,dom)
+    Wait.wakeup_events_bag Events.Wait.translate_dom t events (cl0,dom)
 
 
 (*
@@ -1042,8 +856,8 @@ module Delayed = struct
     VDomTable.iter_initialized {VDomTable.iter} t.env.dom;
 
     (** wakeup the daemons *)
-    wakeup_events_bag
-      Events.Fired.translate_change t other_event other_cl
+    Wait.wakeup_events_bag
+      Events.Wait.translate_change t other_event other_cl
 
   let finalize_merge_pending t pexp other_cl0 repr_cl0 inv  =
     let dom_not_done = merge_dom t pexp other_cl0 repr_cl0 inv in
@@ -1123,11 +937,11 @@ module Delayed = struct
     set_dom_pending d pexp dom cl None
 
 
-  let rec do_pending_daemon delayed (DaemonKey (dem,runable)) =
-    let module Dem = (val get_dem dem) in
+  let rec do_pending_daemon delayed (Events.Wait.DaemonKey (dem,runable)) =
+    let module Dem = (val Wait.get_dem dem) in
     match Dem.run delayed runable with
     | None -> ()
-    | Some runable -> new_pending_daemon delayed dem runable
+    | Some runable -> Wait.new_pending_daemon delayed dem runable
 
   and nothing_todo t =
       Queue.is_empty t.todo_immediate_dem
@@ -1320,13 +1134,6 @@ module type Ro = sig
   val get_env : t -> 'a env -> 'a
   val set_env: t -> 'a env -> 'a -> unit
 
-
-  (** Registered for events *)
-  val attached_reg_cl:
-    t -> Cl.t -> ('event,'d) dem -> 'event Enum.t
-  val attached_cl:
-    t -> Cl.t -> ('event,'d) dem -> 'event Enum.t
-
   val is_current_env: t -> bool
 
 end
@@ -1348,12 +1155,7 @@ let check_initialization () =
         Dom.pp dom;
     end};
 
-  Dem.iter {Dem.iter = fun dem ->
-    if VDem.is_uninitialized defined_dem dem then begin
-      Format.eprintf
-        "[Warning] The daemon %a is not registered" Dem.pp dem;
-      well_initialized := false;
-    end};
+  well_initialized := !well_initialized && Wait.well_initialized ();
 
   !well_initialized
 

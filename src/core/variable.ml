@@ -36,7 +36,7 @@ module Dem = struct
   let key = Demon.Fast.create "Variable.dec"
   let throttle = 100
   let wakeup d = function
-    | Solver.Events.Fired.EventRegCl (cl,make_dec) ->
+    | Events.Fired.EventRegCl (cl,make_dec) ->
       Solver.Delayed.register_decision d (make_dec cl)
     | _ -> assert false
 end

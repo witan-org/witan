@@ -20,9 +20,9 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-include Std
+(** Witan core: define basic types and the solver *)
 
-exception UnwaitedEvent = Typedef.UnwaitedEvent
+include Std
 
 module Ty = struct
   include Typedef.Ty
@@ -32,15 +32,6 @@ module Keys = Keys
 
 module Cl = struct
   include Typedef.Cl
-end
-
-module Dom = struct
-  include Typedef.Dom
-  let print = Solver.print_dom
-
-  module type Dom = Solver.Dom
-
-  module Register = Solver.RegisterDom
 end
 
 module Value = struct
@@ -62,15 +53,30 @@ module Sem = struct
   module Register = Typedef.RegisterSem
 end
 
+module Dom = struct
+  include Typedef.Dom
+  let print = Solver.print_dom
+
+  module type Dom = Solver.Dom
+
+  module Register = Solver.RegisterDom
+end
+
 module Dem = struct
   include Typedef.Dem
 
-  module type Dem = Solver.Dem
+  module type Dem = Solver.Wait.Dem
 
-  module Register = Solver.RegisterDem
+  module Register = Solver.Wait.RegisterDem
 end
 
 module Solver = Solver
 module Demon = Demon
 module Explanation = Explanation
 module Variable = Variable
+
+module Events = Events.Fired
+
+exception UnwaitedEvent = Typedef.UnwaitedEvent
+(** Can be raised by daemon when receiving an event that they don't
+    waited for. It is the sign of a bug in the core solver *)

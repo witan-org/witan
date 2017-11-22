@@ -63,7 +63,7 @@ module Key: sig
 
     val immediate: bool
     val wakeup:
-      Solver.Delayed.t -> Key.t -> Data.t Solver.Events.Fired.t ->
+      Solver.Delayed.t -> Key.t -> Data.t Events.Fired.t ->
       info -> Key.t alive
       (** the Events.t in wakeup is a subset of the one given in watch *)
   end
@@ -111,7 +111,7 @@ module Fast: sig
     val immediate: bool
     val throttle: int (** todo int ref? *)
     (** number of time run in a row *)
-    val wakeup: Solver.Delayed.t -> Data.t Solver.Events.Fired.event -> unit
+    val wakeup: Solver.Delayed.t -> Data.t Events.Fired.event -> unit
 
   end
 

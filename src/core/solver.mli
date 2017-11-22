@@ -23,8 +23,6 @@
 open Explanation
 open Typedef
 
-
-
 exception NotNormalized
 
 type exp_same_sem =
@@ -32,36 +30,6 @@ type exp_same_sem =
 | ExpSameValue : pexp * Cl.t * ClValue.t -> exp_same_sem
 
 val exp_same_sem : exp_same_sem Explanation.exp
-
-module Events : sig
-
-  module Fired : sig
-    type 'b event =
-      (** the domain dom of the class change *)
-    | EventDom    : Cl.t * 'a dom  *      'b -> 'b event
-      (** the value of the class has been set *)
-    | EventValue    : Cl.t * 'a value  *  'b -> 'b event
-      (** a new semantical term 'a point to this class (not complete) *)
-    | EventSem    : Cl.t * 'a sem  * 'a * 'b -> 'b event
-      (** we want to register a class *)
-    | EventReg  : Cl.t *                  'b -> 'b event
-      (** we want to register this class *)
-    | EventRegCl: Cl.t *                  'b -> 'b event
-      (** This class is not the representant of its eq-class anymore *)
-    | EventChange : Cl.t *                'b -> 'b event
-    (** a new semantical term 'a appear *)
-    | EventRegSem : ClSem.t * 'b -> 'b event
-    (** a new value 'a appear *)
-    | EventRegValue : ClValue.t * 'b -> 'b event
-
-    val pp: 'b event Pp.pp
-    val get_data: 'b event -> 'b
-
-    type 'b t = 'b event list
-
-  end
-
-end
 
 exception UninitializedEnv of Env.K.t
 
@@ -87,12 +55,6 @@ module type Ro = sig
 
   val get_env : t -> 'a env -> 'a
   val set_env: t -> 'a env -> 'a -> unit
-
-  (** Registered for events *)
-  val attached_reg_cl:
-    t -> Cl.t -> ('event,'d) dem -> 'event Enum.t
-  val attached_cl:
-    t -> Cl.t -> ('event,'d) dem -> 'event Enum.t
 
   val is_current_env: t -> bool
 
@@ -159,6 +121,8 @@ end
 
 type d = Delayed.t
 
+module Wait : Events.Wait.S with type delayed = Delayed.t and type delayed_ro = Ro.t
+
 (** {2 Domains and Semantic Values key creation} *)
 
 module type Dom = sig
@@ -187,42 +151,13 @@ module RegisterDom (D:Dom) : sig end
 val register_env: 'a Pp.pp -> 'a env -> unit
 val print_env: 'a env -> 'a Pp.pp
 
-
-type _ enqueue =
-| EnqRun: 'r -> 'r enqueue
-| EnqAlready: _ enqueue
-| EnqRedirected: ('e,'r) dem * 'e -> _ enqueue
-| EnqStopped: _ enqueue
-
-module type Dem = sig
-
-  type runable
-  val print_runable: runable Pp.pp
-  val run: Delayed.t -> runable -> runable option
-    (** can return something to scheduled *)
-
-  type event
-  val print_event: event Pp.pp
-  val enqueue: Ro.t -> event Events.Fired.event -> runable enqueue
-
-  val key: (event,runable) dem
-  val immediate: bool
-
-end
-
-module RegisterDem (D:Dem) : sig end
-
 (** {2 External use of the solver} *)
 type t
 
 val new_t    : unit -> t
 
-type daemon_key =
-| DaemonKey: ('k,'d) dem * 'd -> daemon_key
-
-
 val new_delayed :
-  sched_daemon:(daemon_key -> unit) ->
+  sched_daemon:(Events.Wait.daemon_key -> unit) ->
   sched_decision:(chogen -> unit) ->
   t -> Delayed.t
 (** The solver shouldn't be used anymore before
@@ -231,7 +166,7 @@ val new_delayed :
 
 exception Contradiction of Explanation.pexp
 
-val run_daemon:   Delayed.t -> daemon_key -> unit
+val run_daemon: Delayed.t -> Events.Wait.daemon_key -> unit
 (** schedule the run of a deamon *)
 
 val delayed_stop: Delayed.t -> unit

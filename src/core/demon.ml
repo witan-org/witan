@@ -60,7 +60,7 @@ type 'k alive =
 module Key = struct
 
   type ('d,'k,'i) daemon_state =
-    | Alive of 'd Solver.Events.Fired.t * 'i
+    | Alive of 'd Events.Fired.t * 'i
     | Dead
     | Redirected of 'k
 
@@ -102,7 +102,7 @@ module Key = struct
 
     val immediate: bool
     val wakeup:
-      Solver.Delayed.t -> Key.t -> Data.t Solver.Events.Fired.t ->
+      Solver.Delayed.t -> Key.t -> Data.t Events.Fired.t ->
       info -> Key.t alive
     (** the Events.t in wakeup is a subset of the one given in watch *)
   end
@@ -143,7 +143,7 @@ module Key = struct
       | Alive (events,info) ->
         Debug.dprintf6 debug "[Demon] @[Run daemon %a for %a:@[%a@]@]"
           Dem.pp D.key.dk_id DemTable.Key.pp k
-          (Pp.list Pp.newline Solver.Events.Fired.pp) events;
+          (Pp.list Pp.newline Events.Fired.pp) events;
         (** event can be added during wakeup *)
         let module DemTable' = struct
           include DemTable
@@ -185,7 +185,7 @@ module Key = struct
           Debug.dprintf6 debug
           "[Demon] @[schedule %a for %a with %a@]"
           Dem.pp D.key.dk_id D.Key.pp k
-          Solver.Events.Fired.pp event;
+          Events.Fired.pp event;
         let module DemTable' = struct
           include DemTable
           let state = DemTable.Key.M.add k l DemTable.state
@@ -198,18 +198,18 @@ module Key = struct
         | Some Dead ->
           Debug.dprintf4 debug
             "[Demon] @[Dem %a is dead for %a@]"
-            Dem.pp D.key.dk_id Solver.Events.Fired.pp event;
-          Solver.EnqStopped
+            Dem.pp D.key.dk_id Events.Fired.pp event;
+          Events.Wait.EnqStopped
         | Some (Redirected k') -> update_state k' data
         | (Some Alive([],info))  ->
           change_state k (Alive([data],info));
-          Solver.EnqRun k
+          Events.Wait.EnqRun k
         | Some Alive(l,info) ->
           change_state k (Alive(data::l,info));
-          Solver.EnqAlready
+          Events.Wait.EnqAlready
       in
       let k, event =
-        let open Solver.Events.Fired in
+        let open Events.Fired in
         match event with
         | EventDom      (a, b , (k,d))   -> k, EventDom(a, b, d)
         | EventValue    (a, b , (k,d))   -> k, EventValue(a, b, d)
@@ -243,7 +243,7 @@ module Key = struct
       let key = D.key.dk_id
       let immediate = D.immediate
     end in
-    let module RDem = Solver.RegisterDem(Dem) in
+    let module RDem = Solver.Wait.RegisterDem(Dem) in
     ()
 
     let init d =
@@ -332,10 +332,10 @@ module Fast = struct
 
   type 'd t = {
     dk_id : ('d, unit) Typedef.dem;
-    dk_data : 'd Solver.Events.Fired.event list Typedef.env;
+    dk_data : 'd Events.Fired.event list Typedef.env;
     (** for throttling *)
     mutable dk_remaining: int; (** 0 if the demon is not the current one *)
-    dk_current : 'd Solver.Events.Fired.event Queue.t; (** empty if idem *)
+    dk_current : 'd Events.Fired.event Queue.t; (** empty if idem *)
   }
 
   let create name = {
@@ -358,7 +358,7 @@ module Fast = struct
     val immediate: bool
     val throttle: int (** todo int ref? *)
     (** number of time run in a row *)
-    val wakeup: Solver.Delayed.t -> Data.t Solver.Events.Fired.event -> unit
+    val wakeup: Solver.Delayed.t -> Data.t Events.Fired.event -> unit
 
   end
 
@@ -388,8 +388,8 @@ module Fast = struct
           let event = Queue.pop D.key.dk_current in
           Debug.dprintf6 debug
             "[Demon] @[Run daemon fast %a:@[%a@ %a@]@]"
-            Dem.pp D.key.dk_id Solver.Events.Fired.pp event
-            D.Data.pp (Solver.Events.Fired.get_data event);
+            Dem.pp D.key.dk_id Events.Fired.pp event
+            D.Data.pp (Events.Fired.get_data event);
           D.wakeup d event;
           Debug.dprintf0 debug "[Demon] @[Done@]";
           if not D.immediate then Solver.Delayed.flush d;
@@ -412,23 +412,23 @@ module Fast = struct
         let events = Solver.Ro.get_env d D.key.dk_data in
         Debug.dprintf4 debug
           "[Demon] @[schedule %a for %a@]"
-          Dem.pp D.key.dk_id Solver.Events.Fired.pp event;
+          Dem.pp D.key.dk_id Events.Fired.pp event;
         Solver.Ro.set_env d D.key.dk_data (event::events);
-        if events = [] then Solver.EnqRun () else Solver.EnqAlready
+        if events = [] then Events.Wait.EnqRun () else Events.Wait.EnqAlready
       else begin
         Debug.dprintf4 debug
           "[Demon] @[schedule %a for %a now@]"
-          Dem.pp D.key.dk_id Solver.Events.Fired.pp event;
+          Dem.pp D.key.dk_id Events.Fired.pp event;
         Queue.add event D.key.dk_current;
         D.key.dk_remaining <- D.key.dk_remaining - 1;
         assert (D.key.dk_remaining >= 0);
-        Solver.EnqAlready
+        Events.Wait.EnqAlready
       end
 
 
     let () =
       let print_demtable fmt d =
-        Pp.list Pp.comma Solver.Events.Fired.pp fmt d
+        Pp.list Pp.comma Events.Fired.pp fmt d
       in
       Solver.register_env print_demtable D.key.dk_data;
     (** Interface for generic daemon *)
@@ -444,7 +444,7 @@ module Fast = struct
       let key = D.key.dk_id
       let immediate = D.immediate
     end in
-    let module RDem = Solver.RegisterDem(Dem) in
+    let module RDem = Solver.Wait.RegisterDem(Dem) in
     ()
 
     let init d =
@@ -485,7 +485,7 @@ module Fast = struct
       let immediate = immediate
       let throttle = throttle
       let wakeup d = function
-        | Solver.Events.Fired.EventRegSem(clsem,()) ->
+        | Events.Fired.EventRegSem(clsem,()) ->
           let clsem = ClSem.coerce_clsem clsem in
           f d clsem
         | _ -> raise UnwaitedEvent
