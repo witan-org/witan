@@ -70,18 +70,18 @@ type pexp = private
 type dec
 
 type modif =
-| Cl : Cl.t * Cl.t               -> modif
-  (** Cl(cl1,cl2,pexp) explication why cl1 and cl2 are merged
+| Node : Node.t * Node.t               -> modif
+  (** Node(cl1,cl2,pexp) explication why cl1 and cl2 are merged
       but cl1 and cl2 are perhaps not the representative of there class
   *)
 
-| Dom: Cl.t * 'a Dom.t      * pexp * Cl.t -> modif
-(** Cl(clr,dom,pexp,cl) explication why cl1 and cl2 are merged
+| Dom: Node.t * 'a Dom.t      * pexp * Node.t -> modif
+(** Node(clr,dom,pexp,node) explication why cl1 and cl2 are merged
       but clr is the representative of the equivalence class,
     cl2 can be not the representative.
 *)
 
-| DomL: Cl.t * 'a Dom.t * 'a option * Age.t * pexp * Cl.t -> modif
+| DomL: Node.t * 'a Dom.t * 'a option * Age.t * pexp * Node.t -> modif
 (** same as before but the first time in this level *)
 
 | Dec: dec                       -> modif
@@ -89,18 +89,18 @@ type modif =
 
 type node_clhist = {
   nage : age;
-  ncl : Cl.t;
+  ncl : Node.t;
   npexp: pexp;
   ninv : bool;
 }
 
 val print_node: node_clhist Pp.pp
 
-type clgraph = (node_clhist list) Cl.M.t (** graph *)
-type clhist = (age * Cl.t) Cl.M.t (** graph *)
+type clgraph = (node_clhist list) Node.M.t (** graph *)
+type clhist = (age * Node.t) Node.M.t (** graph *)
 
 type mod_dom = {
-  modcl : Cl.t;
+  modcl : Node.t;
   modage : Age.t;
   modpexp : pexp
 }
@@ -113,20 +113,20 @@ type domhist_node =
                 domhist_node (** other_cl *) *
                 domhist_node (** repr_cl  *)
   | DomPreMerge of Age.t *
-                   Cl.t * (** cl that will be equal to it
-                              and from which we take the cl *)
-                   domhist_node * (** domhist of this cl *)
+                   Node.t * (** node that will be equal to it
+                              and from which we take the node *)
+                   domhist_node * (** domhist of this node *)
                    domhist_node   (** previous domhist *)
   | DomSet of mod_dom * domhist_node
 
 val print_domhist_node: domhist_node Pp.pp
 
-type domhist = domhist_node Cl.M.t Dom.Vector.t
+type domhist = domhist_node Node.M.t Dom.Vector.t
 
 val print_domhist: domhist Pp.pp
 
 type dom_before_last_dec =
-  { dom_before_last_dec: 'a. 'a Dom.t -> Cl.t -> 'a option }
+  { dom_before_last_dec: 'a. 'a Dom.t -> Node.t -> 'a option }
 
 type t = private {
   mutable last_dec : Age.t;
@@ -163,35 +163,35 @@ val mk_pexp:
     and so cut in two it.
  *)
 val add_pexp_cl:
-  t -> pexp -> inv:bool -> other_cl:Cl.t -> other_cl0:Cl.t
-  -> repr_cl:Cl.t -> repr_cl0:Cl.t -> unit
-(** cl* representative, cl*_0 the one merged initially on which the
+  t -> pexp -> inv:bool -> other_cl:Node.t -> other_cl0:Node.t
+  -> repr_cl:Node.t -> repr_cl0:Node.t -> unit
+(** node* representative, node*_0 the one merged initially on which the
     pexp apply *)
 val add_merge_dom_no:
-  t -> inv:bool -> other_cl:Cl.t -> other_cl0:Cl.t
-  -> repr_cl:Cl.t -> repr_cl0:Cl.t -> unit
+  t -> inv:bool -> other_cl:Node.t -> other_cl0:Node.t
+  -> repr_cl:Node.t -> repr_cl0:Node.t -> unit
 
 val add_merge_dom_all:
-  t -> inv:bool -> other_cl:Cl.t -> other_cl0:Cl.t
-  -> repr_cl:Cl.t -> repr_cl0:Cl.t -> unit
-(** cl* representative, cl*_0 the one merged initially on which the
+  t -> inv:bool -> other_cl:Node.t -> other_cl0:Node.t
+  -> repr_cl:Node.t -> repr_cl0:Node.t -> unit
+(** node* representative, node*_0 the one merged initially on which the
     pexp apply *)
 val add_pexp_dom:
-  t -> pexp -> 'b Dom.t -> cl:Cl.t -> cl0:Cl.t -> unit
+  t -> pexp -> 'b Dom.t -> node:Node.t -> cl0:Node.t -> unit
 val add_pexp_value:
-  t -> pexp -> 'b value -> cl:Cl.t -> cl0:Cl.t -> unit
+  t -> pexp -> 'b value -> node:Node.t -> cl0:Node.t -> unit
 
 
 val add_pexp_dom_premerge:
   t -> 'b Dom.t ->
-  clto:Cl.t ->
-  clfrom:Cl.t ->
-  clfrom0:Cl.t ->
+  clto:Node.t ->
+  clfrom:Node.t ->
+  clfrom0:Node.t ->
   unit
 
 val trail: t -> modif list
 val last_dec: t -> Age.t
-val dom_before_last_dec: t -> 'a Dom.t -> Cl.t -> 'a option
+val dom_before_last_dec: t -> 'a Dom.t -> Node.t -> 'a option
 val nbdec: t -> int
 val at_current_level: t -> Age.t -> bool
 val before_first_dec : t -> Age.t -> bool
@@ -203,11 +203,11 @@ module Conunknown : Intmap_hetero.S1 with
 type conunknown = unit Conunknown.t
 type chogen =
   | GCho: ('k,'d) cho * 'k -> chogen
-type decs = chogen list Cl.M.t Dom.M.t
+type decs = chogen list Node.M.t Dom.M.t
 
 val print_modif_ref : modif Pp.pp ref
 
-type invclhist = Cl.t Age.M.t Cl.H.t
+type invclhist = Node.t Age.M.t Node.H.t
 val print_invclhist: invclhist Pp.pp
 val invclhist: t -> invclhist
 

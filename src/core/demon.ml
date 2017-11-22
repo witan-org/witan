@@ -29,22 +29,22 @@ let debug = Debug.register_info_flag
 
 module Create = struct
     type 'b event =
-    | EventDom      : Cl.t * 'a Dom.t  * 'b -> 'b event
-    | EventValue    : Cl.t * 'a value * 'b -> 'b event
-    | EventRegCl  : Cl.t           * 'b -> 'b event
-    | EventChange   : Cl.t           * 'b -> 'b event
+    | EventDom      : Node.t * 'a Dom.t  * 'b -> 'b event
+    | EventValue    : Node.t * 'a value * 'b -> 'b event
+    | EventRegCl  : Node.t           * 'b -> 'b event
+    | EventChange   : Node.t           * 'b -> 'b event
     | EventRegSem :        'a sem  * 'b -> 'b event
 
 
     let pp fmt = function
-      | EventDom      (cl, dom, _) ->
-        Format.fprintf fmt "dom:%a of %a" Dom.pp dom Cl.pp cl
-      | EventValue    (cl, value, _) ->
-        Format.fprintf fmt "value:%a of %a" Value.pp value Cl.pp cl
-      | EventRegCl  (cl, _)    ->
-        Format.fprintf fmt "registration of %a" Cl.pp cl
-      | EventChange   (cl, _)    ->
-        Format.fprintf fmt "changecl of %a" Cl.pp cl
+      | EventDom      (node, dom, _) ->
+        Format.fprintf fmt "dom:%a of %a" Dom.pp dom Node.pp node
+      | EventValue    (node, value, _) ->
+        Format.fprintf fmt "value:%a of %a" Value.pp value Node.pp node
+      | EventRegCl  (node, _)    ->
+        Format.fprintf fmt "registration of %a" Node.pp node
+      | EventChange   (node, _)    ->
+        Format.fprintf fmt "changecl of %a" Node.pp node
       | EventRegSem (sem, _)    ->
         Format.fprintf fmt "regsem for %a" Sem.pp sem
 
@@ -266,14 +266,14 @@ module Key = struct
       Debug.dprintf2 debug "[Demon] @[Attach event %a@]"
         Create.pp ev;
         match ev with
-        | Create.EventDom (cl,dom,data) ->
-          Solver.Delayed.attach_dom t cl dom dem.dk_id (k,data)
-        | Create.EventValue (cl,value,data) ->
-          Solver.Delayed.attach_value t cl value dem.dk_id (k,data)
-        | Create.EventChange (cl,data) ->
-          Solver.Delayed.attach_cl t cl dem.dk_id (k,data)
-        | Create.EventRegCl (cl,data) ->
-          Solver.Delayed.attach_reg_cl t cl dem.dk_id (k,data)
+        | Create.EventDom (node,dom,data) ->
+          Solver.Delayed.attach_dom t node dom dem.dk_id (k,data)
+        | Create.EventValue (node,value,data) ->
+          Solver.Delayed.attach_value t node value dem.dk_id (k,data)
+        | Create.EventChange (node,data) ->
+          Solver.Delayed.attach_cl t node dem.dk_id (k,data)
+        | Create.EventRegCl (node,data) ->
+          Solver.Delayed.attach_reg_cl t node dem.dk_id (k,data)
         | Create.EventRegSem (sem,data) ->
           Solver.Delayed.attach_reg_sem t sem dem.dk_id (k,data)
       in
@@ -455,44 +455,44 @@ module Fast = struct
   let attach d dem events =
     let open Create in
     List.iter (function
-        | EventDom      (cl,dom,data) ->
-          Solver.Delayed.attach_dom d cl dom dem.dk_id data
-        | EventValue    (cl,value,data) ->
-          Solver.Delayed.attach_value d cl value dem.dk_id data
-        | EventRegCl  (cl,data) ->
-          Solver.Delayed.attach_reg_cl d cl dem.dk_id data
-        | EventChange   (cl,data) ->
-          Solver.Delayed.attach_cl d cl dem.dk_id data
+        | EventDom      (node,dom,data) ->
+          Solver.Delayed.attach_dom d node dom dem.dk_id data
+        | EventValue    (node,value,data) ->
+          Solver.Delayed.attach_value d node value dem.dk_id data
+        | EventRegCl  (node,data) ->
+          Solver.Delayed.attach_reg_cl d node dem.dk_id data
+        | EventChange   (node,data) ->
+          Solver.Delayed.attach_cl d node dem.dk_id data
         | EventRegSem (sem,data) ->
           Solver.Delayed.attach_reg_sem d sem dem.dk_id data) events
 
   let fresh_with_reg_cl dem s ty data =
-    Cl.fresh ~to_reg:(dem.dk_id,data) s ty
+    Node.fresh ~to_reg:(dem.dk_id,data) s ty
 
   let register_init_daemon
     (type a)
     ~name
     ?(immediate=false)
     ?(throttle=100)
-    (clsem: (module Typedef.RegisteredSem with type t = a) )
+    (nodesem: (module Typedef.RegisteredSem with type t = a) )
     (f:Solver.Delayed.t -> a -> unit)
     (init_d:Solver.Delayed.t)
     =
-    let module ClSem = (val clsem) in
+    let module NodeSem = (val nodesem) in
     let module DaemonInit = struct
       let key = create name
       module Data = Stdlib.DUnit
       let immediate = immediate
       let throttle = throttle
       let wakeup d = function
-        | Events.Fired.EventRegSem(clsem,()) ->
-          let clsem = ClSem.coerce_clsem clsem in
-          f d clsem
+        | Events.Fired.EventRegSem(nodesem,()) ->
+          let nodesem = NodeSem.coerce_clsem nodesem in
+          f d nodesem
         | _ -> raise UnwaitedEvent
     end in
     let module RDaemonInit = Register(DaemonInit) in
     RDaemonInit.init init_d;
-    attach init_d DaemonInit.key [Create.EventRegSem(ClSem.key,())]
+    attach init_d DaemonInit.key [Create.EventRegSem(NodeSem.key,())]
 
 
 end

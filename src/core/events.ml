@@ -27,49 +27,49 @@ let debug = Debug.register_info_flag ~desc:"for the events" "Solver.events"
 module Fired = struct
   type 'b event =
     (** the domain dom of the class change *)
-    | EventDom    : Cl.t * 'a Dom.t  *      'b -> 'b event
+    | EventDom    : Node.t * 'a Dom.t  *      'b -> 'b event
     (** the value of the class has been set *)
-    | EventValue    : Cl.t * 'a value  *  'b -> 'b event
+    | EventValue    : Node.t * 'a value  *  'b -> 'b event
     (** a new semantical term 'a point to this class (not complete) *)
-    | EventSem    : Cl.t * 'a sem  * 'a * 'b -> 'b event
+    | EventSem    : Node.t * 'a sem  * 'a * 'b -> 'b event
     (** we want to register a class *)
-    | EventReg    : Cl.t *                'b -> 'b event
+    | EventReg    : Node.t *                'b -> 'b event
     (** we want to register this class *)
-    | EventRegCl  : Cl.t *                'b -> 'b event
+    | EventRegCl  : Node.t *                'b -> 'b event
     (** This class is not the representant of its eq-class anymore *)
-    | EventChange : Cl.t *                'b -> 'b event
+    | EventChange : Node.t *                'b -> 'b event
     (** a new semantical term 'a appear *)
-    | EventRegSem : ClSem.t * 'b -> 'b event
+    | EventRegSem : NodeSem.t * 'b -> 'b event
     (** a new value 'a appear *)
-    | EventRegValue : ClValue.t * 'b -> 'b event
+    | EventRegValue : NodeValue.t * 'b -> 'b event
 
   let pp fmt = function
-    | EventDom      (cl, dom, _) ->
-      Format.fprintf fmt "dom:%a of %a" Dom.pp dom Cl.pp cl
-    | EventValue    (cl, value, _) ->
-      Format.fprintf fmt "value:%a of %a" Value.pp value Cl.pp cl
-    | EventSem      (cl, sem, v, _) ->
+    | EventDom      (node, dom, _) ->
+      Format.fprintf fmt "dom:%a of %a" Dom.pp dom Node.pp node
+    | EventValue    (node, value, _) ->
+      Format.fprintf fmt "value:%a of %a" Value.pp value Node.pp node
+    | EventSem      (node, sem, v, _) ->
       Format.fprintf fmt "sem:%a of %a with %a"
-        Sem.pp sem Cl.pp cl (print_sem sem) v
-    | EventReg      (cl, _)    ->
-      Format.fprintf fmt "any registration of %a" Cl.pp cl
-    | EventRegCl    (cl, _)    ->
-      Format.fprintf fmt "registration of %a" Cl.pp cl
-    | EventChange   (cl, _)    ->
-      Format.fprintf fmt "changecl of %a" Cl.pp cl
-    | EventRegSem (clsem, _) ->
-      let cl = Only_for_solver.cl_of_clsem clsem in
-      begin match Only_for_solver.sem_of_cl clsem with
+        Sem.pp sem Node.pp node (print_sem sem) v
+    | EventReg      (node, _)    ->
+      Format.fprintf fmt "any registration of %a" Node.pp node
+    | EventRegCl    (node, _)    ->
+      Format.fprintf fmt "registration of %a" Node.pp node
+    | EventChange   (node, _)    ->
+      Format.fprintf fmt "changecl of %a" Node.pp node
+    | EventRegSem (nodesem, _) ->
+      let node = Only_for_solver.cl_of_clsem nodesem in
+      begin match Only_for_solver.sem_of_cl nodesem with
         | Only_for_solver.Sem(sem,v) ->
           Format.fprintf fmt "registration of sem:%a of %a with %a"
-            Sem.pp sem Cl.pp cl (print_sem sem) v
+            Sem.pp sem Node.pp node (print_sem sem) v
       end
-    | EventRegValue (clvalue, _) ->
-      let cl = Only_for_solver.cl_of_clvalue clvalue in
-      begin match Only_for_solver.value_of_cl clvalue with
+    | EventRegValue (nodevalue, _) ->
+      let node = Only_for_solver.cl_of_clvalue nodevalue in
+      begin match Only_for_solver.value_of_cl nodevalue with
         | Only_for_solver.Value(value,v) ->
           Format.fprintf fmt "registration of value:%a of %a with %a"
-            Value.pp value Cl.pp cl (print_value value) v
+            Value.pp value Node.pp node (print_value value) v
       end
 
   let get_data = function
@@ -110,19 +110,19 @@ module Wait = struct
   type 'a translate = { translate : 'd. 'a -> 'd -> 'd Fired.event}
 
   let translate_dom =
-    {translate = fun (cl,dom) data -> EventDom(cl,dom,data)}
+    {translate = fun (node,dom) data -> EventDom(node,dom,data)}
   let translate_value =
-    {translate = fun (cl,value) data -> EventValue(cl,value,data)}
+    {translate = fun (node,value) data -> EventValue(node,value,data)}
   (* let translate_sem = *)
-  (*   {translate = fun (cl,sem,s) data -> EventSem(cl,sem,s,data)} *)
+  (*   {translate = fun (node,sem,s) data -> EventSem(node,sem,s,data)} *)
   let translate_reg =
-    {translate = fun cl data -> EventReg(cl,data)}
+    {translate = fun node data -> EventReg(node,data)}
   let translate_regcl =
-    {translate = fun cl data -> EventRegCl(cl,data)}
+    {translate = fun node data -> EventRegCl(node,data)}
   let translate_change =
-    {translate = fun cl data -> EventChange(cl,data)}
+    {translate = fun node data -> EventChange(node,data)}
   let translate_regsem =
-    {translate = fun clsem data -> EventRegSem(clsem,data)}
+    {translate = fun nodesem data -> EventRegSem(nodesem,data)}
   let translate_regvalue =
     {translate = fun clval data -> EventRegValue(clval,data)}
 

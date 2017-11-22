@@ -131,7 +131,7 @@ module Dem = Keys.Make_key2(struct end)
 type ('k,'d) dem = ('k,'d) Dem.t
 
 
-module Cl = struct
+module Node = struct
   type 'a r =
     | Fresh: int * Ty.t -> [>`Fresh] r
     | Fresh_to_reg: int * Ty.t * ('event,'r) dem * 'event -> [>`Fresh] r
@@ -139,8 +139,8 @@ module Cl = struct
     | Value  : int * Ty.t * 'a value * 'a -> [>`Value] r
 
   type t' = [ `Fresh | `Sem | `Value] r
-  type clsem = [`Sem] r
-  type clvalue = [`Value] r
+  type nodesem = [`Sem] r
+  type nodevalue = [`Value] r
 
   let tag: t' -> int = function
     | Fresh(tag,_) -> tag
@@ -181,9 +181,9 @@ module Cl = struct
       Debug.dprintf1 debug_create "[Solver] @[fresh to reg @@%s@]" s;
       Fresh_to_reg(i,ty,dem,event)
 
-  let rename cl s =
+  let rename node s =
     let s = Strings.find_new_name used_names s in
-    Simple_vector.set names (tag cl) s
+    Simple_vector.set names (tag node) s
 
   let ty = function | Fresh (_,ty)
                     | Fresh_to_reg (_,ty,_,_)
@@ -191,58 +191,58 @@ module Cl = struct
                     | Value(_,ty,_,_) -> ty
 
   module SemIndex = Sem.MkVector
-      (struct type ('a,'unedeed) t = 'a -> Ty.t -> clsem end)
+      (struct type ('a,'unedeed) t = 'a -> Ty.t -> nodesem end)
 
   let semindex : unit SemIndex.t = SemIndex.create 8
 
-  let clsem sem v ty : clsem =
+  let nodesem sem v ty : nodesem =
     assert (if sem_uninitialized sem then raise UnregisteredKey else true);
     (SemIndex.get semindex sem) v ty
 
   module ValueIndex = Value.MkVector
-      (struct type ('a,'unedeed) t = 'a -> Ty.t -> clvalue end)
+      (struct type ('a,'unedeed) t = 'a -> Ty.t -> nodevalue end)
 
   let valueindex : unit ValueIndex.t = ValueIndex.create 8
 
-  let clvalue value v ty : clvalue =
+  let nodevalue value v ty : nodevalue =
     assert (if value_uninitialized value then raise UnregisteredKey else true);
     (ValueIndex.get valueindex value) v ty
 
   (** Just used for checking the typability *)
-  let _of_clsem : clsem -> t = function
+  let _of_clsem : nodesem -> t = function
     | Sem(tag,ty,sem,v) -> Sem(tag,ty,sem,v)
 
   (** IF the previous function is typable this one is correct:
       I'm not able to defined is without obj.magic
   *)
-  let of_clsem : clsem -> t = Obj.magic
+  let of_clsem : nodesem -> t = Obj.magic
 
   (** Just used for checking the typability *)
-  let _of_clvalue : clvalue -> t = function
+  let _of_clvalue : nodevalue -> t = function
     | Value(tag,ty,value,v) -> Value(tag,ty,value,v)
 
   (** IF the previous function is typable this one is correct:
       I'm not able to defined is without obj.magic
   *)
-  let of_clvalue : clvalue -> t = Obj.magic
+  let of_clvalue : nodevalue -> t = Obj.magic
 
-  let index sem v ty = of_clsem (clsem sem v ty)
+  let index sem v ty = of_clsem (nodesem sem v ty)
 
 end
 
-module ClSem = struct
+module NodeSem = struct
   include Stdlib.MakeMSH(struct
-      type t = Cl.clsem
+      type t = Node.nodesem
       let tag: t -> int = function
-        | Cl.Sem(tag,_,_,_) -> tag
+        | Node.Sem(tag,_,_,_) -> tag
       let pp fmt : t -> unit = function
-        | Cl.Sem(_,_,sem,v) -> print_sem sem fmt v
+        | Node.Sem(_,_,sem,v) -> print_sem sem fmt v
     end)
 
-  let index = Cl.clsem
-  let cl = Cl.of_clsem
+  let index = Node.nodesem
+  let node = Node.of_clsem
   let ty : t -> Ty.t = function
-    | Cl.Sem(_,ty,_,_) -> ty
+    | Node.Sem(_,ty,_,_) -> ty
 
 
 end
@@ -250,25 +250,25 @@ end
 module type RegisteredSem = sig
   type s
   val key: s sem
-  (** clsem *)
+  (** nodesem *)
   include Datatype
 
   val index: s -> Ty.t -> t
-  (** Return a clsem from a semantical value *)
+  (** Return a nodesem from a semantical value *)
 
-  val cl: t -> Cl.t
-  (** Return a class from a clsem *)
+  val node: t -> Node.t
+  (** Return a class from a nodesem *)
 
   val ty: t -> Ty.t
-  (** Return the type from a clsem *)
+  (** Return the type from a nodesem *)
 
   val sem: t -> s
-  (** Return the sem from a clsem *)
+  (** Return the sem from a nodesem *)
 
-  val clsem: t -> ClSem.t
-  val of_clsem: ClSem.t -> t option
+  val nodesem: t -> NodeSem.t
+  val of_clsem: NodeSem.t -> t option
 
-  val coerce_clsem: ClSem.t -> t
+  val coerce_clsem: NodeSem.t -> t
 
 end
 
@@ -277,11 +277,11 @@ end
 module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
 
   module HC = Hashcons.MakeTag(struct
-      open Cl
-      type t = clsem
+      open Node
+      type t = nodesem
 
-      let next_tag = Cl.next_tag
-      let incr_tag = Cl.incr_tag
+      let next_tag = Node.next_tag
+      let incr_tag = Node.incr_tag
 
       let equal: t -> t -> bool = fun a b ->
         match a, b with
@@ -316,42 +316,42 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
   let key = D.key
 
   let tag: t -> int = function
-    | Cl.Sem(tag,_,_,_) -> tag
+    | Node.Sem(tag,_,_,_) -> tag
 
   let index v ty =
-    let cl =
+    let node =
       HC.hashcons3
-        (fun tag sem v ty -> Cl.Sem(tag,ty,sem,v))
+        (fun tag sem v ty -> Node.Sem(tag,ty,sem,v))
         D.key v ty in
-    let i = tag cl in
-    Simple_vector.inc_size (i+1) Cl.names;
+    let i = tag node in
+    Simple_vector.inc_size (i+1) Node.names;
     begin
-      if Simple_vector.is_uninitialized Cl.names i then
-        let s = Strings.find_new_name Cl.used_names ""
+      if Simple_vector.is_uninitialized Node.names i then
+        let s = Strings.find_new_name Node.used_names ""
         (** TODO use Sem.pp or Sem.print_debug *) in
         Debug.dprintf3 debug_create "[Solver] @[index %a into @@%s@]"
           D.pp v s;
-        Simple_vector.set Cl.names i s
+        Simple_vector.set Node.names i s
     end;
-    cl
+    node
 
-  let cl = Cl.of_clsem
+  let node = Node.of_clsem
 
   let sem : t -> D.t = function
-    | Cl.Sem(_,_,sem,v) ->
+    | Node.Sem(_,_,sem,v) ->
       match Sem.Eq.coerce_type sem D.key with
       | Keys.Eq -> v
 
-  let ty = ClSem.ty
+  let ty = NodeSem.ty
 
-  let clsem: t -> ClSem.t = fun x -> x
+  let nodesem: t -> NodeSem.t = fun x -> x
 
-  let of_clsem: ClSem.t -> t option = function
-    | Cl.Sem(_,_,sem',_) as v when Sem.equal sem' D.key -> Some v
+  let of_clsem: NodeSem.t -> t option = function
+    | Node.Sem(_,_,sem',_) as v when Sem.equal sem' D.key -> Some v
     | _ -> None
 
-  let coerce_clsem: ClSem.t -> t = function
-    | Cl.Sem(_,_,sem',_) as v -> assert (Sem.equal sem' D.key); v
+  let coerce_clsem: NodeSem.t -> t = function
+    | Node.Sem(_,_,sem',_) as v -> assert (Sem.equal sem' D.key); v
 
   let () =
     VSem.inc_size D.key defined_sem;
@@ -359,23 +359,23 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
       then raise AlreadyRegisteredKey else true);
     let sem = (module D: Sem with type t = D.t) in
     VSem.set defined_sem D.key sem;
-    Cl.SemIndex.set Cl.semindex D.key (fun v ty -> index v ty)
+    Node.SemIndex.set Node.semindex D.key (fun v ty -> index v ty)
 
 end
 
-module ClValue = struct
+module NodeValue = struct
   include Stdlib.MakeMSH(struct
-      type t = Cl.clvalue
+      type t = Node.nodevalue
       let tag: t -> int = function
-        | Cl.Value(tag,_,_,_) -> tag
+        | Node.Value(tag,_,_,_) -> tag
       let pp fmt : t -> unit = function
-        | Cl.Value(_,_,value,v) -> print_value value fmt v
+        | Node.Value(_,_,value,v) -> print_value value fmt v
     end)
 
-  let index = Cl.clvalue
-  let cl = Cl.of_clvalue
+  let index = Node.nodevalue
+  let node = Node.of_clvalue
   let ty : t -> Ty.t = function
-    | Cl.Value(_,ty,_,_) -> ty
+    | Node.Value(_,ty,_,_) -> ty
 
 
 end
@@ -383,36 +383,36 @@ end
 module type RegisteredValue = sig
   type s
   val key: s value
-  (** clvalue *)
+  (** nodevalue *)
   include Datatype
 
   val index: s -> Ty.t -> t
-  (** Return a clvalue from a valueantical value *)
+  (** Return a nodevalue from a valueantical value *)
 
-  val cl: t -> Cl.t
-  (** Return a class from a clvalue *)
+  val node: t -> Node.t
+  (** Return a class from a nodevalue *)
 
   val ty: t -> Ty.t
-  (** Return the type from a clvalue *)
+  (** Return the type from a nodevalue *)
 
   val value: t -> s
-  (** Return the value from a clvalue *)
+  (** Return the value from a nodevalue *)
 
-  val clvalue: t -> ClValue.t
-  val of_clvalue: ClValue.t -> t option
+  val nodevalue: t -> NodeValue.t
+  val of_clvalue: NodeValue.t -> t option
 
-  val coerce_clvalue: ClValue.t -> t
+  val coerce_clvalue: NodeValue.t -> t
 
 end
 
 module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
 
   module HC = Hashcons.MakeTag(struct
-      open Cl
-      type t = clvalue
+      open Node
+      type t = nodevalue
 
-      let next_tag = Cl.next_tag
-      let incr_tag = Cl.incr_tag
+      let next_tag = Node.next_tag
+      let incr_tag = Node.incr_tag
 
       let equal: t -> t -> bool = fun a b ->
         match a, b with
@@ -447,42 +447,42 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
   let key = D.key
 
   let tag: t -> int = function
-    | Cl.Value(tag,_,_,_) -> tag
+    | Node.Value(tag,_,_,_) -> tag
 
   let index v ty =
-    let cl =
+    let node =
       HC.hashcons3
-        (fun tag value v ty -> Cl.Value(tag,ty,value,v))
+        (fun tag value v ty -> Node.Value(tag,ty,value,v))
         D.key v ty in
-    let i = tag cl in
-    Simple_vector.inc_size (i+1) Cl.names;
+    let i = tag node in
+    Simple_vector.inc_size (i+1) Node.names;
     begin
-      if Simple_vector.is_uninitialized Cl.names i then
-        let s = Strings.find_new_name Cl.used_names ""
+      if Simple_vector.is_uninitialized Node.names i then
+        let s = Strings.find_new_name Node.used_names ""
         (** TODO use Value.pp or Value.print_debug *) in
         Debug.dprintf3 debug_create "[Solver] @[index %a into @@%s@]"
           D.pp v s;
-        Simple_vector.set Cl.names i s
+        Simple_vector.set Node.names i s
     end;
-    cl
+    node
 
-  let cl = Cl.of_clvalue
+  let node = Node.of_clvalue
 
   let value : t -> D.t = function
-    | Cl.Value(_,_,value,v) ->
+    | Node.Value(_,_,value,v) ->
       match Value.Eq.coerce_type value D.key with
       | Keys.Eq -> v
 
-  let ty = ClValue.ty
+  let ty = NodeValue.ty
 
-  let clvalue: t -> ClValue.t = fun x -> x
+  let nodevalue: t -> NodeValue.t = fun x -> x
 
-  let of_clvalue: ClValue.t -> t option = function
-    | Cl.Value(_,_,value',_) as v when Value.equal value' D.key -> Some v
+  let of_clvalue: NodeValue.t -> t option = function
+    | Node.Value(_,_,value',_) as v when Value.equal value' D.key -> Some v
     | _ -> None
 
-  let coerce_clvalue: ClValue.t -> t = function
-    | Cl.Value(_,_,value',_) as v -> assert (Value.equal value' D.key); v
+  let coerce_clvalue: NodeValue.t -> t = function
+    | Node.Value(_,_,value',_) as v -> assert (Value.equal value' D.key); v
 
   let () =
     VValue.inc_size D.key defined_value;
@@ -490,7 +490,7 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
       then raise AlreadyRegisteredKey else true);
     let value = (module D: Value with type t = D.t) in
     VValue.set defined_value D.key value;
-    Cl.ValueIndex.set Cl.valueindex D.key (fun v ty -> index v ty)
+    Node.ValueIndex.set Node.valueindex D.key (fun v ty -> index v ty)
 
 end
 
@@ -523,37 +523,37 @@ module Only_for_solver = struct
   type sem_of_cl =
     | Sem: 'a sem * 'a  -> sem_of_cl
 
-  let clsem: Cl.t -> ClSem.t option = function
-    | Cl.Fresh _ | Cl.Fresh_to_reg _ | Cl.Value _ -> None
-    | Cl.Sem _ as x -> Some (Obj.magic x: ClSem.t)
+  let nodesem: Node.t -> NodeSem.t option = function
+    | Node.Fresh _ | Node.Fresh_to_reg _ | Node.Value _ -> None
+    | Node.Sem _ as x -> Some (Obj.magic x: NodeSem.t)
 
-  let sem_of_cl: ClSem.t -> sem_of_cl = function
-    | Cl.Sem (_,_,sem,v) -> Sem(sem,v)
+  let sem_of_cl: NodeSem.t -> sem_of_cl = function
+    | Node.Sem (_,_,sem,v) -> Sem(sem,v)
 
   type value_of_cl =
     | Value: 'a value * 'a  -> value_of_cl
 
-  let clvalue: Cl.t -> ClValue.t option = function
-    | Cl.Fresh _ | Cl.Fresh_to_reg _ | Cl.Sem _ -> None
-    | Cl.Value _ as x -> Some (Obj.magic x: ClValue.t)
+  let nodevalue: Node.t -> NodeValue.t option = function
+    | Node.Fresh _ | Node.Fresh_to_reg _ | Node.Sem _ -> None
+    | Node.Value _ as x -> Some (Obj.magic x: NodeValue.t)
 
-  let value_of_cl: ClValue.t -> value_of_cl = function
-    | Cl.Value (_,_,value,v) -> Value(value,v)
+  let value_of_cl: NodeValue.t -> value_of_cl = function
+    | Node.Value (_,_,value,v) -> Value(value,v)
 
-  let cl_of_clsem : ClSem.t -> Cl.t = ClSem.cl
-  let cl_of_clvalue : ClValue.t -> Cl.t = ClValue.cl
+  let cl_of_clsem : NodeSem.t -> Node.t = NodeSem.node
+  let cl_of_clvalue : NodeValue.t -> Node.t = NodeValue.node
 
   type opened_cl =
     | Fresh: opened_cl
     | Fresh_to_reg: ('event,'r) dem * 'event -> opened_cl
-    | Sem  : ClSem.t -> opened_cl
-    | Value  : ClValue.t -> opened_cl
+    | Sem  : NodeSem.t -> opened_cl
+    | Value  : NodeValue.t -> opened_cl
 
   let open_cl = function
-    | Cl.Fresh _ -> Fresh
-    | Cl.Fresh_to_reg(_,_,dem,event) -> Fresh_to_reg(dem,event)
-    | Cl.Sem _ as x -> Sem (Obj.magic x: ClSem.t)
-    | Cl.Value _ as x -> Value (Obj.magic x: ClValue.t)
+    | Node.Fresh _ -> Fresh
+    | Node.Fresh_to_reg(_,_,dem,event) -> Fresh_to_reg(dem,event)
+    | Node.Sem _ as x -> Sem (Obj.magic x: NodeSem.t)
+    | Node.Value _ as x -> Value (Obj.magic x: NodeValue.t)
 end
 
 

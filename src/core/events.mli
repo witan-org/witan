@@ -25,21 +25,21 @@ open Typedef
 module Fired : sig
   type 'b event =
     (** the domain dom of the class change *)
-    | EventDom    : Cl.t * 'a Dom.t  *      'b -> 'b event
+    | EventDom    : Node.t * 'a Dom.t  *      'b -> 'b event
     (** the value of the class has been set *)
-    | EventValue    : Cl.t * 'a value  *  'b -> 'b event
+    | EventValue    : Node.t * 'a value  *  'b -> 'b event
     (** a new semantical term 'a point to this class (not complete) *)
-    | EventSem    : Cl.t * 'a sem  * 'a * 'b -> 'b event
+    | EventSem    : Node.t * 'a sem  * 'a * 'b -> 'b event
     (** we want to register a class *)
-    | EventReg  : Cl.t *                  'b -> 'b event
+    | EventReg  : Node.t *                  'b -> 'b event
     (** we want to register this class *)
-    | EventRegCl: Cl.t *                  'b -> 'b event
+    | EventRegCl: Node.t *                  'b -> 'b event
     (** This class is not the representant of its eq-class anymore *)
-    | EventChange : Cl.t *                'b -> 'b event
+    | EventChange : Node.t *                'b -> 'b event
     (** a new semantical term 'a appear *)
-    | EventRegSem : ClSem.t * 'b -> 'b event
+    | EventRegSem : NodeSem.t * 'b -> 'b event
     (** a new value 'a appear *)
-    | EventRegValue : ClValue.t * 'b -> 'b event
+    | EventRegValue : NodeValue.t * 'b -> 'b event
 
   val pp: 'b event Pp.pp
   val get_data: 'b event -> 'b
@@ -66,13 +66,13 @@ module Wait : sig
 
   type 'a translate = { translate : 'd. 'a -> 'd -> 'd Fired.event}
 
-  val translate_dom : (Cl.t * 'a Dom.t) translate
-  val translate_value : (Cl.t * 'a value) translate
-  val translate_reg : Cl.t translate
-  val translate_regcl : Cl.t translate
-  val translate_change : Cl.t translate
-  val translate_regsem : ClSem.t translate
-  val translate_regvalue : ClValue.t translate
+  val translate_dom : (Node.t * 'a Dom.t) translate
+  val translate_value : (Node.t * 'a value) translate
+  val translate_reg : Node.t translate
+  val translate_regcl : Node.t translate
+  val translate_change : Node.t translate
+  val translate_regsem : NodeSem.t translate
+  val translate_regvalue : NodeValue.t translate
 
   module type S = sig
     type delayed

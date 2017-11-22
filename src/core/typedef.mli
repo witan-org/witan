@@ -85,7 +85,7 @@ module Dem: Keys.Key2
 type ('k,'d) dem = ('k,'d) Dem.t
 
 (** Classes *)
-module Cl : sig
+module Node : sig
   include Datatype
 
   val fresh: ?to_reg:(('event,'r) dem * 'event) -> string -> Ty.t -> t
@@ -97,17 +97,17 @@ module Cl : sig
   val ty: t -> Ty.t
 
   val index: 'a sem -> 'a -> Ty.t -> t
-  (** Return the corresponding cl from a semantical term *)
+  (** Return the corresponding node from a semantical term *)
 end
 
-module ClSem: sig
+module NodeSem: sig
   include Datatype
 
 
   val index: 'a sem -> 'a -> Ty.t -> t
-  (** Return the corresponding cl from a semantical term *)
+  (** Return the corresponding node from a semantical term *)
 
-  val cl: t -> Cl.t
+  val node: t -> Node.t
 
   val ty: t -> Ty.t
 
@@ -117,25 +117,25 @@ module type RegisteredSem = sig
   type s
   val key: s sem
 
-  (** clsem *)
+  (** nodesem *)
   include Datatype
 
   val index: s -> Ty.t -> t
-  (** Return a clsem from a semantical term *)
+  (** Return a nodesem from a semantical term *)
 
-  val cl: t -> Cl.t
-  (** Return a class from a clsem *)
+  val node: t -> Node.t
+  (** Return a class from a nodesem *)
 
   val ty: t -> Ty.t
-  (** Return the type from a clsem *)
+  (** Return the type from a nodesem *)
 
   val sem: t -> s
-  (** Return the sem from a clsem *)
+  (** Return the sem from a nodesem *)
 
-  val clsem: t -> ClSem.t
-  val of_clsem: ClSem.t -> t option
+  val nodesem: t -> NodeSem.t
+  val of_clsem: NodeSem.t -> t option
 
-  val coerce_clsem: ClSem.t -> t
+  val coerce_clsem: NodeSem.t -> t
 
 end
 
@@ -143,14 +143,14 @@ end
 module RegisterSem (D:Sem) : RegisteredSem with type s = D.t
 
 
-module ClValue: sig
+module NodeValue: sig
   include Datatype
 
 
   val index: 'a value -> 'a -> Ty.t -> t
-  (** Return the corresponding cl from a value *)
+  (** Return the corresponding node from a value *)
 
-  val cl: t -> Cl.t
+  val node: t -> Node.t
 
   val ty: t -> Ty.t
 
@@ -160,25 +160,25 @@ module type RegisteredValue = sig
   type s
   val key: s value
 
-  (** clvalue *)
+  (** nodevalue *)
   include Datatype
 
   val index: s -> Ty.t -> t
-  (** Return a clvalue from a valueantical term *)
+  (** Return a nodevalue from a valueantical term *)
 
-  val cl: t -> Cl.t
-  (** Return a class from a clvalue *)
+  val node: t -> Node.t
+  (** Return a class from a nodevalue *)
 
   val ty: t -> Ty.t
-  (** Return the type from a clvalue *)
+  (** Return the type from a nodevalue *)
 
   val value: t -> s
-  (** Return the value from a clvalue *)
+  (** Return the value from a nodevalue *)
 
-  val clvalue: t -> ClValue.t
-  val of_clvalue: ClValue.t -> t option
+  val nodevalue: t -> NodeValue.t
+  val of_clvalue: NodeValue.t -> t option
 
-  val coerce_clvalue: ClValue.t -> t
+  val coerce_clvalue: NodeValue.t -> t
 
 end
 
@@ -210,38 +210,38 @@ module Only_for_solver: sig
   type sem_of_cl =
     | Sem: 'a sem * 'a -> sem_of_cl
 
-  val clsem:
-    Cl.t -> ClSem.t option
-    (** give the sem associated with a cl, make sense only for not merged
+  val nodesem:
+    Node.t -> NodeSem.t option
+    (** give the sem associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
   val sem_of_cl:
-    ClSem.t -> sem_of_cl
-    (** give the sem associated with a cl, make sense only for not merged
+    NodeSem.t -> sem_of_cl
+    (** give the sem associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
   type value_of_cl =
     | Value: 'a value * 'a -> value_of_cl
 
-  val clvalue:
-    Cl.t -> ClValue.t option
-    (** give the value associated with a cl, make sense only for not merged
+  val nodevalue:
+    Node.t -> NodeValue.t option
+    (** give the value associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
   val value_of_cl:
-    ClValue.t -> value_of_cl
-    (** give the value associated with a cl, make sense only for not merged
+    NodeValue.t -> value_of_cl
+    (** give the value associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
-  val cl_of_clsem: ClSem.t -> Cl.t
-  val cl_of_clvalue: ClValue.t -> Cl.t
+  val cl_of_clsem: NodeSem.t -> Node.t
+  val cl_of_clvalue: NodeValue.t -> Node.t
 
   type opened_cl =
     | Fresh: opened_cl
     | Fresh_to_reg: ('event,'r) dem * 'event -> opened_cl
-    | Sem  : ClSem.t -> opened_cl
-    | Value  : ClValue.t -> opened_cl
+    | Sem  : NodeSem.t -> opened_cl
+    | Value  : NodeValue.t -> opened_cl
 
-  val open_cl: Cl.t -> opened_cl
+  val open_cl: Node.t -> opened_cl
 
 end

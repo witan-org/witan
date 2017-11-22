@@ -95,7 +95,7 @@ module Conunknown = Con.MkMap(struct type ('a,'b) t = 'a Bag.t end)
 type conunknown = unit Conunknown.t
 type chogen =
   | GCho: ('k,'d) cho * 'k -> chogen
-type decs = chogen list Cl.M.t Dom.M.t
+type decs = chogen list Node.M.t Dom.M.t
 
 (** Module for manipulating explicit dependencies *)
 module Deps = struct
@@ -221,46 +221,46 @@ let show_pexp = Pp.string_of_wnl pp_pexp
 
 
 type modif =
-| Cl : Cl.t * Cl.t             -> modif (** Just for taking an age *)
-| Dom: Cl.t * 'a Dom.t      * pexp * Cl.t -> modif
-| DomL: Cl.t * 'a Dom.t * 'a option * Age.t * pexp * Cl.t -> modif
+| Node : Node.t * Node.t             -> modif (** Just for taking an age *)
+| Dom: Node.t * 'a Dom.t      * pexp * Node.t -> modif
+| DomL: Node.t * 'a Dom.t * 'a option * Age.t * pexp * Node.t -> modif
 | Dec: dec                       -> modif
 
 let print_modif_ref = ref (fun _ _ -> assert false)
 
 type node_clhist = {
   nage : age;
-  ncl : Cl.t;
+  ncl : Node.t;
   npexp: pexp;
   ninv : bool;
 }
 
 let print_node fmt e =
     Format.fprintf fmt "M(%a,@,%a,@,%a,@,%b)"
-      Age.pp e.nage Cl.pp e.ncl pp_pexp e.npexp e.ninv
+      Age.pp e.nage Node.pp e.ncl pp_pexp e.npexp e.ninv
 
 
-type clgraph = (node_clhist list) Cl.M.t (** graph *)
-type clhist = (age * Cl.t) Cl.M.t (** graph *)
+type clgraph = (node_clhist list) Node.M.t (** graph *)
+type clhist = (age * Node.t) Node.M.t (** graph *)
 
 type mod_dom = {
-  modcl : Cl.t;
+  modcl : Node.t;
   modage : Age.t;
   modpexp : pexp
 }
 
 let print_mod_dom fmt m =
-  Format.fprintf fmt "{cl=%a;@,age=%a;@,pexp=%a}"
-    Cl.pp m.modcl Age.pp m.modage pp_pexp m.modpexp
+  Format.fprintf fmt "{node=%a;@,age=%a;@,pexp=%a}"
+    Node.pp m.modcl Age.pp m.modage pp_pexp m.modpexp
 
 type domhist_node =
   | DomNeverSet
   | DomMerge of Age.t (** agedommerge *) *
                 domhist_node (** other_cl *) * domhist_node (** repr_cl **)
   | DomPreMerge of Age.t *
-                   Cl.t * (** cl that will be equal to it
+                   Node.t * (** node that will be equal to it
                               and from which we take the dom *)
-                   domhist_node * (** domhist of this cl *)
+                   domhist_node * (** domhist of this node *)
                    domhist_node (** previous domhist *)
   | DomSet of mod_dom * domhist_node
 
@@ -272,22 +272,22 @@ let rec print_domhist_node fmt = function
   | DomPreMerge(age,from_cl,_,l) ->
     Format.fprintf fmt "(%a,%a,_)::%a"
       Age.pp age
-      Cl.pp from_cl
+      Node.pp from_cl
       print_domhist_node l
   | DomSet(moddom,l) ->
     Format.fprintf fmt "%a::%a"
       print_mod_dom moddom
       print_domhist_node l
 
-type domhist = domhist_node Cl.M.t Dom.Vector.t
+type domhist = domhist_node Node.M.t Dom.Vector.t
 
 let print_domhist fmt x =
   (Dom.Vector.pp Pp.newline Pp.colon {Dom.Vector.printk = Dom.pp}
-     (Pp.iter2 Cl.M.iter Pp.semi Pp.comma Cl.pp print_domhist_node))
+     (Pp.iter2 Node.M.iter Pp.semi Pp.comma Node.pp print_domhist_node))
     fmt x
 
 type dom_before_last_dec =
-  { dom_before_last_dec: 'a. 'a Dom.t -> Cl.t -> 'a option }
+  { dom_before_last_dec: 'a. 'a Dom.t -> Node.t -> 'a option }
 
 type t = {
   mutable last_dec : Age.t;
@@ -305,8 +305,8 @@ type t = {
 let create () = {
   age    = Age.bef;
   trail  = [];
-  clhist = Cl.M.empty;
-  clgraph = Cl.M.empty;
+  clhist = Node.M.empty;
+  clgraph = Node.M.empty;
   domhist = Dom.Vector.create (Dom.hint_size ());
   last_dec = Age.bef;
   first_dec = max_int;
@@ -328,8 +328,8 @@ let new_handler t = {
 
 let current_age t = t.age
 let last_dec t = t.last_dec
-let dom_before_last_dec (t:t) dom cl =
-  t.dom_before_last_dec.dom_before_last_dec dom cl
+let dom_before_last_dec (t:t) dom node =
+  t.dom_before_last_dec.dom_before_last_dec dom node
 let nbdec t = t.nbdec
 let at_current_level t age = Age.compare t.last_dec age <= 0
 let before_first_dec t age = Age.compare t.first_dec age > 0
@@ -367,16 +367,16 @@ let mk_pexp_direct ~age ?(tags=Tags.empty) kexp exp =
 
 
 let add_pexp_cl t pexp ~inv ~other_cl ~other_cl0 ~repr_cl ~repr_cl0  =
-  (* let modif = Cl(other_cl0,repr_cl0) in *)
+  (* let modif = Node(other_cl0,repr_cl0) in *)
   push (* modif *) t;
   Debug.dprintf10 debug
     "[Trail] @[merge %a(%a) -> %a(%a) at %a@]"
-    Cl.pp other_cl0 Cl.pp other_cl
-    Cl.pp repr_cl0 Cl.pp repr_cl
+    Node.pp other_cl0 Node.pp other_cl
+    Node.pp repr_cl0 Node.pp repr_cl
     Age.pp t.age (* print_modif modif *);
   (** update clgraph *)
   let add_edge cl1_0 cl2_0 inv =
-    t.clgraph <- Cl.M.add_change Lists.singleton Lists.add
+    t.clgraph <- Node.M.add_change Lists.singleton Lists.add
         cl1_0 {nage = t.age; ncl = cl2_0; npexp = pexp; ninv = inv} t.clgraph in
   add_edge other_cl0 repr_cl0 inv;
   add_edge repr_cl0  other_cl0 (not inv)
@@ -386,11 +386,11 @@ let add_merge_dom_no
   push (* modif *) t;
   Debug.dprintf10 debug
     "[Trail] @[finalmerge without dom %a(%a) -> %a(%a) at %a@]"
-    Cl.pp other_cl0 Cl.pp other_cl
-    Cl.pp repr_cl0 Cl.pp repr_cl
+    Node.pp other_cl0 Node.pp other_cl
+    Node.pp repr_cl0 Node.pp repr_cl
     Age.pp t.age (* print_modif modif *);
   (** update clhist *)
-  t.clhist <- Cl.M.add other_cl (t.age,repr_cl) t.clhist
+  t.clhist <- Node.M.add other_cl (t.age,repr_cl) t.clhist
 
 
 let add_merge_dom_all
@@ -398,85 +398,85 @@ let add_merge_dom_all
   push (* modif *) t;
   Debug.dprintf10 debug
     "[Trail] @[finalmerge with dom %a(%a) -> %a(%a) at %a@]"
-    Cl.pp other_cl0 Cl.pp other_cl
-    Cl.pp repr_cl0 Cl.pp repr_cl
+    Node.pp other_cl0 Node.pp other_cl
+    Node.pp repr_cl0 Node.pp repr_cl
     Age.pp t.age (* print_modif modif *);
   (** update clhist *)
-  t.clhist <- Cl.M.add other_cl (t.age,repr_cl) t.clhist;
+  t.clhist <- Node.M.add other_cl (t.age,repr_cl) t.clhist;
   (**update domhist *)
   let apply m =
-    try Cl.M.add_change
+    try Node.M.add_change
           (fun (age,o) -> DomMerge(age,o,DomNeverSet))
           (fun (age,o) r -> DomMerge(age,o,r))
-          repr_cl (t.age,Cl.M.find other_cl m) m
+          repr_cl (t.age,Node.M.find other_cl m) m
     with Not_found -> m
   in
   Dom.Vector.apply_initialized apply t.domhist
 
-let add_pexp_dom t pexp dom ~cl ~cl0 =
+let add_pexp_dom t pexp dom ~node ~cl0 =
   if Dom.Vector.is_uninitialized t.domhist dom then
-    Dom.Vector.set t.domhist dom Cl.M.empty;
+    Dom.Vector.set t.domhist dom Node.M.empty;
   push t;
-  Debug.dprintf6 debug "[Trail] @[add dom cl:%a cl0:%a %a@]"
-    Cl.pp cl Cl.pp cl0 Age.pp t.age;
+  Debug.dprintf6 debug "[Trail] @[add dom node:%a cl0:%a %a@]"
+    Node.pp node Node.pp cl0 Age.pp t.age;
   let cm = Dom.Vector.get t.domhist dom in
   let append md m = DomSet(md,m) in
   let singleton md = append md DomNeverSet in
-  let cm = Cl.M.add_change singleton append cl
+  let cm = Node.M.add_change singleton append node
       {modage=t.age;modpexp=pexp;modcl=cl0} cm in
   Dom.Vector.set t.domhist dom cm
 
 let add_pexp_dom_premerge t dom ~clto ~clfrom ~clfrom0 =
   if Dom.Vector.is_uninitialized t.domhist dom then
-    Dom.Vector.set t.domhist dom Cl.M.empty;
+    Dom.Vector.set t.domhist dom Node.M.empty;
   push t;
   Debug.dprintf8 debug
     "[Trail] @[add premerge to_cl:%a from_cl:%a(%a) dom %a@]"
-    Cl.pp clto Cl.pp clfrom0 Cl.pp clfrom Age.pp t.age;
+    Node.pp clto Node.pp clfrom0 Node.pp clfrom Age.pp t.age;
   let cm = Dom.Vector.get t.domhist dom in
-  let append (age,cl,m') m = DomPreMerge(age,cl,m',m) in
+  let append (age,node,m') m = DomPreMerge(age,node,m',m) in
   let singleton x = append x DomNeverSet in
-  let cm = Cl.M.add_change singleton append clto
-      (t.age,clfrom0,Cl.M.find clfrom cm) cm in
+  let cm = Node.M.add_change singleton append clto
+      (t.age,clfrom0,Node.M.find clfrom cm) cm in
   Dom.Vector.set t.domhist dom cm
 
-let add_pexp_value _t _pexp _dom ~cl:_ ~cl0:_ =
+let add_pexp_value _t _pexp _dom ~node:_ ~cl0:_ =
   assert false (** TODO nearly all this module will change*)
 
 (*
-  let age = Cl.M.find_def Age.bef cl (Dom.Vector.get t.dom dom) in
+  let age = Node.M.find_def Age.bef node (Dom.Vector.get t.dom dom) in
   if age <= t.last_dec
   then (** last modified before current level *)
     begin
-      push (DomL (cl,dom,v,age,pexp,cl0)) t;
-      Dom.Vector.set t.dom dom (Cl.M.add cl t.age (Dom.Vector.get t.dom dom));
+      push (DomL (node,dom,v,age,pexp,cl0)) t;
+      Dom.Vector.set t.dom dom (Node.M.add node t.age (Dom.Vector.get t.dom dom));
     end
   else (** already modified after current level *)
-    push (Dom (cl,dom,pexp,cl0)) t;
+    push (Dom (node,dom,pexp,cl0)) t;
   Debug.dprintf10 debug
     "[Trail] @[change dom %a of (%a)%a at %a evaluated at %a@]"
-    Dom.pp dom Cl.pp cl0 Cl.pp cl Age.pp t.age pp_pexp pexp
+    Dom.pp dom Node.pp cl0 Node.pp node Age.pp t.age pp_pexp pexp
 *)
 
 let expfact : unit exp = Exp.create_key "Explanation.fact"
 let pexpfact = Pexp(Age.bef,expfact,(),Tags.empty,Concache.mk ())
 
-type invclhist = Cl.t Age.M.t Cl.H.t
+type invclhist = Node.t Age.M.t Node.H.t
 
 let print_invclhist fmt h =
-  Pp.iter2 Cl.H.iter Pp.newline Pp.colon Cl.pp
-    (Pp.iter2 Age.M.iter Pp.semi Pp.comma Age.pp Cl.pp)
+  Pp.iter2 Node.H.iter Pp.newline Pp.colon Node.pp
+    (Pp.iter2 Age.M.iter Pp.semi Pp.comma Age.pp Node.pp)
     fmt h
 
 let invclhist t =
-  let invclhist = Cl.H.create 100 in
-  let iter cl (age,cl') =
+  let invclhist = Node.H.create 100 in
+  let iter node (age,node') =
     (* if Age.compare t.last_dec age <= 0 then *)
-      let m = Cl.H.find_def invclhist Age.M.empty cl' in
-      let m = Age.M.add_new Impossible age cl m in
-      Cl.H.replace invclhist cl' m
+      let m = Node.H.find_def invclhist Age.M.empty node' in
+      let m = Age.M.add_new Impossible age node m in
+      Node.H.replace invclhist node' m
   in
-  Cl.M.iter iter t.clhist;
+  Node.M.iter iter t.clhist;
   invclhist
 
 type pcho =

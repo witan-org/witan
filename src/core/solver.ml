@@ -39,8 +39,8 @@ let stats_set_value =
   Debug.register_stats_int ~name:"Solver.set_value/merge" ~init:0
 
 type exp_same_sem =
-| ExpSameSem   : pexp * Cl.t * ClSem.t -> exp_same_sem
-| ExpSameValue : pexp * Cl.t * ClValue.t -> exp_same_sem
+| ExpSameSem   : pexp * Node.t * NodeSem.t -> exp_same_sem
+| ExpSameValue : pexp * Node.t * NodeValue.t -> exp_same_sem
 
 let exp_same_sem : exp_same_sem Explanation.exp =
   Explanation.Exp.create_key "Solver.exp_same_sem"
@@ -56,8 +56,8 @@ let exp_diff_value : pexp Explanation.exp =
 module DecTag = DInt
 
 type 'a domtable = {
-  table : 'a Cl.M.t;
-  events : Events.Wait.t Bag.t Cl.M.t
+  table : 'a Node.M.t;
+  events : Events.Wait.t Bag.t Node.M.t
 }
 
 type semtable = Events.Wait.t list
@@ -67,8 +67,8 @@ module VDomTable = Dom.MkVector (struct type ('a,'unused) t = 'a domtable end)
 module VSemTable = Sem.Vector
 
 type 'a valuetable = {
-  table : 'a Cl.M.t;
-  events : Events.Wait.t Bag.t Cl.M.t;
+  table : 'a Node.M.t;
+  events : Events.Wait.t Bag.t Node.M.t;
   reg_events : Events.Wait.t list;
 }
 module VValueTable = Value.MkVector (struct type ('a,'unit) t = 'a valuetable end)
@@ -79,9 +79,9 @@ module VValueTable = Value.MkVector (struct type ('a,'unit) t = 'a valuetable en
 (** Just for easy qualification *)
 module Def = struct
 type t = {
-  mutable repr  : Cl.t Cl.M.t;
-  mutable event : Events.Wait.t Bag.t Cl.M.t;
-  mutable event_reg : Events.Wait.t list Cl.M.t;
+  mutable repr  : Node.t Node.M.t;
+  mutable event : Events.Wait.t Bag.t Node.M.t;
+  mutable event_reg : Events.Wait.t list Node.M.t;
   mutable event_any_reg : Events.Wait.t list;
           (** extensible "number of fields" *)
           dom   : delayed_t VDomTable.t;
@@ -97,7 +97,7 @@ and delayed_t = {
   env : t;
   todo_immediate_dem : action_immediate_dem Queue.t;
   todo_merge_dom : action_merge_dom Queue.t;
-  mutable todo_delayed_merge : (pexp * Cl.t * Cl.t * bool) option;
+  mutable todo_delayed_merge : (pexp * Node.t * Node.t * bool) option;
   todo_merge : action_merge Queue.t;
   todo_ext_action : action_ext Queue.t;
   sched_daemon : Events.Wait.daemon_key -> unit;
@@ -109,10 +109,10 @@ and action_immediate_dem =
 
 and action_merge_dom =
 | SetMergeDomCl  :
-    pexp * 'a Dom.t * Cl.t * Cl.t * bool -> action_merge_dom
+    pexp * 'a Dom.t * Node.t * Node.t * bool -> action_merge_dom
 
 and action_merge =
-| Merge of pexp * Cl.t * Cl.t
+| Merge of pexp * Node.t * Node.t
 
 and action_ext =
 | ExtDem         : Events.Wait.daemon_key  -> action_ext
@@ -154,9 +154,9 @@ let unsat_delayed = mk_dumb_delayed ()
 
 
 let new_t () = {
-  repr = Cl.M.empty;
-  event = Cl.M.empty;
-  event_reg = Cl.M.empty;
+  repr = Node.M.empty;
+  event = Node.M.empty;
+  event_reg = Node.M.empty;
   event_any_reg = [];
   dom = VDomTable.create 5;
   sem = VSemTable.create 5;
@@ -187,8 +187,8 @@ let get_table_dom t k =
   VDom.check_is_registered k;
   VDomTable.inc_size k t.dom;
   VDomTable.get_def t.dom k
-    { table = Cl.M.empty;
-      events = Cl.M.empty }
+    { table = Node.M.empty;
+      events = Node.M.empty }
 
 let get_table_sem t k =
   Typedef.check_sem_registered k;
@@ -199,8 +199,8 @@ let get_table_value t k =
   Typedef.check_value_registered k;
   VValueTable.inc_size k t.value;
   VValueTable.get_def t.value k
-    { table = Cl.M.empty;
-      events = Cl.M.empty;
+    { table = Node.M.empty;
+      events = Node.M.empty;
       reg_events = [];
     }
 
@@ -210,44 +210,44 @@ exception NotRegistered
 
 (** Just used for being able to qualify these function on t *)
 module T = struct
-  let rec find t cl =
-    let cl' = Cl.M.find_exn NotRegistered cl t.repr in
-    if Cl.equal cl cl' then cl else
-      let r = find t cl' in
-      t.repr <- Cl.M.add cl r t.repr;
+  let rec find t node =
+    let node' = Node.M.find_exn NotRegistered node t.repr in
+    if Node.equal node node' then node else
+      let r = find t node' in
+      t.repr <- Node.M.add node r t.repr;
       r
 
-  let find_def t cl =
-    let cl' = Cl.M.find_def cl cl t.repr in
-    if Cl.equal cl cl' then cl else
-      let r = find t cl' in
-      t.repr <- Cl.M.add cl r t.repr;
+  let find_def t node =
+    let node' = Node.M.find_def node node t.repr in
+    if Node.equal node node' then node else
+      let r = find t node' in
+      t.repr <- Node.M.add node r t.repr;
       r
 
-  let is_repr t cl =
-    try Cl.equal (Cl.M.find cl t.repr) cl
+  let is_repr t node =
+    try Node.equal (Node.M.find node t.repr) node
     with Not_found -> true
 
   let is_equal t cl1 cl2 =
     let cl1 = find_def t cl1 in
     let cl2 = find_def t cl2 in
-    Cl.equal cl1 cl2
+    Node.equal cl1 cl2
 end
 open T
 
-let get_direct_dom (type a) t (dom : a Dom.t) cl =
-  Cl.M.find_opt cl (get_table_dom t dom).table
+let get_direct_dom (type a) t (dom : a Dom.t) node =
+  Node.M.find_opt node (get_table_dom t dom).table
 
-let get_dom t dom cl =
-  let cl = find_def t cl in
-  get_direct_dom t dom cl
+let get_dom t dom node =
+  let node = find_def t node in
+  get_direct_dom t dom node
 
-let get_direct_value t value cl =
-  Cl.M.find_opt cl (get_table_value t value).table
+let get_direct_value t value node =
+  Node.M.find_opt node (get_table_value t value).table
 
-let get_value t value cl =
-  let cl = find_def t cl in
-  get_direct_value t value cl
+let get_value t value node =
+  let node = find_def t node in
+  get_direct_value t value node
 
 let get_env : type a. t -> a Env.t -> a
   = fun t k ->
@@ -265,16 +265,16 @@ let set_env : type a. t -> a Env.t -> a -> unit
     Env.VectorH.set t.envs k
 
 
-let is_registered t cl =
-  Cl.M.mem cl t.repr
+let is_registered t node =
+  Node.M.mem node t.repr
 
 
 (** {2 For debugging and display} *)
 let _print_env fmt t =
   let printd (type a) dom fmt (domtable:a domtable) =
     Format.fprintf fmt "%a:@[%a@]" Dom.pp dom
-      (Pp.iter2 Cl.M.iter Pp.newline Pp.colon
-         Cl.pp (Bag.pp Pp.comma Events.Wait.pp))
+      (Pp.iter2 Node.M.iter Pp.newline Pp.colon
+         Node.pp (Bag.pp Pp.comma Events.Wait.pp))
       domtable.events
   in
   VDomTable.pp Pp.newline Pp.nothing
@@ -292,54 +292,54 @@ let escape_for_dot pp v =
 let output_graph filename t =
   let open Graph in
   let module G = struct
-    include Imperative.Digraph.Concrete(Cl)
+    include Imperative.Digraph.Concrete(Node)
     let graph_attributes _ = []
     let default_vertex_attributes _ = [`Shape `Record]
-    let vertex_name cl = string_of_int (Cl.hash cl)
+    let vertex_name node = string_of_int (Node.hash node)
 
-    let pp fmt cl =
+    let pp fmt node =
       let iter_dom dom fmt (domtable: _ domtable) =
         try
-          let s   = Cl.M.find cl domtable.table in
+          let s   = Node.M.find node domtable.table in
           Format.fprintf fmt "| {%a | %s}"
             Dom.pp dom (escape_for_dot (VDom.print_dom dom) s);
         with Not_found -> ()
       in
-      let print_ty fmt cl =
-        if is_repr t cl
-        then Format.fprintf fmt ": %a" Ty.pp (Cl.ty cl)
+      let print_ty fmt node =
+        if is_repr t node
+        then Format.fprintf fmt ": %a" Ty.pp (Node.ty node)
       in
-      let print_sem fmt cl =
-        match Only_for_solver.clsem cl with
+      let print_sem fmt node =
+        match Only_for_solver.nodesem node with
         | None -> ()
-        | Some clsem ->
-          match Only_for_solver.sem_of_cl clsem with
+        | Some nodesem ->
+          match Only_for_solver.sem_of_cl nodesem with
           | Only_for_solver.Sem(sem,v) ->
             let module S = (val get_sem sem) in
             Format.fprintf fmt "| {%a | %s}"
               Sem.pp sem (escape_for_dot S.pp v)
       in
       Format.fprintf fmt "{%a %a %a %a}" (* "{%a | %a | %a}" *)
-        Cl.pp cl
-        print_ty cl
-        print_sem cl
-        (if is_repr t cl
+        Node.pp node
+        print_ty node
+        print_sem node
+        (if is_repr t node
          then VDomTable.pp Pp.nothing Pp.nothing
              {VDomTable.printk=Pp.nothing}
              {VDomTable.printd=iter_dom}
          else Pp.nothing)
         t.dom
 
-    let vertex_attributes cl =
-      let label = Pp.string_of_wnl pp cl in
+    let vertex_attributes node =
+      let label = Pp.string_of_wnl pp node in
       [`Label label]
     let default_edge_attributes _ = []
     let edge_attributes _ = []
     let get_subgraph _ = None
   end in
   let g = G.create () in
-  Cl.M.iter (fun cl1 cl2 ->
-      if Cl.equal cl1 cl2
+  Node.M.iter (fun cl1 cl2 ->
+      if Node.equal cl1 cl2
       then G.add_vertex g cl1
       else G.add_edge g cl1 (find_def t cl2)) t.repr;
   let cout = open_out filename in
@@ -369,53 +369,53 @@ module Delayed = struct
 
   let is_current_env t = t.env.current_delayed == t
 
-  let find t cl =
+  let find t node =
     assert (is_current_env t);
-    find t.env cl
+    find t.env node
 
-  let find_def t cl =
+  let find_def t node =
     assert (is_current_env t);
-    find_def t.env cl
+    find_def t.env node
 
-  let is_repr t cl =
+  let is_repr t node =
     assert (is_current_env t);
-    is_repr t.env cl
+    is_repr t.env node
 
   let is_equal t cl1 cl2 =
     assert (is_current_env t);
     is_equal t.env cl1 cl2
 
 
-  let is_registered t cl =
+  let is_registered t node =
     assert (is_current_env t);
-    is_registered t.env cl
+    is_registered t.env node
 
   let set_value_direct (type a) t pexp (value : a value) cl0 new_v =
     Debug.incr stats_set_value;
-    let cl = find t cl0 in
+    let node = find t cl0 in
     let valuetable = get_table_value t.env value in
-    let events = Cl.M.find_opt cl valuetable.events in
-    let new_table = Cl.M.add cl new_v valuetable.table in
+    let events = Node.M.find_opt node valuetable.events in
+    let new_table = Node.M.add node new_v valuetable.table in
     let valuetable = {
       valuetable with
       table = new_table
     } in
     VValueTable.set t.env.value value valuetable;
-    Explanation.add_pexp_value t.env.trail pexp value ~cl ~cl0;
-    Wait.wakeup_events_bag Events.Wait.translate_value t events (cl,value)
+    Explanation.add_pexp_value t.env.trail pexp value ~node ~cl0;
+    Wait.wakeup_events_bag Events.Wait.translate_value t events (node,value)
 
   let merge_values t pexp cl0 cl0' =
-    let cl  = find t cl0 in
-    let cl' = find t cl0'  in
+    let node  = find t cl0 in
+    let node' = find t cl0'  in
     let iteri (type a) (value:a value) (valuetable:a valuetable) =
-      let old_s = Cl.M.find_opt cl valuetable.table in
-      let old_s'  = Cl.M.find_opt cl'  valuetable.table in
+      let old_s = Node.M.find_opt node valuetable.table in
+      let old_s'  = Node.M.find_opt node'  valuetable.table in
       let module Value = (val (Typedef.get_value value)) in
       Debug.dprintf12 debug_few
         "[Solver] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
-        Cl.pp cl Cl.pp cl0
+        Node.pp node Node.pp cl0
         (Pp.option (print_value value)) old_s
-        Cl.pp cl' Cl.pp cl0'
+        Node.pp node' Node.pp cl0'
         (Pp.option (print_value value)) old_s';
       match old_s, old_s' with
       | None, None   -> ()
@@ -435,26 +435,26 @@ module Delayed = struct
     in
     VValueTable.iter_initializedi {VValueTable.iteri} t.env.value
 
-  let add_pending_merge (t : t) pexp cl cl' =
+  let add_pending_merge (t : t) pexp node node' =
     Debug.dprintf4 debug "[Solver] @[add_pending_merge for %a and %a@]"
-      Cl.pp cl Cl.pp cl';
-    assert (is_registered t cl);
-    assert (is_registered t cl');
-    assert (not (Cl.equal (find t cl) (find t cl')));
-    assert (Ty.equal (Cl.ty cl) (Cl.ty cl'));
+      Node.pp node Node.pp node';
+    assert (is_registered t node);
+    assert (is_registered t node');
+    assert (not (Node.equal (find t node) (find t node')));
+    assert (Ty.equal (Node.ty node) (Node.ty node'));
     (*  Immediately merge values *)
-    merge_values t pexp cl cl';
+    merge_values t pexp node node';
     (* Add the actual merge for later *)
-    Queue.add (Merge (pexp,cl,cl')) t.todo_merge
+    Queue.add (Merge (pexp,node,node')) t.todo_merge
 
 
-  let get_dom t dom cl =
+  let get_dom t dom node =
     assert (is_current_env t);
-    get_dom t.env dom cl
+    get_dom t.env dom node
 
-  let get_value t value cl =
+  let get_value t value node =
     assert (is_current_env t);
-    get_value t.env value cl
+    get_value t.env value node
 
   let get_env t env =
     assert (is_current_env t);
@@ -464,40 +464,40 @@ module Delayed = struct
     assert (is_current_env t);
     set_env t.env env v
 
-  let attach_dom (type a) t cl (dom : a Dom.t) dem event =
-    let cl = find_def t cl in
+  let attach_dom (type a) t node (dom : a Dom.t) dem event =
+    let node = find_def t node in
     let event = Events.Wait.Event (dem,event) in
     let domtable = get_table_dom t.env dom in
     let domtable = {
       domtable with
-      events = Cl.M.add_change Bag.elt Bag.add cl event domtable.events
+      events = Node.M.add_change Bag.elt Bag.add node event domtable.events
     }
     in
     VDomTable.set t.env.dom dom domtable
 
-  let attach_value (type a) t cl (value : a value) dem event =
-    let cl = find_def t cl in
+  let attach_value (type a) t node (value : a value) dem event =
+    let node = find_def t node in
     let event = Events.Wait.Event (dem,event) in
     let valuetable = (get_table_value t.env value) in
     let valuetable = {
       valuetable with
-      events = Cl.M.add_change Bag.elt Bag.add cl event valuetable.events
+      events = Node.M.add_change Bag.elt Bag.add node event valuetable.events
     } in
     VValueTable.set t.env.value value valuetable
 
-  let attach_cl t cl dem event =
-    let cl = find_def t cl in
+  let attach_cl t node dem event =
+    let node = find_def t node in
     let event = Events.Wait.Event (dem,event) in
-    t.env.event <- Cl.M.add_change Bag.elt Bag.add cl event t.env.event
+    t.env.event <- Node.M.add_change Bag.elt Bag.add node event t.env.event
 
-  let attach_reg_cl t cl dem event =
+  let attach_reg_cl t node dem event =
     let event = Events.Wait.Event (dem,event) in
-    match find t cl with
-    | cl -> (** already registered *)
-      Wait.wakeup_events_list Events.Wait.translate_regcl t (Some [event]) cl
+    match find t node with
+    | node -> (** already registered *)
+      Wait.wakeup_events_list Events.Wait.translate_regcl t (Some [event]) node
     | exception NotRegistered ->
       t.env.event_reg <-
-        Cl.M.add_change Lists.singleton Lists.add cl event t.env.event_reg
+        Node.M.add_change Lists.singleton Lists.add node event t.env.event_reg
 
   let attach_reg_sem (type a) t (sem : a sem) dem event =
     let event = Events.Wait.Event (dem,event) in
@@ -506,7 +506,7 @@ module Delayed = struct
     Sem.Vector.set t.env.sem sem reg_events
 
   let attached_reg_cl
-      (type k) (type d) d cl (dem:(k,d) dem) : k Enum.t =
+      (type k) (type d) d node (dem:(k,d) dem) : k Enum.t =
     Enum.from_list
       ~filter:(function
           | Events.Wait.Event(dem',_) ->
@@ -517,10 +517,10 @@ module Delayed = struct
             match Dem.Eq.coerce_type dem dem' with
             | Keys.Eq, Keys.Eq -> (event:k)
         )
-       (Cl.M.find_def [] cl d.env.event_reg)
+       (Node.M.find_def [] node d.env.event_reg)
 
   let attached_cl
-    (type k) (type d) d cl (dem:(k,d) dem) : k Enum.t =
+    (type k) (type d) d node (dem:(k,d) dem) : k Enum.t =
     Enum.from_bag
       ~filter:(function
           | Events.Wait.Event(dem',_) ->
@@ -531,136 +531,136 @@ module Delayed = struct
             match Dem.Eq.coerce_type dem dem' with
             | Keys.Eq, Keys.Eq -> (event:k)
         )
-       (Cl.M.find_def Bag.empty cl d.env.event)
+       (Node.M.find_def Bag.empty node d.env.event)
 
 
 (** *)
 
 
-  let check_no_dom t cl =
+  let check_no_dom t node =
     let foldi acc _dom (domtable: _ domtable) =
       acc &&
-      not (Cl.M.mem cl domtable.table)
+      not (Node.M.mem node domtable.table)
     in
     VDomTable.fold_initializedi {VDomTable.foldi} true t.env.dom
 
-  let register t cl =
+  let register t node =
     assert (is_current_env t);
-    if not (is_registered t cl) then begin
+    if not (is_registered t node) then begin
       if Debug.test_flag debug_few then begin
-      match Only_for_solver.clsem cl with
+      match Only_for_solver.nodesem node with
       | None ->
-        Debug.dprintf2 debug_few "[Solver] @[register %a@]" Cl.pp cl
-      | Some clsem ->
+        Debug.dprintf2 debug_few "[Solver] @[register %a@]" Node.pp node
+      | Some nodesem ->
         Debug.dprintf4 debug_few "[Solver] @[register %a: %a@]"
-          Cl.pp cl ClSem.pp clsem
+          Node.pp node NodeSem.pp nodesem
       end;
-      assert ( check_no_dom t cl );
-      t.env.repr <- Cl.M.add cl cl t.env.repr;
+      assert ( check_no_dom t node );
+      t.env.repr <- Node.M.add node node t.env.repr;
       (** reg_cl *)
-      let new_events, cl_events = Cl.M.find_remove cl t.env.event_reg in
+      let new_events, cl_events = Node.M.find_remove node t.env.event_reg in
       t.env.event_reg <- new_events;
-      Wait.wakeup_events_list Events.Wait.translate_regcl t cl_events cl;
+      Wait.wakeup_events_list Events.Wait.translate_regcl t cl_events node;
       (** reg *)
       Wait.wakeup_events_list Events.Wait.translate_reg
-        t (Some t.env.event_any_reg) cl;
+        t (Some t.env.event_any_reg) node;
       (** reg_sem *)
-      match Only_for_solver.open_cl cl with
+      match Only_for_solver.open_cl node with
       | Only_for_solver.Fresh -> ()
       | Only_for_solver.Fresh_to_reg(dem,event) ->
         Wait.wakeup_events_list Events.Wait.translate_regcl t
           (Some [Events.Wait.Event(dem,event)])
-          cl;
-      | Only_for_solver.Sem clsem ->
-        begin match Only_for_solver.sem_of_cl clsem with
+          node;
+      | Only_for_solver.Sem nodesem ->
+        begin match Only_for_solver.sem_of_cl nodesem with
         | Only_for_solver.Sem(sem,_) ->
           let reg_events = get_table_sem t.env sem in
           Wait.wakeup_events_list Events.Wait.translate_regsem
-            t (Some reg_events) (clsem)
+            t (Some reg_events) (nodesem)
         end
-      | Only_for_solver.Value clvalue ->
-        begin match Only_for_solver.value_of_cl clvalue with
+      | Only_for_solver.Value nodevalue ->
+        begin match Only_for_solver.value_of_cl nodevalue with
         | Only_for_solver.Value(value,v) ->
           let valuetable = get_table_value t.env value in
           let reg_events = valuetable.reg_events in
           Wait.wakeup_events_list Events.Wait.translate_regvalue
-            t (Some reg_events) (clvalue);
-          set_value_direct t (assert false (** TODO *)) value cl v
+            t (Some reg_events) (nodevalue);
+          set_value_direct t (assert false (** TODO *)) value node v
         end
     end
 
   let set_semvalue_pending t pexp cl0 cl0' =
-    let cl = find t cl0 in
-    assert (Ty.equal (Cl.ty cl) (Cl.ty cl0'));
+    let node = find t cl0 in
+    assert (Ty.equal (Node.ty node) (Node.ty cl0'));
     begin
       if not (is_registered t cl0') then begin
         register t cl0';
         (* Here the important part of this function the representative
-           is forced to be cl. The goal is to not grow the number of
+           is forced to be node. The goal is to not grow the number of
            classes that can be used for representative for
            termination.
         *)
-        t.env.repr <- Cl.M.add cl0' cl t.env.repr;
+        t.env.repr <- Node.M.add cl0' node t.env.repr;
         let pexp = pexp () in
         Explanation.add_pexp_cl t.env.trail pexp ~inv:true
           ~other_cl:cl0' ~other_cl0:cl0'
-          ~repr_cl:cl ~repr_cl0:cl0;
+          ~repr_cl:node ~repr_cl0:cl0;
         Explanation.add_merge_dom_no
           t.env.trail ~inv:true
           ~other_cl:cl0' ~other_cl0:cl0'
-          ~repr_cl:cl ~repr_cl0:cl0;
+          ~repr_cl:node ~repr_cl0:cl0;
         (** wakeup the daemons register_cl *)
-        let event, other_event = Cl.M.find_remove cl0' t.env.event in
+        let event, other_event = Node.M.find_remove cl0' t.env.event in
         Wait.wakeup_events_bag Events.Wait.translate_change t other_event cl0';
         t.env.event <- event
       end
-      (** cl' is already registered *)
-      else if Cl.equal cl (find t cl0') then
-        (** if cl is the representant of cl' then we have nothing to do *)
+      (** node' is already registered *)
+      else if Node.equal node (find t cl0') then
+        (** if node is the representant of node' then we have nothing to do *)
         ()
       else
-        (** merge cl and cl0' *)
+        (** merge node and cl0' *)
         let pexp = pexp () in
         add_pending_merge t pexp cl0 cl0'
     end
 
-  let set_sem_pending t pexp cl0 clsem =
-    let cl0' = ClSem.cl clsem in
+  let set_sem_pending t pexp cl0 nodesem =
+    let cl0' = NodeSem.node nodesem in
     let pexp () =
       mk_pexp t.env.trail exp_same_sem
-        (ExpSameSem(pexp,cl0,clsem)) in
+        (ExpSameSem(pexp,cl0,nodesem)) in
     set_semvalue_pending t pexp cl0 cl0'
 
-  let set_value_pending t pexp cl0 clvalue =
-    let cl0' = ClValue.cl clvalue in
+  let set_value_pending t pexp cl0 nodevalue =
+    let cl0' = NodeValue.node nodevalue in
     let pexp () =
       mk_pexp t.env.trail exp_same_sem
-        (ExpSameValue(pexp,cl0,clvalue)) in
+        (ExpSameValue(pexp,cl0,nodevalue)) in
     set_semvalue_pending t pexp cl0 cl0'
 
   let set_dom_pending (type a) t pexp (dom : a Dom.t) cl0 new_v =
     Debug.incr stats_set_dom;
-    let cl = find t cl0 in
+    let node = find t cl0 in
     let domtable = (get_table_dom t.env dom) in
-    let events = Cl.M.find_opt cl domtable.events in
-    let new_table = Cl.M.add_opt cl new_v domtable.table in
+    let events = Node.M.find_opt node domtable.events in
+    let new_table = Node.M.add_opt node new_v domtable.table in
     let domtable = { domtable with table = new_table } in
     VDomTable.set t.env.dom dom domtable;
-    Explanation.add_pexp_dom t.env.trail pexp dom ~cl ~cl0;
-    Wait.wakeup_events_bag Events.Wait.translate_dom t events (cl,dom)
+    Explanation.add_pexp_dom t.env.trail pexp dom ~node ~cl0;
+    Wait.wakeup_events_bag Events.Wait.translate_dom t events (node,dom)
 
   let set_dom_premerge_pending (type a) t (dom : a Dom.t)
       ~from:cl0' cl0 (new_v:a) =
     Debug.incr stats_set_dom;
-    let cl' = find t cl0' in
-    let cl   = find t cl0 in
+    let node' = find t cl0' in
+    let node   = find t cl0 in
     let domtable = (get_table_dom t.env dom) in
-    let events = Cl.M.find_opt cl domtable.events in
-    let new_table = Cl.M.add cl new_v domtable.table in
+    let events = Node.M.find_opt node domtable.events in
+    let new_table = Node.M.add node new_v domtable.table in
     let domtable = { domtable with table = new_table } in
     VDomTable.set t.env.dom dom domtable;
     Explanation.add_pexp_dom_premerge t.env.trail dom
-      ~clfrom:cl' ~clfrom0:cl0' ~clto:cl;
+      ~clfrom:node' ~clfrom0:cl0' ~clto:node;
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (cl0,dom)
 
 
@@ -680,14 +680,14 @@ module Delayed = struct
     let other_cl = find t other_cl0 in
     let repr_cl  = find t repr_cl0  in
     let domtable = (get_table_dom t.env dom) in
-    let old_other_s = Cl.M.find_opt other_cl domtable.table in
-    let old_repr_s = Cl.M.find_opt repr_cl  domtable.table in
+    let old_other_s = Node.M.find_opt other_cl domtable.table in
+    let old_repr_s = Node.M.find_opt repr_cl  domtable.table in
     let module Dom = (val (VDom.get_dom dom)) in
     Debug.dprintf12 debug_few
       "[Solver] @[merge dom (%a(%a),%a)@ and (%a(%a),%a)@]"
-      Cl.pp other_cl Cl.pp other_cl0
+      Node.pp other_cl Node.pp other_cl0
       (Pp.option Dom.pp) old_other_s
-      Cl.pp repr_cl Cl.pp repr_cl0
+      Node.pp repr_cl Node.pp repr_cl0
       (Pp.option Dom.pp) old_repr_s;
     match old_other_s, old_repr_s with
     | None, None   -> ()
@@ -703,8 +703,8 @@ module Delayed = struct
     let repr_cl  = find t repr_cl0  in
     let dom_not_done = ref false in
     let iteri (type a) (dom : a Dom.t) (domtable : a domtable) =
-      let other_s = Cl.M.find_opt other_cl domtable.table in
-      let repr_s  = Cl.M.find_opt repr_cl  domtable.table in
+      let other_s = Node.M.find_opt other_cl domtable.table in
+      let repr_s  = Node.M.find_opt repr_cl  domtable.table in
     let module Dom = (val (VDom.get_dom dom)) in
       if not (Dom.merged other_s repr_s)
       then begin
@@ -725,28 +725,28 @@ module Delayed = struct
     let other_cl = find t other_cl0 in
     let repr_cl  = find t repr_cl0  in
     Debug.dprintf8 debug_few "[Solver.few] merge %a(%a) -> %a(%a)"
-      Cl.pp other_cl Cl.pp other_cl0
-      Cl.pp repr_cl Cl.pp repr_cl0;
-    t.env.repr <- Cl.M.add other_cl repr_cl t.env.repr;
+      Node.pp other_cl Node.pp other_cl0
+      Node.pp repr_cl Node.pp repr_cl0;
+    t.env.repr <- Node.M.add other_cl repr_cl t.env.repr;
     add_merge_dom_all t.env.trail ~inv ~other_cl ~other_cl0 ~repr_cl ~repr_cl0;
-    let event, other_event = Cl.M.find_remove other_cl t.env.event in
+    let event, other_event = Node.M.find_remove other_cl t.env.event in
 
-    (** move cl events *)
+    (** move node events *)
     begin match other_event with
       | None -> ()
       | Some other_event ->
         t.env.event <-
-          Cl.M.add_change (fun x -> x) Bag.concat repr_cl other_event
+          Node.M.add_change (fun x -> x) Bag.concat repr_cl other_event
             event
     end;
 
     (** move dom events  *)
     let iteri (type a) (dom : a Dom.t) (domtable: a domtable) =
-      match Cl.M.find_opt other_cl domtable.events with
+      match Node.M.find_opt other_cl domtable.events with
       | None -> ()
       | Some other_events ->
         let new_events =
-          Cl.M.add_change (fun x -> x) Bag.concat repr_cl other_events
+          Node.M.add_change (fun x -> x) Bag.concat repr_cl other_events
             domtable.events in
         let domtable = { domtable with events = new_events } in
         VDomTable.set t.env.dom dom domtable
@@ -762,7 +762,7 @@ module Delayed = struct
     if dom_not_done
     then begin
       Debug.dprintf4 debug "[Solver] @[merge %a %a dom not done@]"
-        Cl.pp other_cl0 Cl.pp repr_cl0;
+        Node.pp other_cl0 Node.pp repr_cl0;
       t.todo_delayed_merge <- Some (pexp,other_cl0,repr_cl0,inv)
     end
     else
@@ -772,10 +772,10 @@ module Delayed = struct
   let merge_pending t pexp cl1_0 cl2_0 =
     let cl1 = find t cl1_0 in
     let cl2 = find t cl2_0 in
-    if not (Cl.equal cl1 cl2) then begin
+    if not (Node.equal cl1 cl2) then begin
       let ((other_cl0,other_cl),(repr_cl0,repr_cl)) =
         choose_repr (cl1_0,cl1) (cl2_0,cl2) in
-      let inv = not (Cl.equal cl1_0 other_cl0) in
+      let inv = not (Node.equal cl1_0 other_cl0) in
       add_pexp_cl t.env.trail pexp
         ~inv ~other_cl ~other_cl0 ~repr_cl ~repr_cl0;
       finalize_merge_pending t pexp cl1_0 cl2_0 inv
@@ -783,56 +783,56 @@ module Delayed = struct
 
   let merge t pexp cl1_0 cl2_0 =
     assert (is_current_env t);
-    if not (Cl.equal
+    if not (Node.equal
               (find t cl1_0)
               (find t cl2_0)) then
       add_pending_merge t pexp cl1_0 cl2_0
 
-  let set_sem  d pexp cl clsem =
+  let set_sem  d pexp node nodesem =
     Debug.dprintf4 debug "[Solver] @[add_pending_set_sem for %a and %a@]"
-      Cl.pp cl ClSem.pp clsem;
+      Node.pp node NodeSem.pp nodesem;
     assert (d.env.current_delayed == d);
-    assert (is_registered d cl);
-    set_sem_pending d pexp cl clsem
-  let set_clvalue  d pexp cl clvalue =
+    assert (is_registered d node);
+    set_sem_pending d pexp node nodesem
+  let set_clvalue  d pexp node nodevalue =
     Debug.dprintf4 debug "[Solver] @[add_pending_set_clvalue for %a and %a@]"
-      Cl.pp cl ClValue.pp clvalue;
+      Node.pp node NodeValue.pp nodevalue;
     assert (d.env.current_delayed == d);
-    assert (is_registered d cl);
-    set_value_pending d pexp cl clvalue
-  let set_value (type a)  d pexp (value : a value) cl v =
+    assert (is_registered d node);
+    set_value_pending d pexp node nodevalue
+  let set_value (type a)  d pexp (value : a value) node v =
     Debug.dprintf4 debug_few
       "[Solver] @[set_dom for %a with %a@]"
-      Cl.pp cl (print_value value) v;
-    let clvalue = ClValue.index value v (Cl.ty cl) in
-    set_value_pending d pexp cl clvalue
-  let set_dom d pexp dom cl v =
+      Node.pp node (print_value value) v;
+    let nodevalue = NodeValue.index value v (Node.ty node) in
+    set_value_pending d pexp node nodevalue
+  let set_dom d pexp dom node v =
     Debug.dprintf4 debug_few
       "[Solver] @[set_dom for %a with %a@]"
-      Cl.pp cl (print_dom dom) v;
+      Node.pp node (print_dom dom) v;
     assert (d.env.current_delayed == d);
-    assert (is_registered d cl);
-    set_dom_pending d pexp dom cl (Some v)
-  let set_dom_premerge d dom cl v =
+    assert (is_registered d node);
+    set_dom_pending d pexp dom node (Some v)
+  let set_dom_premerge d dom node v =
     Debug.dprintf4 debug
       "[Solver] @[set_dom_premerge for %a with %a@]"
-      Cl.pp cl (print_dom dom) v;
+      Node.pp node (print_dom dom) v;
     assert (d.env.current_delayed == d);
-    assert (is_registered d cl);
-    let cl' = match d.todo_delayed_merge with
-    | Some(_,cl1,cl2,_) when Cl.equal cl1 cl -> cl2
-    | Some(_,cl1,cl2,_) when Cl.equal cl2 cl -> cl1
+    assert (is_registered d node);
+    let node' = match d.todo_delayed_merge with
+    | Some(_,cl1,cl2,_) when Node.equal cl1 node -> cl2
+    | Some(_,cl1,cl2,_) when Node.equal cl2 node -> cl1
     | _ -> raise (BrokenInvariant(
         "set_dom_premerge should be used only on the \
          classes currently merged")) in
-    set_dom_premerge_pending d dom ~from:cl' cl v
-  let unset_dom d pexp dom cl =
+    set_dom_premerge_pending d dom ~from:node' node v
+  let unset_dom d pexp dom node =
     Debug.dprintf2 debug
       "[Solver] @[unset_dom for %a@]"
-      Cl.pp cl;
+      Node.pp node;
     assert (d.env.current_delayed == d);
-    assert (is_registered d cl);
-    set_dom_pending d pexp dom cl None
+    assert (is_registered d node);
+    set_dom_pending d pexp dom node None
 
 
   let rec do_pending_daemon delayed (Events.Wait.DaemonKey (dem,runable)) =
@@ -860,7 +860,7 @@ module Delayed = struct
       match Queue.pop t.todo_merge_dom with
       | SetMergeDomCl(pexp,dom,cl1,cl2,inv) ->
         Debug.dprintf6 debug "[Solver] @[do_pending SetDomCl %a %a %a@]"
-          Dom.pp dom Cl.pp cl1 Cl.pp cl2;
+          Dom.pp dom Node.pp cl1 Node.pp cl2;
         merge_dom_pending t pexp dom cl1 cl2 inv;
         do_pending t
     else match t.todo_delayed_merge with
@@ -876,17 +876,17 @@ module Delayed = struct
       match Queue.pop t.todo_merge with
       | Merge (pexp,cl1,cl2) ->
         Debug.dprintf4 debug "[Solver] @[do_pending Merge %a %a@]"
-          Cl.pp cl1 Cl.pp cl2;
+          Node.pp cl1 Node.pp cl2;
         merge_pending t pexp cl1 cl2;
         do_pending t
     else if not (Queue.is_empty t.todo_ext_action) then
       (begin match Queue.pop t.todo_ext_action with
-      (* | ExtSetDom (pexp,dom,cl,v) -> *)
-      (*   Queue.push (SetDom(pexp,dom,cl,v)) t.todo_dom *)
-      (* | ExtSetMergeDom (pexp,dom,cl,v) -> *)
-      (*   Queue.push (SetMergeDomVal(pexp,dom,cl,v)) t.todo_merge_dom *)
-      (* | ExtSetSem (pexp,sem,cl,v) -> *)
-      (*   Queue.push (SetSem(pexp,sem,cl,v)) t.todo_sem *)
+      (* | ExtSetDom (pexp,dom,node,v) -> *)
+      (*   Queue.push (SetDom(pexp,dom,node,v)) t.todo_dom *)
+      (* | ExtSetMergeDom (pexp,dom,node,v) -> *)
+      (*   Queue.push (SetMergeDomVal(pexp,dom,node,v)) t.todo_merge_dom *)
+      (* | ExtSetSem (pexp,sem,node,v) -> *)
+      (*   Queue.push (SetSem(pexp,sem,node,v)) t.todo_sem *)
       (* | ExtMerge (pexp,cl1,cl2) -> *)
       (*   Queue.push (Merge(pexp,cl1,cl2)) t.todo_merge *)
       | ExtDem att ->
@@ -959,21 +959,21 @@ let is_equal t cl1 cl2 =
   assert (t.current_delayed == dumb_delayed);
   let cl1,cl2 = Shuffle.shuffle2 (cl1,cl2) in
   Debug.dprintf4 debug "[Solver] @[is_equal %a %a@]"
-    Cl.pp cl1 Cl.pp cl2;
+    Node.pp cl1 Node.pp cl2;
   draw_graph t;
   is_equal t cl1 cl2
 
-let find t cl =
+let find t node =
   assert (t.current_delayed == dumb_delayed);
-  find t cl
+  find t node
 
-let get_dom t dom cl =
+let get_dom t dom node =
   assert (t.current_delayed == dumb_delayed);
-  get_dom t dom cl
+  get_dom t dom node
 
-let get_value t value cl =
+let get_value t value node =
   assert (t.current_delayed == dumb_delayed);
-  get_value t value cl
+  get_value t value node
 
 let get_env t env =
   assert (t.current_delayed == dumb_delayed);
@@ -983,13 +983,13 @@ let set_env t env v =
   assert (t.current_delayed == dumb_delayed);
   set_env t env v
 
-let is_repr t cl =
+let is_repr t node =
   assert (t.current_delayed == dumb_delayed);
-  is_repr t cl
+  is_repr t node
 
-let find_def t cl =
+let find_def t node =
   assert (t.current_delayed == dumb_delayed);
-  find_def t cl
+  find_def t node
 
 let get_trail t =
   assert (t.current_delayed == dumb_delayed ||
@@ -1001,34 +1001,34 @@ let new_dec t =
   assert (t.current_delayed == dumb_delayed);
   let t' = new_handle t in
   Explanation.new_dec
-    {dom_before_last_dec = (fun dom cl -> get_dom t' dom cl)}
+    {dom_before_last_dec = (fun dom node -> get_dom t' dom node)}
     t.trail
 
 let current_age (t:t) = Explanation.current_age t.trail
 let current_nbdec (t:t) = Explanation.nbdec t.trail
 
-let get_direct_dom t dom cl =
+let get_direct_dom t dom node =
   assert (t.current_delayed == dumb_delayed ||
           t.current_delayed == unsat_delayed);
-  get_direct_dom t dom cl
+  get_direct_dom t dom node
 
 
 module type Getter = sig
   type t
 
-  val is_equal      : t -> Cl.t -> Cl.t -> bool
-  val find_def  : t -> Cl.t -> Cl.t
-  val get_dom   : t -> 'a Dom.t -> Cl.t -> 'a option
+  val is_equal      : t -> Node.t -> Node.t -> bool
+  val find_def  : t -> Node.t -> Node.t
+  val get_dom   : t -> 'a Dom.t -> Node.t -> 'a option
     (** dom of the class *)
-  val get_value   : t -> 'a value -> Cl.t -> 'a option
+  val get_value   : t -> 'a value -> Node.t -> 'a option
     (** value of the class *)
 
   (** {4 The classes must have been marked has registered} *)
 
-  val find      : t -> Cl.t -> Cl.t
-  val is_repr      : t -> Cl.t -> bool
+  val find      : t -> Node.t -> Node.t
+  val is_repr      : t -> Node.t -> bool
 
-  val is_registered : t -> Cl.t -> bool
+  val is_registered : t -> Node.t -> bool
 
   val get_env : t -> 'a Env.t -> 'a
   val set_env: t -> 'a Env.t -> 'a -> unit
@@ -1039,7 +1039,7 @@ module type Ro = sig
   include Getter
 
   (** {3 Immediate information} *)
-  val register : t -> Cl.t -> unit
+  val register : t -> Node.t -> unit
 
   val is_current_env: t -> bool
 

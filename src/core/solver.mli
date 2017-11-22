@@ -22,8 +22,8 @@
 
 (** Solver is the main module of core *)
 
-(** The solver contains all the information. It keep track of
-    equivalence classe, values. It take care to schedule event that
+(** The solver contains all the information. It keeps track of
+    equivalence classes, values. It take care to schedule event that
     happened. *)
 
 open Explanation
@@ -32,8 +32,8 @@ open Typedef
 exception NotRegistered
 
 type exp_same_sem =
-| ExpSameSem   : pexp * Cl.t * ClSem.t -> exp_same_sem
-| ExpSameValue : pexp * Cl.t * ClValue.t -> exp_same_sem
+| ExpSameSem   : pexp * Node.t * NodeSem.t -> exp_same_sem
+| ExpSameValue : pexp * Node.t * NodeValue.t -> exp_same_sem
 
 val exp_same_sem : exp_same_sem Explanation.exp
 
@@ -42,19 +42,19 @@ exception UninitializedEnv of Env.K.t
 module type Getter = sig
   type t
 
-  val is_equal      : t -> Cl.t -> Cl.t -> bool
-  val find_def  : t -> Cl.t -> Cl.t
-  val get_dom   : t -> 'a Dom.t -> Cl.t -> 'a option
+  val is_equal      : t -> Node.t -> Node.t -> bool
+  val find_def  : t -> Node.t -> Node.t
+  val get_dom   : t -> 'a Dom.t -> Node.t -> 'a option
     (** dom of the class *)
-  val get_value   : t -> 'a value -> Cl.t -> 'a option
+  val get_value   : t -> 'a value -> Node.t -> 'a option
     (** value of the class *)
 
-  (** {4 The classes must have been marked has registered} *)
+  (** {4 The classes must have been registered} *)
 
-  val find      : t -> Cl.t -> Cl.t
-  val is_repr      : t -> Cl.t -> bool
+  val find      : t -> Node.t -> Node.t
+  val is_repr      : t -> Node.t -> bool
 
-  val is_registered : t -> Cl.t -> bool
+  val is_registered : t -> Node.t -> bool
 
   val get_env : t -> 'a Env.t -> 'a
   val set_env: t -> 'a Env.t -> 'a -> unit
@@ -64,7 +64,7 @@ end
 module type Ro = sig
   include Getter
 
-  val register : t -> Cl.t -> unit
+  val register : t -> Node.t -> unit
   (** Add a new class to register *)
 
   val is_current_env: t -> bool
@@ -78,40 +78,40 @@ module Delayed : sig
   include Ro with type t := t
 
   (** {3 Immediate modifications} *)
-  val set_dom  : t -> pexp -> 'a Dom.t -> Cl.t -> 'a -> unit
+  val set_dom  : t -> pexp -> 'a Dom.t -> Node.t -> 'a -> unit
     (** change the dom of the equivalence class *)
 
-  val set_sem  : t -> Explanation.pexp -> Cl.t -> ClSem.t -> unit
+  val set_sem  : t -> Explanation.pexp -> Node.t -> NodeSem.t -> unit
   (** attach a sem to an equivalence class *)
 
-  val set_clvalue: t -> Explanation.pexp -> Cl.t -> ClValue.t -> unit
+  val set_clvalue: t -> Explanation.pexp -> Node.t -> NodeValue.t -> unit
   (** attach value to an equivalence class *)
 
-  val set_value: t -> Explanation.pexp -> 'a value -> Cl.t -> 'a -> unit
+  val set_value: t -> Explanation.pexp -> 'a value -> Node.t -> 'a -> unit
   (** attach value to an equivalence class *)
 
-  val set_dom_premerge  : t -> 'a Dom.t -> Cl.t -> 'a -> unit
-    (** [set_dom_premerge d cl] must be used only during the merge of two class
-        [cl1] and [cl2], with one of them being [cl].
+  val set_dom_premerge  : t -> 'a Dom.t -> Node.t -> 'a -> unit
+    (** [set_dom_premerge d node] must be used only during the merge of two class
+        [cl1] and [cl2], with one of them being [node].
         The explication is the explication given for the merge
     *)
 
-  val unset_dom  : t -> pexp -> 'a Dom.t -> Cl.t -> unit
+  val unset_dom  : t -> pexp -> 'a Dom.t -> Node.t -> unit
   (** remove the dom of the equivalence class *)
 
   (** {3 Delayed modifications} *)
-  val merge    : t -> Explanation.pexp -> Cl.t -> Cl.t -> unit
+  val merge    : t -> Explanation.pexp -> Node.t -> Node.t -> unit
 
   (** {3 Attach Event} *)
-  val attach_dom: t -> Cl.t -> 'a Dom.t -> ('event,'r) dem -> 'event -> unit
+  val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) dem -> 'event -> unit
     (** wakeup when the dom change *)
-  val attach_value: t -> Cl.t -> 'a value -> ('event,'r) dem -> 'event -> unit
+  val attach_value: t -> Node.t -> 'a value -> ('event,'r) dem -> 'event -> unit
     (** wakeup when a value is attached to this equivalence class *)
-  val attach_reg_cl: t -> Cl.t -> ('event,'r) dem -> 'event -> unit
-    (** wakeup when this cl is registered *)
+  val attach_reg_cl: t -> Node.t -> ('event,'r) dem -> 'event -> unit
+    (** wakeup when this node is registered *)
   val attach_reg_sem: t -> 'a sem -> ('event,'r) dem -> 'event -> unit
     (** wakeup when a new semantical class is registered *)
-  val attach_cl: t -> Cl.t -> ('event,'r) dem -> 'event -> unit
+  val attach_cl: t -> Node.t -> ('event,'r) dem -> 'event -> unit
     (** wakeup when it is not anymore the representative class *)
 
   (** other event can be added *)

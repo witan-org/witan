@@ -22,15 +22,15 @@
 
 open Typedef
 
-type make_dec = Cl.t -> Explanation.chogen
+type make_dec = Node.t -> Explanation.chogen
 
-val cst: Ty.t -> string -> Cl.t
+val cst: Ty.t -> string -> Node.t
 (** same string, same class *)
 
-val fresh: Ty.t -> string -> Cl.t
+val fresh: Ty.t -> string -> Node.t
 (** always fresh *)
 
-val add_dec: dec:make_dec -> Solver.Delayed.t -> Cl.t -> unit
+val add_dec: dec:make_dec -> Solver.Delayed.t -> Node.t -> unit
 (** Ask for a decision for this *)
 
 val register_sort: dec:make_dec -> Ty.t -> unit

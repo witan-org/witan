@@ -26,32 +26,32 @@ type t
 val sem: t Sem.t
 val dom: bool Value.t
 
-val _true : Cl.t
-val _false : Cl.t
-val _and  : Cl.t list -> Cl.t
-val _or   : Cl.t list -> Cl.t
-val _not  : Cl.t -> Cl.t
-val gen   : bool -> (Cl.t * bool) list -> Cl.t
+val _true : Node.t
+val _false : Node.t
+val _and  : Node.t list -> Node.t
+val _or   : Node.t list -> Node.t
+val _not  : Node.t -> Node.t
+val gen   : bool -> (Node.t * bool) list -> Node.t
 (** [gen d b0 [cl1,b1;cl2,c2]] is
     not_b0 (or (not_b1 cl1,not_b2 cl2)) with not_x f = if x then not f else f
 *)
 
-val set_true  : Solver.d -> Explanation.pexp -> Cl.t -> unit
-val set_false : Solver.d -> Explanation.pexp -> Cl.t -> unit
+val set_true  : Solver.d -> Explanation.pexp -> Node.t -> unit
+val set_false : Solver.d -> Explanation.pexp -> Node.t -> unit
 
-val is       : Solver.d -> Cl.t -> bool option
-val is_true  : Solver.d -> Cl.t -> bool
-val is_false : Solver.d -> Cl.t -> bool
-(** is_true t cl = false means the value is not constrained by the
+val is       : Solver.d -> Node.t -> bool option
+val is_true  : Solver.d -> Node.t -> bool
+val is_false : Solver.d -> Node.t -> bool
+(** is_true t node = false means the value is not constrained by the
     current constraints or due to incompletness *)
-val is_unknown : Solver.d -> Cl.t -> bool
+val is_unknown : Solver.d -> Node.t -> bool
 
-(* val true_is_false : Solver.d -> Cl.t -> Explanation.pexp -> 'a *)
+(* val true_is_false : Solver.d -> Node.t -> Explanation.pexp -> 'a *)
 
 val th_register: Solver.d -> unit
 val th_register_alone: Solver.d -> unit
 
-val chobool: (Cl.t,bool) Explanation.cho
+val chobool: (Node.t,bool) Explanation.cho
 
 val make_dec: Variable.make_dec
 

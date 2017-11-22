@@ -23,7 +23,7 @@
 open Stdlib
 open Typedef
 
-type make_dec = Cl.t -> Explanation.chogen
+type make_dec = Node.t -> Explanation.chogen
 
 module Dem = struct
 
@@ -36,8 +36,8 @@ module Dem = struct
   let key = Demon.Fast.create "Variable.dec"
   let throttle = 100
   let wakeup d = function
-    | Events.Fired.EventRegCl (cl,make_dec) ->
-      Solver.Delayed.register_decision d (make_dec cl)
+    | Events.Fired.EventRegCl (node,make_dec) ->
+      Solver.Delayed.register_decision d (make_dec node)
     | _ -> assert false
 end
 
@@ -49,26 +49,26 @@ let fresh ty s =
   match Ty.H.find_opt dec_of_sort ty with
   | Some make_dec ->
     Demon.Fast.fresh_with_reg_cl Dem.key s ty make_dec
-  | None -> Cl.fresh s ty
+  | None -> Node.fresh s ty
 
 let cst =
   let h = DStr.H.create 10 in
   fun ty s ->
     try
-      let cl = DStr.H.find h s in
-      assert (Ty.equal (Cl.ty cl) ty);
-      cl
+      let node = DStr.H.find h s in
+      assert (Ty.equal (Node.ty node) ty);
+      node
     with Not_found ->
-      let cl = fresh ty s in
-      DStr.H.add h s cl;
-      cl
+      let node = fresh ty s in
+      DStr.H.add h s node;
+      node
 
 let register_sort ~dec ty =
   Ty.H.add_new Std.Impossible dec_of_sort ty dec
 
-let add_dec ~dec t cl =
+let add_dec ~dec t node =
   Demon.Fast.attach t Dem.key
-    [Demon.Create.EventRegCl(cl,dec)]
+    [Demon.Create.EventRegCl(node,dec)]
 
 
 let th_register env =

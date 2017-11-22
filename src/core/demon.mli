@@ -25,13 +25,13 @@ open Typedef
 module Create : sig
   type 'b event =
     (** the domain dom of the class is watched *)
-    | EventDom      : Cl.t * 'a Dom.t  * 'b -> 'b event
+    | EventDom      : Node.t * 'a Dom.t  * 'b -> 'b event
     (** the value of the class is watched *)
-    | EventValue    : Cl.t * 'a value  * 'b -> 'b event
+    | EventValue    : Node.t * 'a value  * 'b -> 'b event
     (** we want to register this class *)
-    | EventRegCl  : Cl.t           * 'b -> 'b event
+    | EventRegCl  : Node.t           * 'b -> 'b event
     (** Warn when the class is not the representant of its eq-class anymore *)
-    | EventChange   : Cl.t           * 'b -> 'b event
+    | EventChange   : Node.t           * 'b -> 'b event
     (** a new semantical value 'a appear *)
     | EventRegSem :        'a sem  * 'b -> 'b event
 
@@ -123,7 +123,7 @@ module Fast: sig
   val attach: Solver.Delayed.t -> 'd t -> 'd Create.t -> unit
   (** raise AlreadyDead if this key is already dead *)
 
-  val fresh_with_reg_cl: 'd t -> string -> Ty.t -> 'd -> Cl.t
+  val fresh_with_reg_cl: 'd t -> string -> Ty.t -> 'd -> Node.t
 
   (** helper *)
   val register_init_daemon:

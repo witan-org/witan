@@ -37,7 +37,7 @@ module type Dom_partial = sig
 
   val merged: t option -> t option -> bool
   val merge: delayed ->
-    pexp -> t option * Cl.t -> t option * Cl.t ->
+    pexp -> t option * Node.t -> t option * Node.t ->
     bool ->
     unit
   val pp: Format.formatter  -> t  -> unit
