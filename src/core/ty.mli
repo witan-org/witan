@@ -20,63 +20,17 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-(** Witan core: define basic types and the solver *)
+open Stdlib
 
-include Std
+(** {2 Types} *)
 
-module Ty = Ty
+module Constr: Strings.Fresh
+(** type constructors *)
 
-module Keys = Keys
+type ty = private { ctr: Constr.t; args: ty IArray.t; tag: int}
 
-module Node = struct
-  include Typedef.Node
-end
+include Datatype with type t = ty
+(** types *)
 
-module Value = struct
-  include Typedef.Value
-  let print = Typedef.print_value
-
-  module type Value = Typedef.Value
-
-  module Register = Typedef.RegisterValue
-end
-
-module Sem = struct
-  include Typedef.Sem
-  let print = Typedef.print_sem
-
-  module type Sem = Typedef.Sem
-  module type Registered = Typedef.RegisteredSem
-
-  module Register = Typedef.RegisterSem
-end
-
-module Dom = struct
-  include Dom
-  let print = Solver.print_dom
-
-  module type Dom = Solver.Dom
-
-  module Register = Solver.RegisterDom
-end
-
-module Dem = struct
-  include Typedef.Dem
-
-  module type Dem = Solver.Wait.Dem
-
-  module Register = Solver.Wait.RegisterDem
-end
-
-module Env = Env
-
-module Solver = Solver
-module Demon = Demon
-module Explanation = Explanation
-module Variable = Variable
-
-module Events = Events
-
-exception UnwaitedEvent = Typedef.UnwaitedEvent
-(** Can be raised by daemon when receiving an event that they don't
-    waited for. It is the sign of a bug in the core solver *)
+val app: Constr.t -> ty IArray.t -> ty
+val ctr: Constr.t -> ty

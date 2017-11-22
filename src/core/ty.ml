@@ -20,63 +20,34 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-(** Witan core: define basic types and the solver *)
+open Stdlib
 
-include Std
+module Constr= Strings.Fresh(struct end)
 
-module Ty = Ty
+type ty = { ctr: Constr.t; args: ty IArray.t; tag: int}
 
-module Keys = Keys
+module Ty = Hashcons.Make(struct
+    type t = ty
 
-module Node = struct
-  include Typedef.Node
-end
+    let equal ty1 ty2 =
+      Constr.equal ty1.ctr ty2.ctr &&
+      IArray.equal (fun x1 x2 -> DInt.equal x1.tag x2.tag) ty1.args ty2.args
 
-module Value = struct
-  include Typedef.Value
-  let print = Typedef.print_value
+    let hash {ctr;args} =
+      Hashcons.combine (Constr.hash ctr)
+        (IArray.hash (fun x1 -> x1.tag) args)
 
-  module type Value = Typedef.Value
+    let set_tag i t = {t with tag = i}
+    let tag t = t.tag
 
-  module Register = Typedef.RegisterValue
-end
+    let rec pp fmt = function
+      | {ctr;args} when IArray.length args = 0 -> Constr.pp fmt ctr
+      | {ctr;args} -> Format.fprintf fmt "%a(%a)"
+                        Constr.pp ctr (IArray.pp Pp.comma pp) args
+  end)
 
-module Sem = struct
-  include Typedef.Sem
-  let print = Typedef.print_sem
+let app ctr args = Ty.hashcons {ctr;args; tag = -1}
+let args0 = IArray.of_array [||]
+let ctr ctr = app ctr args0
 
-  module type Sem = Typedef.Sem
-  module type Registered = Typedef.RegisteredSem
-
-  module Register = Typedef.RegisterSem
-end
-
-module Dom = struct
-  include Dom
-  let print = Solver.print_dom
-
-  module type Dom = Solver.Dom
-
-  module Register = Solver.RegisterDom
-end
-
-module Dem = struct
-  include Typedef.Dem
-
-  module type Dem = Solver.Wait.Dem
-
-  module Register = Solver.Wait.RegisterDem
-end
-
-module Env = Env
-
-module Solver = Solver
-module Demon = Demon
-module Explanation = Explanation
-module Variable = Variable
-
-module Events = Events
-
-exception UnwaitedEvent = Typedef.UnwaitedEvent
-(** Can be raised by daemon when receiving an event that they don't
-    waited for. It is the sign of a bug in the core solver *)
+include Ty

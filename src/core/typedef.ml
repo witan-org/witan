@@ -35,39 +35,6 @@ let debug_create = Debug.register_info_flag
   ~desc:"for the core solver class creation information"
   "index"
 
-module Ty = struct
-  module Constr= Strings.Fresh(struct end)
-
-  type ty = { ctr: Constr.t; args: ty IArray.t; tag: int}
-
-  module Ty = Hashcons.Make(struct
-      type t = ty
-
-      let equal ty1 ty2 =
-        Constr.equal ty1.ctr ty2.ctr &&
-        IArray.equal (fun x1 x2 -> DInt.equal x1.tag x2.tag) ty1.args ty2.args
-
-      let hash {ctr;args} =
-          Hashcons.combine (Constr.hash ctr)
-            (IArray.hash (fun x1 -> x1.tag) args)
-
-      let set_tag i t = {t with tag = i}
-      let tag t = t.tag
-
-      let rec pp fmt = function
-        | {ctr;args} when IArray.length args = 0 -> Constr.pp fmt ctr
-        | {ctr;args} -> Format.fprintf fmt "%a(%a)"
-                          Constr.pp ctr (IArray.pp Pp.comma pp) args
-    end)
-
-  let app ctr args = Ty.hashcons {ctr;args; tag = -1}
-  let args0 = IArray.of_array [||]
-  let ctr ctr = app ctr args0
-
-  include Ty
-
-end
-
 module Sem = Keys.Make_key(struct end)
 module Value = Keys.Make_key(struct end)
 

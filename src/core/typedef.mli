@@ -30,23 +30,6 @@ exception UnwaitedEvent
 exception AlreadyDead
 exception AlreadyRedirected
 
-(** {2 Types} *)
-
-module Ty : sig
-  module Constr: Strings.Fresh
-  (** type constructors *)
-
-  type ty = private { ctr: Constr.t; args: ty IArray.t; tag: int}
-
-  include Datatype with type t = ty
-  (** types *)
-
-  val app: Constr.t -> ty IArray.t -> ty
-  val ctr: Constr.t -> ty
-
-end
-
-
 (** the key shouldn't be used before its registration and shouldn't be
     registered again *)
 exception UnregisteredKey
