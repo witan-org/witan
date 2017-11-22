@@ -34,11 +34,6 @@ let print_seed fmt = function
   | _ -> assert false
 
 let make_tests acc seed =
-  let module Utils = Tests_utils in
-  let module Uf = Tests_uf in
-  let module Arith = Tests_arith in
-  let module UfArith = Tests_arith_uninterp in
-  let module Bv = Tests_bv in
   let module Bool = Tests_bool in
   let test = ((Witan_popop_lib.Pp.sprintf "seed %a" print_seed seed) >:::
                  [ Bool.tests; ])

@@ -26,14 +26,14 @@ module Fired : sig
   type 'b event =
     (** the domain dom of the class change *)
     | EventDom    : Node.t * 'a Dom.t  *      'b -> 'b event
-    (** the value of the class has been set *)
+    (** the value of the node has been set *)
     | EventValue    : Node.t * 'a value  *  'b -> 'b event
     (** a new semantical term 'a point to this class (not complete) *)
     | EventSem    : Node.t * 'a sem  * 'a * 'b -> 'b event
     (** we want to register a class *)
     | EventReg  : Node.t *                  'b -> 'b event
     (** we want to register this class *)
-    | EventRegCl: Node.t *                  'b -> 'b event
+    | EventRegNode: Node.t *                  'b -> 'b event
     (** This class is not the representant of its eq-class anymore *)
     | EventChange : Node.t *                'b -> 'b event
     (** a new semantical term 'a appear *)
@@ -69,7 +69,7 @@ module Wait : sig
   val translate_dom : (Node.t * 'a Dom.t) translate
   val translate_value : (Node.t * 'a value) translate
   val translate_reg : Node.t translate
-  val translate_regcl : Node.t translate
+  val translate_regnode : Node.t translate
   val translate_change : Node.t translate
   val translate_regsem : NodeSem.t translate
   val translate_regvalue : NodeValue.t translate

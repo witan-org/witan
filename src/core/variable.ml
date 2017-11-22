@@ -36,7 +36,7 @@ module Dem = struct
   let key = Demon.Fast.create "Variable.dec"
   let throttle = 100
   let wakeup d = function
-    | Events.Fired.EventRegCl (node,make_dec) ->
+    | Events.Fired.EventRegNode (node,make_dec) ->
       Solver.Delayed.register_decision d (make_dec node)
     | _ -> assert false
 end
@@ -48,7 +48,7 @@ let dec_of_sort = Ty.H.create 20
 let fresh ty s =
   match Ty.H.find_opt dec_of_sort ty with
   | Some make_dec ->
-    Demon.Fast.fresh_with_reg_cl Dem.key s ty make_dec
+    Demon.Fast.fresh_with_reg_node Dem.key s ty make_dec
   | None -> Node.fresh s ty
 
 let cst =

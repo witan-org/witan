@@ -35,7 +35,7 @@ module Fired = struct
     (** we want to register a class *)
     | EventReg    : Node.t *                'b -> 'b event
     (** we want to register this class *)
-    | EventRegCl  : Node.t *                'b -> 'b event
+    | EventRegNode  : Node.t *                'b -> 'b event
     (** This class is not the representant of its eq-class anymore *)
     | EventChange : Node.t *                'b -> 'b event
     (** a new semantical term 'a appear *)
@@ -53,20 +53,20 @@ module Fired = struct
         Sem.pp sem Node.pp node (print_sem sem) v
     | EventReg      (node, _)    ->
       Format.fprintf fmt "any registration of %a" Node.pp node
-    | EventRegCl    (node, _)    ->
+    | EventRegNode    (node, _)    ->
       Format.fprintf fmt "registration of %a" Node.pp node
     | EventChange   (node, _)    ->
-      Format.fprintf fmt "changecl of %a" Node.pp node
+      Format.fprintf fmt "change of %a" Node.pp node
     | EventRegSem (nodesem, _) ->
-      let node = Only_for_solver.cl_of_clsem nodesem in
-      begin match Only_for_solver.sem_of_cl nodesem with
+      let node = Only_for_solver.node_of_nodesem nodesem in
+      begin match Only_for_solver.sem_of_node nodesem with
         | Only_for_solver.Sem(sem,v) ->
           Format.fprintf fmt "registration of sem:%a of %a with %a"
             Sem.pp sem Node.pp node (print_sem sem) v
       end
     | EventRegValue (nodevalue, _) ->
-      let node = Only_for_solver.cl_of_clvalue nodevalue in
-      begin match Only_for_solver.value_of_cl nodevalue with
+      let node = Only_for_solver.node_of_nodevalue nodevalue in
+      begin match Only_for_solver.value_of_node nodevalue with
         | Only_for_solver.Value(value,v) ->
           Format.fprintf fmt "registration of value:%a of %a with %a"
             Value.pp value Node.pp node (print_value value) v
@@ -77,7 +77,7 @@ module Fired = struct
     | EventValue    (_, _ , d)   -> d
     | EventSem      (_, _, _, d) -> d
     | EventReg    (_, d)       -> d
-    | EventRegCl  (_, d)       -> d
+    | EventRegNode  (_, d)       -> d
     | EventChange   (_, d)       -> d
     | EventRegSem (_, d) -> d
     | EventRegValue (_,d) -> d
@@ -117,14 +117,14 @@ module Wait = struct
   (*   {translate = fun (node,sem,s) data -> EventSem(node,sem,s,data)} *)
   let translate_reg =
     {translate = fun node data -> EventReg(node,data)}
-  let translate_regcl =
-    {translate = fun node data -> EventRegCl(node,data)}
+  let translate_regnode =
+    {translate = fun node data -> EventRegNode(node,data)}
   let translate_change =
     {translate = fun node data -> EventChange(node,data)}
   let translate_regsem =
     {translate = fun nodesem data -> EventRegSem(nodesem,data)}
   let translate_regvalue =
-    {translate = fun clval data -> EventRegValue(clval,data)}
+    {translate = fun nodeval data -> EventRegValue(nodeval,data)}
 
 
   module type S = sig

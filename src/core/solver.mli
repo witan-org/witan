@@ -84,7 +84,7 @@ module Delayed : sig
   val set_sem  : t -> Explanation.pexp -> Node.t -> NodeSem.t -> unit
   (** attach a sem to an equivalence class *)
 
-  val set_clvalue: t -> Explanation.pexp -> Node.t -> NodeValue.t -> unit
+  val set_nodevalue: t -> Explanation.pexp -> Node.t -> NodeValue.t -> unit
   (** attach value to an equivalence class *)
 
   val set_value: t -> Explanation.pexp -> 'a value -> Node.t -> 'a -> unit
@@ -107,11 +107,11 @@ module Delayed : sig
     (** wakeup when the dom change *)
   val attach_value: t -> Node.t -> 'a value -> ('event,'r) dem -> 'event -> unit
     (** wakeup when a value is attached to this equivalence class *)
-  val attach_reg_cl: t -> Node.t -> ('event,'r) dem -> 'event -> unit
+  val attach_reg_node: t -> Node.t -> ('event,'r) dem -> 'event -> unit
     (** wakeup when this node is registered *)
   val attach_reg_sem: t -> 'a sem -> ('event,'r) dem -> 'event -> unit
     (** wakeup when a new semantical class is registered *)
-  val attach_cl: t -> Node.t -> ('event,'r) dem -> 'event -> unit
+  val attach_node: t -> Node.t -> ('event,'r) dem -> 'event -> unit
     (** wakeup when it is not anymore the representative class *)
 
   (** other event can be added *)

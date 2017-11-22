@@ -215,7 +215,7 @@ module Key = struct
         | EventValue    (a, b , (k,d))   -> k, EventValue(a, b, d)
         | EventSem      (a, b, c, (k,d)) -> k, EventSem(a, b, c, d)
         | EventReg      (a, (k,d))       -> k, EventReg(a, d)
-        | EventRegCl    (a, (k,d))       -> k, EventRegCl(a, d)
+        | EventRegNode  (a, (k,d))       -> k, EventRegNode(a, d)
         | EventChange   (a, (k,d))       -> k, EventChange(a, d)
         | EventRegSem (a, (k,d))         -> k, EventRegSem(a, d)
         | EventRegValue (a, (k,d))       -> k, EventRegValue(a, d) in
@@ -271,9 +271,9 @@ module Key = struct
         | Create.EventValue (node,value,data) ->
           Solver.Delayed.attach_value t node value dem.dk_id (k,data)
         | Create.EventChange (node,data) ->
-          Solver.Delayed.attach_cl t node dem.dk_id (k,data)
+          Solver.Delayed.attach_node t node dem.dk_id (k,data)
         | Create.EventRegCl (node,data) ->
-          Solver.Delayed.attach_reg_cl t node dem.dk_id (k,data)
+          Solver.Delayed.attach_reg_node t node dem.dk_id (k,data)
         | Create.EventRegSem (sem,data) ->
           Solver.Delayed.attach_reg_sem t sem dem.dk_id (k,data)
       in
@@ -460,13 +460,13 @@ module Fast = struct
         | EventValue    (node,value,data) ->
           Solver.Delayed.attach_value d node value dem.dk_id data
         | EventRegCl  (node,data) ->
-          Solver.Delayed.attach_reg_cl d node dem.dk_id data
+          Solver.Delayed.attach_reg_node d node dem.dk_id data
         | EventChange   (node,data) ->
-          Solver.Delayed.attach_cl d node dem.dk_id data
+          Solver.Delayed.attach_node d node dem.dk_id data
         | EventRegSem (sem,data) ->
           Solver.Delayed.attach_reg_sem d sem dem.dk_id data) events
 
-  let fresh_with_reg_cl dem s ty data =
+  let fresh_with_reg_node dem s ty data =
     Node.fresh ~to_reg:(dem.dk_id,data) s ty
 
   let register_init_daemon
@@ -486,7 +486,7 @@ module Fast = struct
       let throttle = throttle
       let wakeup d = function
         | Events.Fired.EventRegSem(nodesem,()) ->
-          let nodesem = NodeSem.coerce_clsem nodesem in
+          let nodesem = NodeSem.coerce_nodesem nodesem in
           f d nodesem
         | _ -> raise UnwaitedEvent
     end in

@@ -209,24 +209,24 @@ module Node = struct
     (ValueIndex.get valueindex value) v ty
 
   (** Just used for checking the typability *)
-  let _of_clsem : nodesem -> t = function
+  let _of_nodesem : nodesem -> t = function
     | Sem(tag,ty,sem,v) -> Sem(tag,ty,sem,v)
 
   (** IF the previous function is typable this one is correct:
       I'm not able to defined is without obj.magic
   *)
-  let of_clsem : nodesem -> t = Obj.magic
+  let of_nodesem : nodesem -> t = Obj.magic
 
   (** Just used for checking the typability *)
-  let _of_clvalue : nodevalue -> t = function
+  let _of_nodevalue : nodevalue -> t = function
     | Value(tag,ty,value,v) -> Value(tag,ty,value,v)
 
   (** IF the previous function is typable this one is correct:
       I'm not able to defined is without obj.magic
   *)
-  let of_clvalue : nodevalue -> t = Obj.magic
+  let of_nodevalue : nodevalue -> t = Obj.magic
 
-  let index sem v ty = of_clsem (nodesem sem v ty)
+  let index sem v ty = of_nodesem (nodesem sem v ty)
 
 end
 
@@ -240,7 +240,7 @@ module NodeSem = struct
     end)
 
   let index = Node.nodesem
-  let node = Node.of_clsem
+  let node = Node.of_nodesem
   let ty : t -> Ty.t = function
     | Node.Sem(_,ty,_,_) -> ty
 
@@ -257,7 +257,7 @@ module type RegisteredSem = sig
   (** Return a nodesem from a semantical value *)
 
   val node: t -> Node.t
-  (** Return a class from a nodesem *)
+  (** Return a node from a nodesem *)
 
   val ty: t -> Ty.t
   (** Return the type from a nodesem *)
@@ -266,9 +266,9 @@ module type RegisteredSem = sig
   (** Return the sem from a nodesem *)
 
   val nodesem: t -> NodeSem.t
-  val of_clsem: NodeSem.t -> t option
+  val of_nodesem: NodeSem.t -> t option
 
-  val coerce_clsem: NodeSem.t -> t
+  val coerce_nodesem: NodeSem.t -> t
 
 end
 
@@ -335,7 +335,7 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
     end;
     node
 
-  let node = Node.of_clsem
+  let node = Node.of_nodesem
 
   let sem : t -> D.t = function
     | Node.Sem(_,_,sem,v) ->
@@ -346,11 +346,11 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
 
   let nodesem: t -> NodeSem.t = fun x -> x
 
-  let of_clsem: NodeSem.t -> t option = function
+  let of_nodesem: NodeSem.t -> t option = function
     | Node.Sem(_,_,sem',_) as v when Sem.equal sem' D.key -> Some v
     | _ -> None
 
-  let coerce_clsem: NodeSem.t -> t = function
+  let coerce_nodesem: NodeSem.t -> t = function
     | Node.Sem(_,_,sem',_) as v -> assert (Sem.equal sem' D.key); v
 
   let () =
@@ -373,7 +373,7 @@ module NodeValue = struct
     end)
 
   let index = Node.nodevalue
-  let node = Node.of_clvalue
+  let node = Node.of_nodevalue
   let ty : t -> Ty.t = function
     | Node.Value(_,ty,_,_) -> ty
 
@@ -399,9 +399,9 @@ module type RegisteredValue = sig
   (** Return the value from a nodevalue *)
 
   val nodevalue: t -> NodeValue.t
-  val of_clvalue: NodeValue.t -> t option
+  val of_nodevalue: NodeValue.t -> t option
 
-  val coerce_clvalue: NodeValue.t -> t
+  val coerce_nodevalue: NodeValue.t -> t
 
 end
 
@@ -466,7 +466,7 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
     end;
     node
 
-  let node = Node.of_clvalue
+  let node = Node.of_nodevalue
 
   let value : t -> D.t = function
     | Node.Value(_,_,value,v) ->
@@ -477,11 +477,11 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
 
   let nodevalue: t -> NodeValue.t = fun x -> x
 
-  let of_clvalue: NodeValue.t -> t option = function
+  let of_nodevalue: NodeValue.t -> t option = function
     | Node.Value(_,_,value',_) as v when Value.equal value' D.key -> Some v
     | _ -> None
 
-  let coerce_clvalue: NodeValue.t -> t = function
+  let coerce_nodevalue: NodeValue.t -> t = function
     | Node.Value(_,_,value',_) as v -> assert (Value.equal value' D.key); v
 
   let () =
@@ -520,36 +520,36 @@ module Print = struct (** Cutting the knot for pp *)
 end
 
 module Only_for_solver = struct
-  type sem_of_cl =
-    | Sem: 'a sem * 'a  -> sem_of_cl
+  type sem_of_node =
+    | Sem: 'a sem * 'a  -> sem_of_node
 
   let nodesem: Node.t -> NodeSem.t option = function
     | Node.Fresh _ | Node.Fresh_to_reg _ | Node.Value _ -> None
     | Node.Sem _ as x -> Some (Obj.magic x: NodeSem.t)
 
-  let sem_of_cl: NodeSem.t -> sem_of_cl = function
+  let sem_of_node: NodeSem.t -> sem_of_node = function
     | Node.Sem (_,_,sem,v) -> Sem(sem,v)
 
-  type value_of_cl =
-    | Value: 'a value * 'a  -> value_of_cl
+  type value_of_node =
+    | Value: 'a value * 'a  -> value_of_node
 
   let nodevalue: Node.t -> NodeValue.t option = function
     | Node.Fresh _ | Node.Fresh_to_reg _ | Node.Sem _ -> None
     | Node.Value _ as x -> Some (Obj.magic x: NodeValue.t)
 
-  let value_of_cl: NodeValue.t -> value_of_cl = function
+  let value_of_node: NodeValue.t -> value_of_node = function
     | Node.Value (_,_,value,v) -> Value(value,v)
 
-  let cl_of_clsem : NodeSem.t -> Node.t = NodeSem.node
-  let cl_of_clvalue : NodeValue.t -> Node.t = NodeValue.node
+  let node_of_nodesem : NodeSem.t -> Node.t = NodeSem.node
+  let node_of_nodevalue : NodeValue.t -> Node.t = NodeValue.node
 
-  type opened_cl =
-    | Fresh: opened_cl
-    | Fresh_to_reg: ('event,'r) dem * 'event -> opened_cl
-    | Sem  : NodeSem.t -> opened_cl
-    | Value  : NodeValue.t -> opened_cl
+  type opened_node =
+    | Fresh: opened_node
+    | Fresh_to_reg: ('event,'r) dem * 'event -> opened_node
+    | Sem  : NodeSem.t -> opened_node
+    | Value  : NodeValue.t -> opened_node
 
-  let open_cl = function
+  let open_node = function
     | Node.Fresh _ -> Fresh
     | Node.Fresh_to_reg(_,_,dem,event) -> Fresh_to_reg(dem,event)
     | Node.Sem _ as x -> Sem (Obj.magic x: NodeSem.t)

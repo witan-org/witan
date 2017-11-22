@@ -133,9 +133,9 @@ module type RegisteredSem = sig
   (** Return the sem from a nodesem *)
 
   val nodesem: t -> NodeSem.t
-  val of_clsem: NodeSem.t -> t option
+  val of_nodesem: NodeSem.t -> t option
 
-  val coerce_clsem: NodeSem.t -> t
+  val coerce_nodesem: NodeSem.t -> t
 
 end
 
@@ -176,9 +176,9 @@ module type RegisteredValue = sig
   (** Return the value from a nodevalue *)
 
   val nodevalue: t -> NodeValue.t
-  val of_clvalue: NodeValue.t -> t option
+  val of_nodevalue: NodeValue.t -> t option
 
-  val coerce_clvalue: NodeValue.t -> t
+  val coerce_nodevalue: NodeValue.t -> t
 
 end
 
@@ -207,41 +207,41 @@ val check_initialization: unit -> bool
 
 (** Only for Solver *)
 module Only_for_solver: sig
-  type sem_of_cl =
-    | Sem: 'a sem * 'a -> sem_of_cl
+  type sem_of_node =
+    | Sem: 'a sem * 'a -> sem_of_node
 
   val nodesem:
     Node.t -> NodeSem.t option
     (** give the sem associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
-  val sem_of_cl:
-    NodeSem.t -> sem_of_cl
+  val sem_of_node:
+    NodeSem.t -> sem_of_node
     (** give the sem associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
-  type value_of_cl =
-    | Value: 'a value * 'a -> value_of_cl
+  type value_of_node =
+    | Value: 'a value * 'a -> value_of_node
 
   val nodevalue:
     Node.t -> NodeValue.t option
     (** give the value associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
-  val value_of_cl:
-    NodeValue.t -> value_of_cl
+  val value_of_node:
+    NodeValue.t -> value_of_node
     (** give the value associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
-  val cl_of_clsem: NodeSem.t -> Node.t
-  val cl_of_clvalue: NodeValue.t -> Node.t
+  val node_of_nodesem: NodeSem.t -> Node.t
+  val node_of_nodevalue: NodeValue.t -> Node.t
 
-  type opened_cl =
-    | Fresh: opened_cl
-    | Fresh_to_reg: ('event,'r) dem * 'event -> opened_cl
-    | Sem  : NodeSem.t -> opened_cl
-    | Value  : NodeValue.t -> opened_cl
+  type opened_node =
+    | Fresh: opened_node
+    | Fresh_to_reg: ('event,'r) dem * 'event -> opened_node
+    | Sem  : NodeSem.t -> opened_node
+    | Value  : NodeValue.t -> opened_node
 
-  val open_cl: Node.t -> opened_cl
+  val open_node: Node.t -> opened_node
 
 end

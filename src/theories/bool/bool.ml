@@ -403,7 +403,7 @@ module DaemonInit = struct
   let wakeup d = function
     | Events.Fired.EventRegSem(nodesem,()) ->
       begin try
-          let nodesem = ThE.coerce_clsem nodesem in
+          let nodesem = ThE.coerce_nodesem nodesem in
           let v = ThE.sem nodesem in
           match isnot v with
           | Some node ->
