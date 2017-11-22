@@ -53,34 +53,16 @@ let exp_init_value : unit Explanation.exp =
 let exp_diff_value : pexp Explanation.exp =
   Explanation.Exp.create_key "Solver.exp_diff_value"
 
-module type Dom' = sig
-  type delayed
-  type t
-
-  val merged: t option -> t option -> bool
-  val merge: delayed ->
-    Explanation.pexp -> t option * Cl.t -> t option * Cl.t ->
-    bool ->
-    unit
-  val pp: Format.formatter  -> t  -> unit
-  val key: t dom
-end
-
 module DecTag = DInt
 
-module type DomTable' = sig
-  type delayed
-  module D : Dom' with type delayed := delayed
-  val table : D.t Cl.M.t
-  val events : Events.Wait.t Bag.t Cl.M.t
-end
+type 'a domtable = {
+  table : 'a Cl.M.t;
+  events : Events.Wait.t Bag.t Cl.M.t
+}
 
 type semtable = Events.Wait.t list
 
-module VDomTable = Dom.MkVector
-  (struct type ('a,'delayed) t =
-            (module DomTable' with type D.t = 'a and type delayed = 'delayed)
-   end)
+module VDomTable = Dom.MkVector (struct type ('a,'unused) t = 'a domtable end)
 
 module VSemTable = Sem.Vector
 
@@ -203,7 +185,17 @@ let new_handle t =
 }
 
 (** {2 Dom and Sem} *)
-module type Dom = Dom' with type delayed := delayed_t
+module type Dom = sig
+  type t
+
+  val merged: t option -> t option -> bool
+  val merge: delayed_t ->
+    Explanation.pexp -> t option * Cl.t -> t option * Cl.t ->
+    bool ->
+    unit
+  val pp: Format.formatter  -> t  -> unit
+  val key: t dom
+end
 
 module VDom = Dom.MkVector
   (struct type ('a,'unedeed) t =
@@ -229,6 +221,8 @@ let get_dom k =
     then raise UnregisteredKey else true);
   VDom.get defined_dom k
 
+let get_dom_with_prefix_to_remove = get_dom
+
 let print_dom (type a) (k : a dom) fmt s =
   let dom = get_dom k in
   let module D = (val dom : Dom with type t = a) in
@@ -240,26 +234,15 @@ let print_dom_opt k fmt = function
 
 (** {2 Dom Sem continued} *)
 
-module type DomTable = DomTable' with type delayed = delayed_t
-
-let get_table_dom : t -> 'a dom -> (module DomTable with type D.t = 'a)
-  = fun (type a) t k ->
+let get_table_dom t k =
   assert (if VDom.is_uninitialized defined_dom k
     then raise UnregisteredKey else true);
   VDomTable.inc_size k t.dom;
   if VDomTable.is_uninitialized t.dom k then
-    let dom = get_dom k in
-    let module DomTable = struct
-      type delayed = delayed_t
-      module D = (val dom : Dom with type t = a)
-      let table = Cl.M.empty
-      let events = Cl.M.empty
-    end in
-    (module DomTable : DomTable with type D.t = a)
+    { table = Cl.M.empty;
+      events = Cl.M.empty }
   else
-    (module (val VDomTable.get t.dom k
-        : DomTable' with type D.t = a and type delayed = delayed_t)
-        : DomTable with type D.t = a)
+    VDomTable.get t.dom k
 
 let get_table_sem : t -> 'a sem -> semtable = fun t k ->
   assert (if sem_uninitialized k then raise UnregisteredKey else true);
@@ -320,9 +303,7 @@ end
 open T
 
 let get_direct_dom (type a) t (dom : a dom) cl =
-  let module DomTable =
-    (val (get_table_dom t dom) : DomTable with type D.t = a) in
-  Cl.M.find_opt cl DomTable.table
+  Cl.M.find_opt cl (get_table_dom t dom).table
 
 let get_dom t dom cl =
   let cl = find_def t cl in
@@ -359,14 +340,11 @@ let is_registered t cl =
 
 (** {2 For debugging and display} *)
 let _print_env fmt t =
-  let printd (type a) _ fmt domtable =
-    let module DomTable =
-      (val domtable : DomTable' with type delayed = delayed_t
-                                 and type D.t = a) in
-    Format.fprintf fmt "%a:@[%a@]" Dom.pp DomTable.D.key
+  let printd dom fmt domtable =
+    Format.fprintf fmt "%a:@[%a@]" Dom.pp dom
       (Pp.iter2 Cl.M.iter Pp.newline Pp.colon
          Cl.pp (Bag.pp Pp.comma Events.Wait.pp))
-      DomTable.events
+      domtable.events
   in
   VDomTable.pp Pp.newline Pp.nothing
     {VDomTable.printk = Pp.nothing}
@@ -389,14 +367,11 @@ let output_graph filename t =
     let vertex_name cl = string_of_int (Cl.hash cl)
 
     let pp fmt cl =
-      let iter_dom (type a) _ fmt dom =
-        let module Dom =
-              (val dom : DomTable' with type delayed = delayed_t
-                                   and type D.t = a) in
+      let iter_dom dom fmt domtable =
         try
-          let s   = Cl.M.find cl Dom.table in
+          let s   = Cl.M.find cl domtable.table in
           Format.fprintf fmt "| {%a | %s}"
-            Typedef.Dom.pp Dom.D.key (escape_for_dot Dom.D.pp s);
+            Typedef.Dom.pp dom (escape_for_dot (print_dom dom) s);
         with Not_found -> ()
       in
       let print_ty fmt cl =
@@ -566,14 +541,13 @@ module Delayed = struct
   let attach_dom (type a) t cl (dom : a dom) dem event =
     let cl = find_def t cl in
     let event = Events.Wait.Event (dem,event) in
-    let module DomTable = (val (get_table_dom t.env dom)) in
-    let module DomTable' = struct
-      (** remove the old domantical value
-              replace it by the new one *)
-      include DomTable
-      let events = Cl.M.add_change Bag.elt Bag.add cl event events
-    end in
-    VDomTable.set t.env.dom dom (module DomTable')
+    let domtable = get_table_dom t.env dom in
+    let domtable = {
+      domtable with
+      events = Cl.M.add_change Bag.elt Bag.add cl event domtable.events
+    }
+    in
+    VDomTable.set t.env.dom dom domtable
 
   let attach_value (type a) t cl (value : a value) dem event =
     let cl = find_def t cl in
@@ -642,10 +616,7 @@ module Delayed = struct
   let check_no_dom t cl =
     let foldi (type a) acc _dom domtable =
       acc &&
-      let module DomTable =
-        (val domtable : DomTable' with type D.t = a
-                                   and type delayed = delayed_t) in
-      not (Cl.M.mem cl DomTable.table)
+      not (Cl.M.mem cl domtable.table)
     in
     VDomTable.fold_initializedi {VDomTable.foldi} true t.env.dom
 
@@ -746,14 +717,11 @@ module Delayed = struct
   let set_dom_pending (type a) t pexp (dom : a dom) cl0 new_v =
     Debug.incr stats_set_dom;
     let cl = find t cl0 in
-    let module DomTable = (val (get_table_dom t.env dom)) in
-    let events = Cl.M.find_opt cl DomTable.events in
-    let new_table = Cl.M.add_opt cl new_v DomTable.table in
-    let module DomTable' = struct
-      include DomTable
-      let table = new_table
-    end in
-    VDomTable.set t.env.dom dom (module DomTable');
+    let domtable = (get_table_dom t.env dom) in
+    let events = Cl.M.find_opt cl domtable.events in
+    let new_table = Cl.M.add_opt cl new_v domtable.table in
+    let domtable = { domtable with table = new_table } in
+    VDomTable.set t.env.dom dom domtable;
     Explanation.add_pexp_dom t.env.trail pexp dom ~cl ~cl0;
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (cl,dom)
 
@@ -762,14 +730,11 @@ module Delayed = struct
     Debug.incr stats_set_dom;
     let cl' = find t cl0' in
     let cl   = find t cl0 in
-    let module DomTable = (val (get_table_dom t.env dom)) in
-    let events = Cl.M.find_opt cl DomTable.events in
-    let new_table = Cl.M.add cl new_v DomTable.table in
-    let module DomTable' = struct
-      include DomTable
-      let table = new_table
-    end in
-    VDomTable.set t.env.dom dom (module DomTable');
+    let domtable = (get_table_dom t.env dom) in
+    let events = Cl.M.find_opt cl domtable.events in
+    let new_table = Cl.M.add cl new_v domtable.table in
+    let domtable = { domtable with table = new_table } in
+    VDomTable.set t.env.dom dom domtable;
     Explanation.add_pexp_dom_premerge t.env.trail dom
       ~clfrom:cl' ~clfrom0:cl0' ~clto:cl;
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (cl0,dom)
@@ -790,19 +755,20 @@ module Delayed = struct
   let merge_dom_pending (type a) t pexp (dom : a dom) other_cl0 repr_cl0 inv =
     let other_cl = find t other_cl0 in
     let repr_cl  = find t repr_cl0  in
-    let module DomTable = (val (get_table_dom t.env dom)) in
-    let old_other_s = Cl.M.find_opt other_cl DomTable.table in
-    let old_repr_s = Cl.M.find_opt repr_cl  DomTable.table in
+    let domtable = (get_table_dom t.env dom) in
+    let old_other_s = Cl.M.find_opt other_cl domtable.table in
+    let old_repr_s = Cl.M.find_opt repr_cl  domtable.table in
+    let module Dom = (val (get_dom_with_prefix_to_remove dom)) in
     Debug.dprintf12 debug_few
       "[Solver] @[merge dom (%a(%a),%a)@ and (%a(%a),%a)@]"
       Cl.pp other_cl Cl.pp other_cl0
-      (Pp.option DomTable.D.pp) old_other_s
+      (Pp.option Dom.pp) old_other_s
       Cl.pp repr_cl Cl.pp repr_cl0
-      (Pp.option DomTable.D.pp) old_repr_s;
+      (Pp.option Dom.pp) old_repr_s;
     match old_other_s, old_repr_s with
     | None, None   -> ()
     | _ ->
-      DomTable.D.merge t pexp
+      Dom.merge t pexp
         (old_other_s,other_cl0)
         (old_repr_s,repr_cl0)
         inv
@@ -812,13 +778,11 @@ module Delayed = struct
     let other_cl = find t other_cl0 in
     let repr_cl  = find t repr_cl0  in
     let dom_not_done = ref false in
-    let iteri (type a) dom domtable =
-      let module DomTable =
-        (val domtable : DomTable' with type delayed = delayed_t
-                                   and type D.t = a) in
-      let other_s = Cl.M.find_opt other_cl DomTable.table in
-      let repr_s  = Cl.M.find_opt repr_cl  DomTable.table in
-      if not (DomTable.D.merged other_s repr_s)
+    let iteri (type a) (dom : a dom) domtable =
+      let other_s = Cl.M.find_opt other_cl domtable.table in
+      let repr_s  = Cl.M.find_opt repr_cl  domtable.table in
+    let module Dom = (val (get_dom_with_prefix_to_remove dom)) in
+      if not (Dom.merged other_s repr_s)
       then begin
         dom_not_done := true;
         if not dry_run then
@@ -853,23 +817,17 @@ module Delayed = struct
     end;
 
     (** move dom events  *)
-    let iter (type a) domtable =
-      let module DomTable =
-        (val domtable : DomTable' with type delayed = delayed_t
-                                   and type D.t = a) in
-      match Cl.M.find_opt other_cl DomTable.events with
+    let iteri (type a) (dom : a dom) domtable =
+      match Cl.M.find_opt other_cl domtable.events with
       | None -> ()
       | Some other_events ->
         let new_events =
           Cl.M.add_change (fun x -> x) Bag.concat repr_cl other_events
-            DomTable.events in
-        let module DomTable' = struct
-          include DomTable
-          let events = new_events
-        end in
-        VDomTable.set t.env.dom DomTable.D.key (module DomTable')
+            domtable.events in
+        let domtable = { domtable with events = new_events } in
+        VDomTable.set t.env.dom dom domtable
     in
-    VDomTable.iter_initialized {VDomTable.iter} t.env.dom;
+    VDomTable.iter_initializedi {VDomTable.iteri} t.env.dom;
 
     (** wakeup the daemons *)
     Wait.wakeup_events_bag
