@@ -86,12 +86,18 @@ let print_dec = Age.pp
 type pexp =
 | Pexp: age * 'a Exp.t * 'a * tags -> pexp
 
+(** Indicate when a node stopped to be the representative, a what it becomes.
+    Can be used to know the state of the classes at any point in the past.
+*)
+type nodehist = (age * Node.t) Node.M.t
+
 type t = {
   mutable last_dec : Age.t;
   mutable first_dec : Age.t;
   mutable nbdec    : int;
   mutable age      : Age.t;
-  trail    : pexp Simple_vector.t;
+  trail            : pexp Simple_vector.t;
+  mutable nodehist : nodehist;
 }
 
 let create () = {
@@ -100,6 +106,7 @@ let create () = {
   nbdec = 0;
   age = Age.bef;
   trail = Simple_vector.create 10;
+  nodehist = Node.M.empty;
 }
 
 let new_handle t = {
@@ -107,7 +114,8 @@ let new_handle t = {
   first_dec = t.first_dec;
   nbdec = t.nbdec;
   age = t.age;
-  trail = t.trail;
+  trail = t.trail; (* not copied because we just add at the front new things *)
+  nodehist = t.nodehist;
 }
 
 let new_dec (t:t)  =
@@ -133,30 +141,21 @@ let add_pexp t pexp =
   t.age <- Age.succ t.age;
   Simple_vector.push t.trail pexp
 
-let add_pexp_equal:
+let add_merge_start:
   t -> pexp -> node1:Node.t -> node2:Node.t ->
   node1_repr:Node.t -> node2_repr:Node.t -> new_repr:Node.t -> unit
   =
-  fun t pexp ~node1:_ ~node2:_ ~node1_repr:_ ~node2_repr:_ ~new_repr:_ ->
-    add_pexp t pexp
-    (* TODO add perhaps more precise information *)
+  fun _t _pexp ~node1:_ ~node2:_ ~node1_repr:_ ~node2_repr:_ ~new_repr:_ ->
+    ()
 
-let add_pexp_value:
-  t -> pexp -> 'b Value.t -> node:Node.t -> node_repr:Node.t -> unit =
-  fun t pexp _ ~node:_ ~node_repr:_ ->
-    add_pexp t pexp
-
-let add_merge_dom_no:
-  t -> inv:bool -> other_node:Node.t -> other_node0:Node.t
-  -> repr_node:Node.t -> repr_node0:Node.t -> unit =
-  fun _t ~inv:_ ~other_node:_ ~other_node0:_ ~repr_node:_ ~repr_node0:_ ->
-    () (** TODO when domain will be needed *)
-
-let add_merge_dom_all:
-  t -> inv:bool -> other_node:Node.t -> other_node0:Node.t
-  -> repr_node:Node.t -> repr_node0:Node.t -> unit =
-  fun _t ~inv:_ ~other_node:_ ~other_node0:_ ~repr_node:_ ~repr_node0:_ ->
-    () (** TODO when domain will be needed *)
+let add_merge_finish:
+  t -> pexp -> node1:Node.t -> node2:Node.t ->
+  node1_repr:Node.t -> node2_repr:Node.t -> new_repr:Node.t -> unit
+  =
+  fun t pexp ~node1:_ ~node2:_ ~node1_repr ~node2_repr ~new_repr ->
+    add_pexp t pexp;
+    let old_repr = if Node.equal node1_repr new_repr then node2_repr else node1_repr in
+    t.nodehist <- Node.M.add old_repr (t.age,new_repr) t.nodehist
 
 let add_pexp_dom:
   t -> pexp -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit =

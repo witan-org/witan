@@ -22,7 +22,6 @@
 
 open Stdlib
 open Typedef
-open Explanation
 
 exception Contradiction of Explanation.pexp
 
@@ -82,11 +81,11 @@ and delayed_t = {
   env : t;
   todo_immediate_dem : action_immediate_dem Queue.t;
   todo_merge_dom : action_merge_dom Queue.t;
-  mutable todo_delayed_merge : (pexp * Node.t * Node.t * bool) option;
+  mutable todo_delayed_merge : (Explanation.pexp * Node.t * Node.t * bool) option;
   todo_merge : action_merge Queue.t;
   todo_ext_action : action_ext Queue.t;
   sched_daemon : Events.Wait.daemon_key -> unit;
-  sched_decision : chogen -> unit;
+  sched_decision : Explanation.chogen -> unit;
 }
 
 and action_immediate_dem =
@@ -94,10 +93,10 @@ and action_immediate_dem =
 
 and action_merge_dom =
 | SetMergeDomNode  :
-    pexp * 'a Dom.t * Node.t * Node.t * bool -> action_merge_dom
+    Explanation.pexp * 'a Dom.t * Node.t * Node.t * bool -> action_merge_dom
 
 and action_merge =
-| Merge of pexp * Node.t * Node.t
+| Merge of Explanation.pexp * Node.t * Node.t
 
 and action_ext =
 | ExtDem         : Events.Wait.daemon_key  -> action_ext
@@ -390,7 +389,7 @@ module Delayed = struct
     assert (is_current_env t);
     is_registered t.env node
 
-  let set_value_direct (type a) t pexp (value : a Value.t) node0 new_v =
+  let set_value_direct (type a) t (value : a Value.t) node0 new_v =
     Debug.incr stats_set_value;
     let node = find t node0 in
     let valuetable = get_table_value t.env value in
@@ -399,40 +398,8 @@ module Delayed = struct
       table = Node.M.add node new_v valuetable.table;
     } in
     VValueTable.set t.env.value value valuetable;
-    Explanation.add_pexp_value t.env.trail pexp value ~node:node0 ~node_repr:node;
     let events = Node.M.find_opt node valuetable.events in
     Wait.wakeup_events_bag Events.Wait.translate_value t events (node,value)
-
-  let merge_values t pexp node0 node0' =
-    let node  = find t node0 in
-    let node' = find t node0'  in
-    let iteri (type a) (value:a Value.t) (valuetable:a valuetable) =
-      let old_s = Node.M.find_opt node valuetable.table in
-      let old_s'  = Node.M.find_opt node'  valuetable.table in
-      let module Value = (val (Typedef.get_value value)) in
-      Debug.dprintf12 debug_few
-        "[Solver] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
-        Node.pp node Node.pp node0
-        (Pp.option (print_value value)) old_s
-        Node.pp node' Node.pp node0'
-        (Pp.option (print_value value)) old_s';
-      match old_s, old_s' with
-      | None, None   -> ()
-      | Some v, None ->
-        set_value_direct t pexp value node0' v
-      | None, Some v' ->
-        set_value_direct t pexp value node0  v'
-      | Some v, Some v' ->
-        if Value.equal v v'
-        then
-          (* already same value. Does that really happen? *)
-          ()
-        else
-          let pexp =
-            mk_pexp t.env.trail exp_diff_value pexp in
-          raise (Contradiction(pexp))
-    in
-    VValueTable.iter_initializedi {VValueTable.iteri} t.env.value
 
   let add_pending_merge (t : t) pexp node node' =
     Debug.dprintf4 debug "[Solver] @[add_pending_merge for %a and %a@]"
@@ -492,8 +459,7 @@ module Delayed = struct
           let reg_events = valuetable.reg_events in
           Wait.wakeup_events_list Events.Wait.translate_regvalue
             t (Some reg_events) (nodevalue);
-          let pexp = Explanation.pexpfact in
-          set_value_direct t pexp value node v
+          set_value_direct t value node v
         end
     end
 
@@ -510,14 +476,14 @@ module Delayed = struct
         *)
         t.env.repr <- Node.M.add node0' node t.env.repr;
         let pexp = pexp () in
-        Explanation.add_pexp_equal t.env.trail pexp
+        Explanation.add_merge_start t.env.trail pexp
           ~node1:node0 ~node2:node0'
           ~node1_repr:node ~node2_repr:node0'
           ~new_repr:node;
-        Explanation.add_merge_dom_no
-          t.env.trail ~inv:true
-          ~other_node:node0' ~other_node0:node0'
-          ~repr_node:node ~repr_node0:node0;
+        Explanation.add_merge_finish t.env.trail pexp
+          ~node1:node0 ~node2:node0'
+          ~node1_repr:node ~node2_repr:node0'
+          ~new_repr:node;
         (** wakeup the daemons register_node *)
         let event, other_event = Node.M.find_remove node0' t.env.event in
         Wait.wakeup_events_bag Events.Wait.translate_change t other_event node0';
@@ -536,14 +502,14 @@ module Delayed = struct
   let set_sem_pending t pexp node0 nodesem =
     let node0' = NodeSem.node nodesem in
     let pexp () =
-      mk_pexp t.env.trail exp_same_sem
+      Explanation.mk_pexp t.env.trail Explanation.exp_same_sem
         (ExpSameSem(pexp,node0,nodesem)) in
     set_semvalue_pending t pexp node0 node0'
 
   let set_value_pending t pexp node0 nodevalue =
     let node0' = NodeValue.node nodevalue in
     let pexp () =
-      mk_pexp t.env.trail exp_same_sem
+      Explanation.mk_pexp t.env.trail Explanation.exp_same_sem
         (ExpSameValue(pexp,node0,nodevalue)) in
     set_semvalue_pending t pexp node0 node0'
 
@@ -616,18 +582,52 @@ module Delayed = struct
     VDomTable.iter_initializedi {VDomTable.iteri} t.env.dom;
     !dom_not_done
 
-  let finalize_merge t _pexp other_node0 repr_node0 inv =
-    let other_node0,repr_node0 =
+  let merge_values t pexp node0 node0' =
+    let node  = find t node0 in
+    let node' = find t node0'  in
+    let iteri (type a) (value:a Value.t) (valuetable:a valuetable) =
+      let old_s = Node.M.find_opt node valuetable.table in
+      let old_s'  = Node.M.find_opt node'  valuetable.table in
+      let module Value = (val (Typedef.get_value value)) in
+      Debug.dprintf12 debug_few
+        "[Solver] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
+        Node.pp node Node.pp node0
+        (Pp.option (print_value value)) old_s
+        Node.pp node' Node.pp node0'
+        (Pp.option (print_value value)) old_s';
+      match old_s, old_s' with
+      | None, None   -> ()
+      | Some v, None ->
+        set_value_direct t value node0' v
+      | None, Some v' ->
+        set_value_direct t value node0  v'
+      | Some v, Some v' ->
+        if Value.equal v v'
+        then
+          (* already same value. Does that really happen? *)
+          ()
+        else
+          let pexp = Explanation.mk_pexp t.env.trail Explanation.exp_diff_value pexp in
+          raise (Contradiction(pexp))
+    in
+    VValueTable.iter_initializedi {VValueTable.iteri} t.env.value
+
+  let finalize_merge t pexp node1_0 node2_0 inv =
+    let node1 = find t node1_0 in
+    let node2  = find t node2_0  in
+    let other_node0,other_node,repr_node0,repr_node =
       if inv
-      then repr_node0, other_node0
-      else other_node0, repr_node0 in
-    let other_node = find t other_node0 in
-    let repr_node  = find t repr_node0  in
+      then node2_0,node2, node1_0, node1
+      else node1_0, node1, node2_0, node2 in
     Debug.dprintf8 debug_few "[Solver.few] merge %a(%a) -> %a(%a)"
       Node.pp other_node Node.pp other_node0
       Node.pp repr_node Node.pp repr_node0;
+    merge_values t pexp node1_0 node2_0;
     t.env.repr <- Node.M.add other_node repr_node t.env.repr;
-    add_merge_dom_all t.env.trail ~inv ~other_node ~other_node0 ~repr_node ~repr_node0;
+    Explanation.add_merge_finish t.env.trail pexp
+      ~node1:node1_0 ~node2:node2_0
+      ~node1_repr:node1 ~node2_repr:node2
+      ~new_repr:repr_node;
     let event, other_event = Node.M.find_remove other_node t.env.event in
 
     (** move node events *)
@@ -656,7 +656,7 @@ module Delayed = struct
     Wait.wakeup_events_bag
       Events.Wait.translate_change t other_event other_node
 
-  let finalize_merge_pending t pexp other_node0 repr_node0 inv  =
+  let do_delayed_merge t pexp other_node0 repr_node0 inv  =
     let dom_not_done = merge_dom t pexp other_node0 repr_node0 inv in
     if dom_not_done
     then begin
@@ -675,12 +675,11 @@ module Delayed = struct
       let ((other_node0,_),(_,repr_node)) =
         choose_repr (node1_0,node1) (node2_0,node2) in
       let inv = not (Node.equal node1_0 other_node0) in
-      add_pexp_equal t.env.trail pexp
+      Explanation.add_merge_start t.env.trail pexp
         ~node1:node1_0 ~node2:node2_0
         ~node1_repr:node1 ~node2_repr:node2
         ~new_repr:repr_node;
-      merge_values t pexp node1_0 node2_0;
-      finalize_merge_pending t pexp node1_0 node2_0 inv
+      do_delayed_merge t pexp node1_0 node2_0 inv
     end
 
   (** {2 Internal scheduler} *)
@@ -728,7 +727,7 @@ module Delayed = struct
         assert (not (merge_dom ~dry_run:true t pexp other_node repr_node inv));
         (** understand why that happend.
             Is it really needed to do a fixpoint? *)
-        finalize_merge_pending t pexp other_node repr_node inv;
+        do_delayed_merge t pexp other_node repr_node inv;
         do_pending t
     | None ->
       if not (Queue.is_empty t.todo_merge) then
@@ -830,7 +829,7 @@ module Delayed = struct
   let register_decision t chogen =
     t.sched_decision chogen
 
-  let mk_pexp t ?age ?tags kexp exp = mk_pexp ?age ?tags t.env.trail kexp exp
+  let mk_pexp t ?age ?tags kexp exp = Explanation.mk_pexp ?age ?tags t.env.trail kexp exp
   let current_age t = Explanation.current_age t.env.trail
 
   let contradiction d pexp =

@@ -88,16 +88,18 @@ val mk_pexp:
   'a Exp.t -> 'a -> pexp
 (** create a new explanation using by default the current age *)
 
-val add_pexp_equal:
+val add_merge_start:
   t -> pexp ->
   node1:Node.t -> node2:Node.t ->
   node1_repr:Node.t -> node2_repr:Node.t -> new_repr:Node.t -> unit
-(** Add in the trail the explanation for the equality between node1
-    and node2 (the order is important) *)
+(** Start of merge, indicative mainly for domains *)
 
-val add_pexp_value:
-  t -> pexp -> 'b Value.t -> node:Node.t -> node_repr:Node.t -> unit
-(** Add in the trail the explanation for the setting of a value to a node *)
+val add_merge_finish:
+  t -> pexp ->
+  node1:Node.t -> node2:Node.t ->
+  node1_repr:Node.t -> node2_repr:Node.t -> new_repr:Node.t -> unit
+(** End of a merge, pexp is added to the trail  *)
+
 
 (** {2 Predefined explanation} *)
 
@@ -130,16 +132,6 @@ type chogen =
 
 
 (** {2 Explanation for domains, currently not used } *)
-
-val add_merge_dom_no:
-  t -> inv:bool -> other_node:Node.t -> other_node0:Node.t
-  -> repr_node:Node.t -> repr_node0:Node.t -> unit
-(** End of a merge without any domain merge needed *)
-
-val add_merge_dom_all:
-  t -> inv:bool -> other_node:Node.t -> other_node0:Node.t
-  -> repr_node:Node.t -> repr_node0:Node.t -> unit
-(** End of a merge with some merge done *)
 
 val add_pexp_dom:
   t -> pexp -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit
