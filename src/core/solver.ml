@@ -540,43 +540,42 @@ module Delayed = struct
 
   let choose_repr a b = Shuffle.shuffle2 (a,b)
 
-  (** TODO rename other_node repr_node *)
-  let merge_dom_pending (type a) t pexp (dom : a Dom.t) other_node0 repr_node0 inv =
-    let other_node = find t other_node0 in
-    let repr_node  = find t repr_node0  in
+  let merge_dom_pending (type a) t pexp (dom : a Dom.t) node1_0 node2_0 inv =
+    let node1 = find t node1_0 in
+    let node2  = find t node2_0  in
     let domtable = (get_table_dom t.env dom) in
-    let old_other_s = Node.M.find_opt other_node domtable.table in
-    let old_repr_s = Node.M.find_opt repr_node  domtable.table in
+    let old_other_s = Node.M.find_opt node1 domtable.table in
+    let old_repr_s = Node.M.find_opt node2  domtable.table in
     let module Dom = (val (VDom.get_dom dom)) in
     Debug.dprintf12 debug_few
       "[Solver] @[merge dom (%a(%a),%a)@ and (%a(%a),%a)@]"
-      Node.pp other_node Node.pp other_node0
+      Node.pp node1 Node.pp node1_0
       (Pp.option Dom.pp) old_other_s
-      Node.pp repr_node Node.pp repr_node0
+      Node.pp node2 Node.pp node2_0
       (Pp.option Dom.pp) old_repr_s;
     match old_other_s, old_repr_s with
     | None, None   -> ()
     | _ ->
       Dom.merge t pexp
-        (old_other_s,other_node0)
-        (old_repr_s,repr_node0)
+        (old_other_s,node1_0)
+        (old_repr_s,node2_0)
         inv
 
 
-  let merge_dom ?(dry_run=false) t pexp other_node0 repr_node0 inv =
-    let other_node = find t other_node0 in
-    let repr_node  = find t repr_node0  in
+  let merge_dom ?(dry_run=false) t pexp node1_0 node2_0 inv =
+    let node1 = find t node1_0 in
+    let node2  = find t node2_0  in
     let dom_not_done = ref false in
     let iteri (type a) (dom : a Dom.t) (domtable : a domtable) =
-      let other_s = Node.M.find_opt other_node domtable.table in
-      let repr_s  = Node.M.find_opt repr_node  domtable.table in
+      let s1 = Node.M.find_opt node1 domtable.table in
+      let s2  = Node.M.find_opt node2  domtable.table in
     let module Dom = (val (VDom.get_dom dom)) in
-      if not (Dom.merged other_s repr_s)
+      if not (Dom.merged s1 s2)
       then begin
         dom_not_done := true;
         if not dry_run then
           Queue.push
-            (SetMergeDomNode(pexp,dom,other_node0,repr_node0,inv)) t.todo_merge_dom
+            (SetMergeDomNode(pexp,dom,node1_0,node2_0,inv)) t.todo_merge_dom
       end
     in
     VDomTable.iter_initializedi {VDomTable.iteri} t.env.dom;
@@ -656,16 +655,16 @@ module Delayed = struct
     Wait.wakeup_events_bag
       Events.Wait.translate_change t other_event other_node
 
-  let do_delayed_merge t pexp other_node0 repr_node0 inv  =
-    let dom_not_done = merge_dom t pexp other_node0 repr_node0 inv in
+  let do_delayed_merge t pexp node1_0 node2_0 inv  =
+    let dom_not_done = merge_dom t pexp node1_0 node2_0 inv in
     if dom_not_done
     then begin
       Debug.dprintf4 debug "[Solver] @[merge %a %a dom not done@]"
-        Node.pp other_node0 Node.pp repr_node0;
-      t.todo_delayed_merge <- Some (pexp,other_node0,repr_node0,inv)
+        Node.pp node1_0 Node.pp node2_0;
+      t.todo_delayed_merge <- Some (pexp,node1_0,node2_0,inv)
     end
     else
-      finalize_merge t pexp other_node0 repr_node0 inv
+      finalize_merge t pexp node1_0 node2_0 inv
 
   (** merge two pending actions *)
   let merge_pending t pexp node1_0 node2_0 =
@@ -722,12 +721,12 @@ module Delayed = struct
         merge_dom_pending t pexp dom node1 node2 inv;
         do_pending t
     else match t.todo_delayed_merge with
-      | Some(pexp,other_node,repr_node,inv) ->
+      | Some(pexp,node1_0,node2_0,inv) ->
         t.todo_delayed_merge <- None;
-        assert (not (merge_dom ~dry_run:true t pexp other_node repr_node inv));
+        assert (not (merge_dom ~dry_run:true t pexp node1_0 node2_0 inv));
         (** understand why that happend.
             Is it really needed to do a fixpoint? *)
-        do_delayed_merge t pexp other_node repr_node inv;
+        do_delayed_merge t pexp node1_0 node2_0 inv;
         do_pending t
     | None ->
       if not (Queue.is_empty t.todo_merge) then
