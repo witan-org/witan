@@ -67,20 +67,24 @@ type pexp =
 (** An explanation. The age indicate the state to consider *)
 
 
+(** trail and additional information *)
 type t
 val create: unit -> t
 val new_handle: t -> t
 
 val current_age: t -> age
 
+(** {2 Decisions} *)
 type dec
 
 val print_dec: dec Pp.pp
 val age_of_dec: dec -> age
 
+(** mark a new decisions *)
 val new_dec: t -> dec
 val nbdec: t -> int
 
+(** {2 Explanations} *)
 val mk_pexp:
   t ->
   ?age:age (* in which age it should be evaluated *) ->
