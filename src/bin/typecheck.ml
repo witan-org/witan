@@ -172,6 +172,10 @@ let new_name pre =
 
 let new_term_name = new_name "t#"
 
+(* Add local bound variables to env *)
+let add_let_term env id t =
+  { env with vars = M.add id t env.vars }
+
 (* Add local variables to environment *)
 let add_term_var env id v loc =
   let v' =
@@ -180,45 +184,20 @@ let add_term_var env id v loc =
     else
       v
   in
+  let t = Term.const v' in
   v', { env with
-        vars = M.add id v' env.vars;
+        vars = M.add id t env.vars;
         locs = E.add v' (Declared loc) env.locs;
       }
 
 let find_var env name =
-  try `Ty (M.find name env.type_vars)
-  with Not_found ->
-    begin
-      try
-        `Term (M.find name env.term_vars)
-      with Not_found ->
-        `Not_found
-    end
-
-(* Add local bound variables to env *)
-let add_let_term env id t =
-  Util.debug ~section "New let-binding: @[<hov>%a ->@ %a@]" Id.print id Expr.Print.term t;
-  { env with term_lets = M.add id t env.term_lets }
-
-let add_let_prop env id t =
-  Util.debug ~section "New let-binding: @[<hov>%a ->@ %a@]" Id.print id Expr.Print.formula t;
-  { env with prop_lets = M.add id t env.prop_lets }
-
-let find_let env name =
-  try `Term (M.find name env.term_lets)
-  with Not_found ->
-    begin
-      try
-        `Prop (M.find name env.prop_lets)
-      with Not_found ->
-        `Not_found
-    end
+  try Some (M.find name env.vars)
+  with Not_found -> None
 
 (* Printing *)
 let print_expect fmt = function
-  | Nothing   -> Format.fprintf fmt "<>"
-  | Type      -> Format.fprintf fmt "<tType>"
-  | Typed ty  -> Expr.Print.ty fmt ty
+  | None    -> Format.fprintf fmt "<>"
+  | Some ty -> Term.print fmt ty
 
 let print_map print fmt map =
   let aux k v =
@@ -228,21 +207,14 @@ let print_map print fmt map =
 
 let pp_env fmt env =
   Format.fprintf fmt "@[<hov 2>(%a) %a%a%a%a@]"
-    print_expect env.expect
-    (print_map Expr.Print.id_ttype) env.type_vars
-    (print_map Expr.Print.id_ty) env.term_vars
-    (print_map Expr.Print.term) env.term_lets
-    (print_map Expr.Print.formula) env.prop_lets
+    print_expect env.expect (print_map Term.print) env.vars
 
 (* Typo suggestion *)
 (* ************************************************************************ *)
 
 let suggest ~limit env fmt id =
   let l =
-    M.suggest ~limit id env.type_vars @
-    M.suggest ~limit id env.term_vars @
-    M.suggest ~limit id env.term_lets @
-    M.suggest ~limit id env.prop_lets @
+    M.suggest ~limit id env.vars @
     H.suggest ~limit global_env id
   in
   if l = [] then
@@ -253,39 +225,41 @@ let suggest ~limit env fmt id =
 (* Typing explanation *)
 (* ************************************************************************ *)
 
-exception Continue of Expr.term list
-
 let get_reason_loc = function Inferred l | Declared l -> l
 
 let pp_reason fmt = function
   | Inferred loc -> Format.fprintf fmt "inferred at %a" Dolmen.ParseLocation.fmt loc
   | Declared loc -> Format.fprintf fmt "declared at %a" Dolmen.ParseLocation.fmt loc
 
+let find_reason env v =
+  try E.find v env.locs
+  with Not_found -> R.find global_locs v
+
 let rec explain ~full env fmt t =
   try
     begin match t with
-      | { Expr.term = Expr.Var v } ->
-        let reason = F.find v env.term_locs in
-        Format.fprintf fmt "%a was %a\n" Expr.Print.id_ty v pp_reason reason
-      | { Expr.term = Expr.Meta m } ->
-        let f = Expr.Meta.ty_def Expr.(m.meta_index) in
-        Format.fprintf fmt "%a was defined by %a\n"
-          Expr.Print.meta m Expr.Print.formula f
-      | { Expr.term = Expr.App (f, _, l) } ->
-        let reason = S.find const_locs f in
-        Format.fprintf fmt "%a was %a\n" Expr.Print.const_ty f pp_reason reason;
-        if full then raise (Continue l)
+      | { Term.term = Term.Type; _ } ->
+        Format.fprintf fmt "Type: Type"
+      | { Term.term = Term.Id v; _ } ->
+        let reason = find_reason env v in
+        Format.fprintf fmt "%a: %a was %a@\n" I.print v Term.print (I.ty v) pp_reason reason
+      | { Term.term = Term.App (f, t); _ } ->
+        explain ~full env fmt f;
+        if full then explain ~full env fmt t
+      | { Term.term = Term.Let (v, e, body); _ } ->
+        Format.fprintf fmt "Term let-bound to %a was typed %a@\n"
+          I.print v Term.print e.Term.ty
+      | { Term.term = Term.Binder (_, _, t); _ } ->
+        explain ~full env fmt t
     end with
   | Not_found ->
-    Format.fprintf fmt "Couldn't find a reason..."
-  | Continue l ->
-    List.iter (explain env ~full fmt) l
+    Format.fprintf fmt "Couldn't find a typing reason (that's a bug !)"
 
 (* Exceptions *)
 (* ************************************************************************ *)
 
 (* Internal exception *)
-exception Found of Ast.t * res
+exception Found of Ast.t * Term.t option
 
 (* Exception for typing errors *)
 exception Typing_error of string * env * Ast.t
@@ -310,13 +284,13 @@ let _expected env s t res =
   let msg = match res with
     | None -> "the expression doesn't match what was expected"
     | Some r ->
+      let ty = r.Term.ty in
       let tmp =
         match r with
-        | Ttype -> "the Ttype constant"
-        | Ty _ -> "a type"
-        | Term _ -> "a first-order term"
-        | Formula _ -> "a first-order formula"
-        | Tags _ -> "a tag/attribute list"
+        | { Term.term = Term.Type; _} -> "the Ttype constant"
+        | _ when Term.equal ty Term._Type -> "a type"
+        | _ when Term.equal ty Term._Prop -> "a first-order formula"
+        | _ -> "a first-order term"
       in
       Format.sprintf "got %s" tmp
   in
@@ -335,7 +309,7 @@ let _bad_id_arity env id n t =
 
 let _bad_term_arity env f n t =
   let msg = Format.asprintf
-      "Bad arity for function '%a' (expected %d arguments)" Expr.Print.id f n
+      "Bad arity for function '%a' (expected %d arguments)" I.print f n
   in
   raise (Typing_error (msg, env, t))
 
@@ -344,20 +318,20 @@ let _fo_let env s t =
   raise (Typing_error (msg, env, t))
 
 let _fo_formula env f ast =
-  let msg = Format.asprintf "Cannot apply formula '%a' to arguments" Expr.Print.formula f in
+  let msg = Format.asprintf "Cannot apply formula '%a' to arguments" Term.print f in
   raise (Typing_error (msg, env, ast))
 
 let _type_mismatch env t ty ty' ast =
   let msg = Format.asprintf
       "Type Mismatch: an expression of type %a was expected, but '%a' has type %a%a"
-      Expr.Print.ty ty' Expr.Print.term t Expr.Print.ty ty (mk_expl ", because:" env) t
+      Term.print ty' Term.print t Term.print ty (mk_expl ", because:" env) t
   in
   raise (Typing_error (msg, env, ast))
 
 let _cannot_unify env ast ty t =
   let msg = Format.asprintf
       "A term of type '%a'@ was expected, but could not unify it with@ %a:@ %a"
-      Expr.Print.ty ty Expr.Print.term t Expr.Print.ty Expr.(t.t_type)
+      Term.print ty Term.print t Term.print t.Term.ty
   in
   raise (Typing_error (msg, env, ast))
 
@@ -367,33 +341,22 @@ let _cannot_infer_quant_var env t =
 (* Wrappers for expression building *)
 (* ************************************************************************ *)
 
-(* Generate metas for wildcards in types. *)
+(* Generate fresh variables for wildcards in types. *)
 let gen_wildcard =
-  let i = ref ~-1 in
+  let i = ref 0 in
   (function () -> (* TODO: add location information? *)
-     incr i; Expr.Id.ttype (Format.sprintf "?%d" !i))
+     incr i; I.mk (Format.sprintf "?%d" !i) Term._Type)
 
 let wildcard =
   (fun env ast id l ->
      match l with
      | [] ->
        let v = gen_wildcard () in
-       Ty (Expr.Ty.of_id v)
+       Term.const v
      | _ -> _bad_id_arity env id 0 ast
   )
 
-let arity f =
-  List.length Expr.(f.id_type.fun_vars) +
-  List.length Expr.(f.id_type.fun_args)
-
-(* Wrapper around type application *)
-let ty_apply env ast f args =
-  try
-    Expr.Ty.apply ~status:env.status f args
-  with Expr.Bad_ty_arity _ ->
-    _bad_term_arity env f (arity f) ast
-
-(* Wrapper aroun term application. Since wildcards are allowed in types,
+(* Wrapper around term application. Since wildcards are allowed in types,
    there may be some variables in [ty_args], so we have to find an appropriate
    substitution for these variables. To do that, we try and unify the expected type
    and the actual argument types. *)
