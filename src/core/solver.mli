@@ -73,8 +73,18 @@ module Delayed : sig
 
   (** {3 Immediate modifications} *)
   val set_dom  : t -> pexp -> 'a Dom.t -> Node.t -> 'a -> unit
-    (** change the dom of the equivalence class *)
+  (** change the dom of the equivalence class *)
 
+  val set_dom_premerge  : t -> 'a Dom.t -> Node.t -> 'a -> unit
+  (** [set_dom_premerge d node] must be used only during the merge of two class
+        [cl1] and [cl2], with one of them being [node].
+        The explication is the explication given for the merge
+  *)
+
+  val unset_dom  : t -> pexp -> 'a Dom.t -> Node.t -> unit
+  (** remove the dom of the equivalence class *)
+
+  (** {3 Delayed modifications} *)
   val set_sem  : t -> Explanation.pexp -> Node.t -> NodeSem.t -> unit
   (** attach a sem to an equivalence class *)
 
@@ -83,15 +93,6 @@ module Delayed : sig
 
   val set_value: t -> Explanation.pexp -> 'a Value.t -> Node.t -> 'a -> unit
   (** attach value to an equivalence class *)
-
-  val set_dom_premerge  : t -> 'a Dom.t -> Node.t -> 'a -> unit
-    (** [set_dom_premerge d node] must be used only during the merge of two class
-        [cl1] and [cl2], with one of them being [node].
-        The explication is the explication given for the merge
-    *)
-
-  val unset_dom  : t -> pexp -> 'a Dom.t -> Node.t -> unit
-  (** remove the dom of the equivalence class *)
 
   (** {3 Delayed modifications} *)
   val merge    : t -> Explanation.pexp -> Node.t -> Node.t -> unit
@@ -108,20 +109,21 @@ module Delayed : sig
   val attach_node: t -> Node.t -> ('event,'r) Dem.t -> 'event -> unit
     (** wakeup when it is not anymore the representative class *)
 
-  (** other event can be added *)
-
   val register_decision: t -> Explanation.chogen -> unit
   (** register a decision that would be scheduled later. The
-      [make_decision] of the [Cho] will be called at that time to know
+      [choose_decision] of the [Cho] will be called at that time to know
       if the decision is still needed. *)
+
+  (** {3 Explanations} *)
   val mk_pexp: t -> ?age:age -> ?tags:tags -> 'a Exp.t -> 'a -> Explanation.pexp
   val current_age: t -> age
   val contradiction: t -> Explanation.pexp -> 'b
 
+  (** {3 Low level} *)
   val flush: t -> unit
-(** Apply all the modifications and direct consequences.
-    Should be used only during wakeup of not immediate daemon
-*)
+  (** Apply all the modifications and direct consequences.
+      Should be used only during wakeup of not immediate daemon
+  *)
 end
 
 type d = Delayed.t

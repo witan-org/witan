@@ -60,7 +60,6 @@ type age = Age.t
 (** {2 Explanation, Conflict and Choices } *)
 
 module Exp: Keys.Key
-module Con: Keys.Key
 
 type pexp =
 | Pexp: age * 'a Exp.t * 'a * tags -> pexp
@@ -126,13 +125,11 @@ val exp_diff_value: pexp Exp.t
 
 (** {2 Generic choices} *)
 
-(** It is perhaps not needed but the decisions are abstracted *)
-
 module Cho: Keys.Key2
 
 (** Generic decision *)
 type chogen =
-  | GCho: ('k,'d) Cho.t * 'k -> chogen
+  | GCho: Node.t * ('k,'d) Cho.t * 'k -> chogen
 
 
 (** {2 Explanation for domains, currently not used } *)

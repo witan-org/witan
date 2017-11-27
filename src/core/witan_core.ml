@@ -81,6 +81,8 @@ module Exp = Explanation.Exp
 module Solver = Solver
 module Demon = Demon
 module Explanation = Explanation
+module Conflict = Conflict
+
 module Variable = Variable
 
 module Events = Events

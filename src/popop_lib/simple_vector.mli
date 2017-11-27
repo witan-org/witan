@@ -55,6 +55,7 @@ val copy : 'a t -> 'a t
 
 (** used as a stack, put the element at the end of the array *)
 val push: 'a t -> 'a -> unit
+val drop_last: 'a t -> unit
 
 (** If you know the implementation *)
 val get_dumb  : 'a t -> int -> 'a

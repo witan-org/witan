@@ -92,6 +92,11 @@ let push t v =
   inc_size (i + 1) t;
   set t i v
 
+let drop_last t =
+  assert (0 < t.size);
+  t.size <- t.size - 1;
+  uninitialize t t.size
+
 let iter_initialized f t =
   for i = 0 to t.size - 1 do
     let e = t.data.(i) in

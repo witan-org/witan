@@ -489,7 +489,7 @@ let set_false env pexp node = set_bool env pexp node false
 
 let chobool = Explanation.Cho.create_key "Bool.cho"
 
-let make_dec node = Explanation.GCho(chobool,node)
+let make_dec node = Explanation.GCho(node,chobool,node)
 
 let () = Variable.register_sort ~dec:make_dec ty
 (*

@@ -32,13 +32,10 @@ let debug = Debug.register_flag (** not info just because duplicate of solver *)
   "Explanation.core"
 
 module Exp = Keys.Make_key(struct end)
-module Con = Keys.Make_key(struct end)
 module Cho = Keys.Make_key2(struct end)
 
-type ('a,'b) cho = ('a,'b) Cho.t
-
 type chogen =
-  | GCho: ('k,'d) cho * 'k -> chogen
+  | GCho: Node.t * ('k,'d) Cho.t * 'k -> chogen
 
 module Age = struct
   include DIntOrd
