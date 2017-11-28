@@ -63,7 +63,7 @@ module Dom = struct
 
   module type Dom = Solver.Dom
 
-  module Register = Solver.RegisterDom
+  let register = Solver.register_dom
 end
 
 module Dem = struct
@@ -71,7 +71,7 @@ module Dem = struct
 
   module type Dem = Solver.Wait.Dem
 
-  module Register = Solver.Wait.RegisterDem
+  let register = Solver.Wait.register_dem
 end
 
 module Env = Env

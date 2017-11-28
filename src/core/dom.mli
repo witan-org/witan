@@ -47,10 +47,9 @@ module Make (S:sig type delayed type pexp end) : sig
 
   module type Dom = Dom_partial with type delayed := S.delayed and type pexp := S.pexp
 
-  module RegisterDom(D:Dom) : sig end
-
+  val register_dom: (module Dom with type t = 'a) -> unit
   val check_is_registered : 'a dom -> unit
-  val well_initialized : unit -> bool
+  val is_well_initialized : unit -> bool
   val get_dom : 'a dom -> (module Dom with type t = 'a)
   val print_dom : 'a dom -> Format.formatter -> 'a -> unit
   val print_dom_opt : 'a dom -> Format.formatter -> 'a option -> unit

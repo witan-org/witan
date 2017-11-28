@@ -44,6 +44,17 @@ exception BadCoercion
 type (_,_) eq = Eq : ('a,'a) eq
 (** Proof of type equality *)
 
+module type Registry = sig
+  type 'a key
+  type 'a data
+
+  val register: 'a data -> unit
+  val check_is_registered : 'a key -> unit
+  val is_well_initialized : unit -> bool
+  val get : 'a key -> 'a data
+  val print : 'a key -> 'a Pp.pp
+
+end
 
 module type Key = sig
   (** Key with arity 1 *)
@@ -89,11 +100,27 @@ module type Key = sig
   module Vector  : Vector_hetero.R1 with type 'a key = 'a t
   module VectorH : Vector_hetero.T1 with type 'a key = 'a t
   module M : Intmap_hetero.R1 with type 'a key = 'a t
-
+  module Make_Registry(S:sig
+      type 'a data
+      val pp: 'a data -> 'a Pp.pp
+      val key: 'a data -> 'a t
+    end) : Registry with type 'a key := 'a t and type 'a data = 'a S.data
 end
 
 module Make_key(X:sig end) : Key
 
+module type Registry2 = sig
+  type ('k,'d) key
+  type ('k,'d) data
+
+  val register: ('k,'d) data -> unit
+  val check_is_registered : ('k,'d) key -> unit
+  val is_well_initialized : unit -> bool
+  val get : ('k,'d) key -> ('k,'d) data
+  val printk : ('k,'d) key -> 'k Pp.pp
+  val printd : ('k,'d) key -> 'd Pp.pp
+
+end
 
 module type Key2 = sig
   (** Key with arity 2 *)
@@ -124,7 +151,14 @@ module type Key2 = sig
   end
   module MkVector(D:sig type ('k,'d,'b) t end)
     : Vector_hetero.S2 with type ('k,'d) key = ('k,'d) t
-                       and type ('k,'d,'b) data = ('k,'d,'b) D.t
+                        and type ('k,'d,'b) data = ('k,'d,'b) D.t
+  module Make_Registry(S:sig
+      type ('k,'d) data
+      val ppk: ('k,'d) data -> 'k Pp.pp
+      val ppd: ('k,'d) data -> 'd Pp.pp
+      val key: ('k,'d) data -> ('k,'d) t
+    end) : Registry2 with type ('k,'d) key := ('k,'d) t and type ('k,'d) data = ('k,'d) S.data
+
 end
 
 module Make_key2(X:sig end): Key2

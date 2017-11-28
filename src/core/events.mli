@@ -90,17 +90,13 @@ module Wait : sig
       val immediate : bool
     end
 
-    module VDem : Vector_hetero.S2 with type ('k,'d) key = ('k,'d) Dem.t
-                                    and type ('k,'d,'unneeded) data =
-                                          (module Dem with type event = 'k and type runable = 'd)
+    val register_dem : (module Dem with type event = 'k and type runable = 'd) -> unit
 
-    module RegisterDem : functor (D : Dem) -> sig  end
+    val get_dem : ('k, 'd) Dem.t -> (module Dem with type event = 'k and type runable = 'd)
 
-    val get_dem : ('a, 'b) Dem.t -> ('a, 'b, unit) VDem.data
+    val print_dem_event : ('a, 'b) Dem.t -> 'a Pp.pp
 
-    val print_dem_event : ('a, 'b) Dem.t -> Format.formatter -> 'a -> unit
-
-    val print_dem_runable : ('a, 'b) Dem.t -> Format.formatter -> 'b -> unit
+    val print_dem_runable : ('a, 'b) Dem.t -> 'b Pp.pp
 
     val new_pending_daemon : delayed -> ('a, 'b) Dem.t -> 'b -> unit
 
@@ -112,7 +108,7 @@ module Wait : sig
     val wakeup_events_bag :
       'a translate -> delayed -> t Bag.t option -> 'a -> unit
 
-    val well_initialized : unit -> bool
+    val is_well_initialized : unit -> bool
   end
 
 

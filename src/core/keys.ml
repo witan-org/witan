@@ -30,6 +30,18 @@ exception BadCoercion
 type (_,_) eq = Eq : ('a,'a) eq
 
 
+module type Registry = sig
+  type 'a key
+  type 'a data
+
+  val register: 'a data -> unit
+  val check_is_registered : 'a key -> unit
+  val is_well_initialized : unit -> bool
+  val get : 'a key -> 'a data
+  val print : 'a key -> 'a Pp.pp
+
+end
+
 module type Key = sig
   (** Key with arity 1 *)
 
@@ -74,8 +86,13 @@ module type Key = sig
   module Vector  : Vector_hetero.R1 with type 'a key = 'a t
   module VectorH : Vector_hetero.T1 with type 'a key = 'a t
   module M : Intmap_hetero.R1 with type 'a key = 'a t
-
+  module Make_Registry(S:sig
+      type 'a data
+      val pp: 'a data -> 'a Pp.pp
+      val key: 'a data -> 'a t
+    end) : Registry with type 'a key := 'a t and type 'a data = 'a S.data
 end
+
 
 module Make_key(X:sig end): Key = struct
   module K = Strings.Fresh(struct end)
@@ -124,6 +141,62 @@ module Make_key(X:sig end): Key = struct
   module M =
     Intmap_hetero.RMake1(struct type nonrec 'a t = 'a t end)
 
+  module Make_Registry(S:sig
+      type 'a data
+      val pp: 'a data -> 'a Pp.pp
+      val key: 'a data -> 'a t
+    end) = struct
+
+    type 'a data = 'a S.data
+
+    module V = MkVector(struct type ('a,'unedeed) t = 'a S.data end)
+
+    let registry : unit V.t = V.create 8
+
+    let register data =
+      let key = S.key data in
+        V.inc_size key registry;
+        assert (if not (V.is_uninitialized registry key)
+                then raise AlreadyRegisteredKey else true);
+        V.set registry key data
+
+    let check_is_registered data =
+      assert (if V.is_uninitialized registry data
+              then raise UnregisteredKey else true)
+
+    let is_well_initialized () =
+      let well_initialized = ref true in
+      iter {iter = fun data ->
+          if V.is_uninitialized registry data then begin
+            Format.eprintf "[Warning] %a is not registered" pp data;
+            well_initialized := false;
+          end};
+      !well_initialized
+
+    let is_registered dom =
+      V.is_uninitialized registry dom
+
+    let get k =
+      check_is_registered k;
+      V.get registry k
+
+    let print (type a) (k : a t) fmt s =
+      let data = get k in
+      (S.pp data) fmt s
+  end
+end
+
+module type Registry2 = sig
+  type ('k,'d) key
+  type ('k,'d) data
+
+  val register: ('k,'d) data -> unit
+  val check_is_registered : ('k,'d) key -> unit
+  val is_well_initialized : unit -> bool
+  val get : ('k,'d) key -> ('k,'d) data
+  val printk : ('k,'d) key -> 'k Pp.pp
+  val printd : ('k,'d) key -> 'd Pp.pp
+
 end
 
 module type Key2 = sig
@@ -156,6 +229,12 @@ module type Key2 = sig
   module MkVector(D:sig type ('k,'d,'b) t end)
     : Vector_hetero.S2 with type ('k,'d) key = ('k,'d) t
                        and type ('k,'d,'b) data = ('k,'d,'b) D.t
+  module Make_Registry(S:sig
+      type ('k,'d) data
+      val ppk: ('k,'d) data -> 'k Pp.pp
+      val ppd: ('k,'d) data -> 'd Pp.pp
+      val key: ('k,'d) data -> ('k,'d) t
+    end) : Registry2 with type ('k,'d) key := ('k,'d) t and type ('k,'d) data = ('k,'d) S.data
 end
 
 module Make_key2(X:sig end) : Key2 = struct
@@ -198,4 +277,52 @@ module Make_key2(X:sig end) : Key2 = struct
   end
   module MkVector(D:sig type ('k,'d,'b) t end) =
     Vector_hetero.Make2(struct type nonrec ('k,'d) t = ('k,'d) t end)(D)
+
+  module Make_Registry(S:sig
+      type ('k,'d) data
+      val ppk: ('k,'d) data -> 'k Pp.pp
+      val ppd: ('k,'d) data -> 'd Pp.pp
+      val key: ('k,'d) data -> ('k,'d) t
+    end) = struct
+
+    type ('k,'d) data = ('k,'d) S.data
+
+    module V = MkVector(struct type ('k,'d,'unedeed) t = ('k,'d) S.data end)
+
+    let registry : unit V.t = V.create 8
+
+    let register data =
+      let key = S.key data in
+        V.inc_size key registry;
+        assert (if not (V.is_uninitialized registry key)
+                then raise AlreadyRegisteredKey else true);
+        V.set registry key data
+
+    let check_is_registered data =
+      assert (if V.is_uninitialized registry data
+              then raise UnregisteredKey else true)
+
+    let is_well_initialized () =
+      let well_initialized = ref true in
+      iter {iter = fun data ->
+          if V.is_uninitialized registry data then begin
+            Format.eprintf "[Warning] %a is not registered" pp data;
+            well_initialized := false;
+          end};
+      !well_initialized
+
+    let is_registered dom =
+      V.is_uninitialized registry dom
+
+    let get k =
+      check_is_registered k;
+      V.get registry k
+
+    let printk (type k) (type d) (k : (k,d) t) fmt s =
+      let data = get k in
+      (S.ppk data) fmt s
+    let printd (type k) (type d) (k : (k,d) t) fmt s =
+      let data = get k in
+      (S.ppd data) fmt s
+  end
 end

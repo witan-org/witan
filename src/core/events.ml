@@ -165,17 +165,13 @@ module Wait = struct
       val immediate : bool
     end
 
-    module VDem : Vector_hetero.S2 with type ('k,'d) key = ('k,'d) Dem.t
-                                    and type ('k,'d,'unneeded) data =
-                                          (module Dem with type event = 'k and type runable = 'd)
+    val register_dem : (module Dem with type event = 'k and type runable = 'd) -> unit
 
-    module RegisterDem : functor (D : Dem) -> sig  end
+    val get_dem : ('k, 'd) Dem.t -> (module Dem with type event = 'k and type runable = 'd)
 
-    val get_dem : ('a, 'b) Dem.t -> ('a, 'b, unit) VDem.data
+    val print_dem_event : ('a, 'b) Dem.t -> 'a Pp.pp
 
-    val print_dem_event : ('a, 'b) Dem.t -> Format.formatter -> 'a -> unit
-
-    val print_dem_runable : ('a, 'b) Dem.t -> Format.formatter -> 'b -> unit
+    val print_dem_runable : ('a, 'b) Dem.t -> 'b Pp.pp
 
     val new_pending_daemon : delayed -> ('a, 'b) Dem.t -> 'b -> unit
 
@@ -187,7 +183,7 @@ module Wait = struct
     val wakeup_events_bag :
       'a translate -> delayed -> t Bag.t option -> 'a -> unit
 
-    val well_initialized : unit -> bool
+    val is_well_initialized : unit -> bool
   end
 
   module Make(S:sig
@@ -217,40 +213,30 @@ module Wait = struct
 
     end
 
-    module VDem = Dem.MkVector
-        (struct type ('k,'d,'unedeed) t =
-                  (module Dem with type event = 'k and type runable = 'd) end)
+    module Registry = Dem.Make_Registry(struct
+        type ('k,'d) data = (module Dem with type event = 'k and type runable = 'd)
+        let ppk (type k) (type d) (dem: (k,d) data) =
+          let module Dem = (val dem) in
+          Dem.print_event
+        let ppd (type k) (type d) (dem: (k,d) data) =
+          let module Dem = (val dem) in
+          Dem.print_runable
+        let key (type k) (type d) (dem: (k,d) data) =
+          let module Dem = (val dem) in
+          Dem.key
+      end
+      )
 
-    let defined_dem : unit VDem.t = VDem.create 8
+    let register_dem = Registry.register
+    let get_dem = Registry.get
 
-    module RegisterDem (D:Dem) = struct
-
-      let () =
-        VDem.inc_size D.key defined_dem;
-        assert (if not (VDem.is_uninitialized defined_dem D.key)
-                then raise Keys.AlreadyRegisteredKey else true);
-        let dem =
-          (module D: Dem with type event = D.event and type runable = D.runable) in
-        VDem.set defined_dem D.key dem
-
-    end
-
-    let get_dem k =
-      assert (if VDem.is_uninitialized defined_dem k
-              then raise Keys.UnregisteredKey else true);
-      VDem.get defined_dem k
-
-    let print_dem_event (type k) (type d) (k : (k,d) Dem.t) fmt s =
-      let module S = (val get_dem k) in
-      S.print_event fmt s
-
+    let print_dem_event = Registry.printk
     let () = Print.pdem_event.Print.pdem_event <- print_dem_event
 
-    let print_dem_runable (type k) (type d) (k : (k,d) Dem.t) fmt s =
-      let module S = (val get_dem k) in
-      S.print_runable fmt s
-
+    let print_dem_runable = Registry.printd
     let () = Print.pdem_runable.Print.pdem_runable <- print_dem_runable
+
+    let is_well_initialized = Registry.is_well_initialized
 
     let new_pending_daemon (type k) (type d) t (dem:(k,d) Dem.t) runable =
       let module Dem = (val get_dem dem) in
@@ -287,16 +273,6 @@ module Wait = struct
         | Some events -> Bag.is_empty events in
       if is_empty then Debug.dprintf0 debug "[Solver] @[No scheduling@]"
       else Bag.iter (wakeup_event translate t info) (Opt.get events)
-
-    let well_initialized () =
-      let well_initialized = ref true in
-      Dem.iter {Dem.iter = fun dem ->
-          if VDem.is_uninitialized defined_dem dem then begin
-            Format.eprintf
-              "[Warning] The daemon %a is not registered" Dem.pp dem;
-            well_initialized := false;
-          end};
-      !well_initialized
 
 
   end

@@ -1028,7 +1028,7 @@ type d = Delayed.t
 module Ro : Ro with type t = Delayed.t = Delayed
 
 let check_initialization () =
-  VDom.well_initialized () && Wait.well_initialized ()
+  VDom.is_well_initialized () && Wait.is_well_initialized ()
 
 let () = Exn_printer.register (fun fmt exn ->
     match exn with

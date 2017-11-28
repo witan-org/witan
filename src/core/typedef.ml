@@ -44,23 +44,19 @@ module type Sem = sig
   val key: t sem
 end
 
-module VSem = Sem.MkVector
-  (struct type ('a,'unedeed) t =
-            (module Sem with type t = 'a)
-   end)
+module SemRegistry = Sem.Make_Registry(struct
+    type 'a data = (module Sem with type t = 'a)
+    let pp (type a) (sem: a data) =
+      let module Sem = (val sem) in
+      Sem.pp
+    let key (type a) (sem: a data) =
+      let module Sem = (val sem) in
+      Sem.key
+  end)
 
-let defined_sem : unit VSem.t = VSem.create 8
-let is_sem_uninitialized sem = VSem.is_uninitialized defined_sem sem
-let check_sem_registered k =
-  assert (if is_sem_uninitialized k then raise Keys.UnregisteredKey else true)
-let get_sem k =
-  check_sem_registered k;
-  VSem.get defined_sem k
-
-let print_sem (type a) (k : a sem) fmt s =
-  let sem = get_sem k in
-  let module S = (val sem : Sem with type t = a) in
-  S.pp fmt s
+let check_sem_registered = SemRegistry.check_is_registered
+let print_sem = SemRegistry.print
+let get_sem = SemRegistry.get
 
 (** value *)
 type 'a value = 'a Value.t
@@ -70,24 +66,19 @@ module type Value = sig
   val key: t value
 end
 
-module VValue = Value.MkVector
-  (struct type ('a,'unedeed) t =
-            (module Value with type t = 'a)
-   end)
+module ValueRegistry = Value.Make_Registry(struct
+    type 'a data = (module Value with type t = 'a)
+    let pp (type a) (value: a data) =
+      let module Value = (val value) in
+      Value.pp
+    let key (type a) (value: a data) =
+      let module Value = (val value) in
+      Value.key
+  end)
 
-let defined_value : unit VValue.t = VValue.create 8
-let is_value_uninitialized value = VValue.is_uninitialized defined_value value
-let check_value_registered k =
-  assert (if is_value_uninitialized k then raise Keys.UnregisteredKey else true)
-
-let get_value k =
-  check_value_registered k;
-  VValue.get defined_value k
-
-let print_value (type a) (k : a value) fmt s =
-  let value = get_value k in
-  let module S = (val value : Value with type t = a) in
-  S.pp fmt s
+let check_value_registered = ValueRegistry.check_is_registered
+let print_value = ValueRegistry.print
+let get_value = ValueRegistry.get
 
 (** Dem *)
 
@@ -161,7 +152,7 @@ module Node = struct
   let semindex : unit SemIndex.t = SemIndex.create 8
 
   let nodesem sem v ty : nodesem =
-    check_sem_registered sem;
+    SemRegistry.check_is_registered sem;
     (SemIndex.get semindex sem) v ty
 
   module ValueIndex = Value.MkVector
@@ -170,7 +161,7 @@ module Node = struct
   let valueindex : unit ValueIndex.t = ValueIndex.create 8
 
   let nodevalue value v ty : nodevalue =
-    check_value_registered value;
+    ValueRegistry.check_is_registered value;
     (ValueIndex.get valueindex value) v ty
 
   (** Just used for checking the typability *)
@@ -320,11 +311,7 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
     | Node.Sem(_,_,sem',_) as v -> assert (Sem.equal sem' D.key); v
 
   let () =
-    VSem.inc_size D.key defined_sem;
-    assert (if not (VSem.is_uninitialized defined_sem D.key)
-      then raise Keys.AlreadyRegisteredKey else true);
-    let sem = (module D: Sem with type t = D.t) in
-    VSem.set defined_sem D.key sem;
+    SemRegistry.register (module D: Sem with type t = D.t);
     Node.SemIndex.set Node.semindex D.key (fun v ty -> index v ty)
 
 end
@@ -451,11 +438,7 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
     | Node.Value(_,_,value',_) as v -> assert (Value.equal value' D.key); v
 
   let () =
-    VValue.inc_size D.key defined_value;
-    assert (if not (VValue.is_uninitialized defined_value D.key)
-      then raise Keys.AlreadyRegisteredKey else true);
-    let value = (module D: Value with type t = D.t) in
-    VValue.set defined_value D.key value;
+    ValueRegistry.register (module D: Value with type t = D.t);
     Node.ValueIndex.set Node.valueindex D.key (fun v ty -> index v ty)
 
 end
@@ -499,13 +482,5 @@ end
 
 
 let check_initialization () =
-  let well_initialized = ref true in
-
-  Sem.iter {Sem.iter = fun sem ->
-    if VSem.is_uninitialized defined_sem sem then begin
-      Format.eprintf
-        "[Warning] The set of values %a is not registered" Sem.pp sem;
-      well_initialized := false;
-    end};
-
-  !well_initialized
+  SemRegistry.is_well_initialized () &&
+  ValueRegistry.is_well_initialized ()

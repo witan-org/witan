@@ -243,8 +243,7 @@ module Key = struct
       let key = D.key.dk_id
       let immediate = D.immediate
     end in
-    let module RDem = Solver.Wait.RegisterDem(Dem) in
-    ()
+    Solver.Wait.register_dem (module Dem)
 
     let init d =
       let module DemTable = struct
@@ -444,8 +443,7 @@ module Fast = struct
       let key = D.key.dk_id
       let immediate = D.immediate
     end in
-    let module RDem = Solver.Wait.RegisterDem(Dem) in
-    ()
+    Solver.Wait.register_dem (module Dem)
 
     let init d =
       Solver.Delayed.set_env d D.key.dk_data [];

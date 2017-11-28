@@ -134,7 +134,7 @@ module Wait : Events.Wait.S with type delayed = Delayed.t and type delayed_ro = 
 
 module type Dom = Dom.Dom_partial with type delayed := Delayed.t and type pexp := Explanation.pexp
 
-module RegisterDom (D:Dom) : sig end
+val register_dom : (module Dom with type t = 'a) -> unit
 
 (** {2 External use of the solver} *)
 include Getter

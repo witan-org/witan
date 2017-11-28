@@ -48,54 +48,19 @@ module Make(S:sig type delayed type pexp end) = struct
 
   module type Dom = Dom_partial with type delayed := S.delayed and type pexp := S.pexp
 
-  module VDom = Dom.MkVector
-      (struct type ('a,'unedeed) t =
-                (module Dom with type t = 'a)
-      end)
+  include Dom.Make_Registry(struct
+      type 'a data = (module Dom with type t = 'a)
+      let pp (type a) (dom: a data) =
+        let module Dom = (val dom) in
+        Dom.pp
+      let key (type a) (dom: a data) =
+        let module Dom = (val dom) in
+        Dom.key
+    end)
 
-  let defined_dom : unit VDom.t = VDom.create 8
-
-  module RegisterDom (D:Dom) = struct
-
-    let () =
-      VDom.inc_size D.key defined_dom;
-      assert (if not (VDom.is_uninitialized defined_dom D.key)
-              then raise Keys.AlreadyRegisteredKey else true);
-      let dom = (module D: Dom with type t = D.t) in
-      VDom.set defined_dom D.key dom
-
-  end
-
-  let check_is_registered dom =
-    assert (if VDom.is_uninitialized defined_dom dom
-            then raise Keys.UnregisteredKey else true)
-
-  let well_initialized () =
-    let well_initialized = ref true in
-    Dom.iter {Dom.iter = fun dom ->
-        if VDom.is_uninitialized defined_dom dom then begin
-          Format.eprintf
-            "[Warning] The domain %a is not registered" Dom.pp dom;
-          well_initialized := false;
-        end else begin
-          Debug.dprintf2 debug "[Solver] @[domain %a initialized@]"
-            Dom.pp dom;
-        end};
-    !well_initialized
-
-  let is_registered dom = VDom.is_uninitialized defined_dom dom
-
-  let get_dom k =
-    assert (if VDom.is_uninitialized defined_dom k
-            then raise Keys.UnregisteredKey else true);
-    VDom.get defined_dom k
-
-  let get_dom_with_prefix_to_remove = get_dom
-
-  let print_dom (type a) (k : a dom) fmt s =
-    let dom = get_dom k in
-    let module D = (val dom : Dom with type t = a) in
-    D.pp fmt s
+  let register_dom = register
+  let get_dom = get
+  let print_dom = print
 
   let print_dom_opt k fmt = function
     | None -> Format.pp_print_string fmt "N"
