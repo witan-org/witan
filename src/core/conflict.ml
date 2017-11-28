@@ -20,23 +20,19 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-(** Decision, Conflict and Learning *)
 
-(** {2 Decision} *)
 module Cho = Explanation.Cho
 
 type 'd decdone  =
-| DecNo (** No decision to do *)
-| DecTodo of 'd (** This decision should be done *)
+| DecNo
+| DecTodo of 'd
 
 module type Cho = sig
-  (** Allows to keep any information for the potential decision *)
   module OnWhat  : sig
     type t
     val pp: t Pp.pp
   end
 
-  (** Allows to transfer any information from {!choose_decision} and {!make_decision} *)
   module What: sig
     type t
     val pp: t Pp.pp
@@ -44,17 +40,14 @@ module type Cho = sig
 
   val choose_decision:
     Solver.Delayed.t -> OnWhat.t -> What.t decdone
-  (** Answer the question: Is the decision still needed? *)
 
   val make_decision:
     Solver.Delayed.t -> Explanation.dec -> OnWhat.t -> What.t -> unit
-  (** Propagate the decision using {!Solver.Delayed.t} *)
 
   val key: (OnWhat.t,What.t) Cho.t
 
 end
 
-(** {2 Conflict} *)
 
 module Conflict = struct
   type t
@@ -76,21 +69,11 @@ module type Exp = sig
 
   val analyse  :
     Conflict.t -> Explanation.Age.t -> t -> 'a Con.t -> 'a -> congen
-    (** One step of the analysis done on the trail. If the explanation
-        as nothing to do with this conflict it should return it
-        unchanged
-    *)
 end
 
 let register_exp: (module Exp) -> unit = fun _ -> assert false
 
-let contradiction = Con.create_key "contradiction"
-(** The start of the conflict analysis. It is false. It should be
-    replaced by {!Exp.analyse} by the explanation given to
-    {!Delayed.contradiction}
- *)
-
-(** {2 Learning} *)
+type levels = {levels: 'a. Typedef.Node.t -> 'a Typedef.Value.t -> unit}
 
 module type Con = sig
 
@@ -99,7 +82,21 @@ module type Con = sig
   val pp: t Pp.pp
 
   val apply_learnt: t -> Typedef.Node.t
-  (** Build the constraint that correspond to the conflict learnt *)
+
+  val levels: levels -> t -> unit
+
 end
 
 let register_con: (module Con) -> unit = fun _ -> assert false
+
+
+let contradiction = Con.create_key "contradiction"
+
+
+let () = register_con (module (struct
+                        include Stdlib.DUnit
+                        let apply_learnt () = raise Std.Impossible
+                        let levels _ () = raise Std.Impossible
+                      end))
+
+let is_con_contradiction con = Con.equal contradiction con

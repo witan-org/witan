@@ -85,13 +85,15 @@ end
 
 val register_exp: (module Exp) -> unit
 
-val contradiction: unit Con.t
-(** The start of the conflict analysis. It is false. It should be
-    replaced by {!Exp.analyse} by the explanation given to
-    {!Delayed.contradiction}
- *)
+val is_con_contradiction: 'a Con.t -> bool
+(** Tests if it is the start of the conflict analysis. It means false.
+    It should be replaced by {!Exp.analyse} by the conflict of the
+    explanation given to {!Delayed.contradiction}
+*)
 
 (** {2 Learning} *)
+
+type levels = {levels: 'a. Typedef.Node.t -> 'a Typedef.Value.t -> unit}
 
 module type Con = sig
 
@@ -101,6 +103,12 @@ module type Con = sig
 
   val apply_learnt: t -> Typedef.Node.t
   (** Build the constraint that correspond to the conflict learnt *)
+
+  val levels: levels -> t -> unit
+  (** iterate on what depends the conflict (classe and value).
+      It is used for computing the back-jumping level.
+  *)
+
 end
 
 val register_con: (module Con) -> unit
