@@ -6,6 +6,7 @@
 (*           alternatives)                                               *)
 (*    INRIA (Institut National de Recherche en Informatique et en        *)
 (*           Automatique)                                                *)
+(*    CNRS  (Centre national de la recherche scientifique)               *)
 (*                                                                       *)
 (*  you can redistribute it and/or modify it under the terms of the GNU  *)
 (*  Lesser General Public License as published by the Free Software      *)
