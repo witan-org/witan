@@ -4,7 +4,7 @@
 (executable
   ((name witan)
    (public_name witan)
-   (libraries (containers gen dolmen cmdliner witan.open witan.core
+   (libraries (containers gen dolmen cmdliner spelll witan.open witan.core
                witan.theories.LRA
                witan.theories.ite
                witan.theories.arrays
@@ -15,4 +15,3 @@
    (ocamlopt_flags (:standard -O3 -color always
                     -unbox-closures -unbox-closures-factor 20))
   ))
-
