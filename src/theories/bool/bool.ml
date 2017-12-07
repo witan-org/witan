@@ -22,7 +22,7 @@
 
 open Stdlib
 open Witan_core
-open Solver
+open Egraph
 
 let lazy_propagation = false
 
@@ -57,7 +57,7 @@ let with_other = ref false
 *)
 
 
-let is env node = Solver.Delayed.get_value env dom node
+let is env node = Egraph.Delayed.get_value env dom node
 let is_true  env node = Node.equal node cl_true || is env node = Some true
 let is_false env node = Node.equal node cl_false || is env node = Some false
 let is_unknown env node = is env node = None
@@ -68,11 +68,11 @@ module D = struct
   let merged b1 b2 = Opt.equal (==) b1 b2
 
   type expmerge =
-  | Merge of Explanation.pexp * Node.t * Node.t
-  | DomMerge of Explanation.pexp * Node.t
+  | Merge of Trail.pexp * Node.t * Node.t
+  | DomMerge of Trail.pexp * Node.t
 
-  let expmerge : expmerge Explanation.exp =
-    Explanation.Exp.create_key "Bool.merge"
+  let expmerge : expmerge Trail.exp =
+    Trail.Exp.create_key "Bool.merge"
 
   let true_is_false d node pexp =
     let pexp = Delayed.mk_pexp d expmerge (DomMerge(pexp,node)) in
@@ -487,9 +487,9 @@ let set_true env pexp node = set_bool env pexp node true
 
 let set_false env pexp node = set_bool env pexp node false
 
-let chobool = Explanation.Cho.create_key "Bool.cho"
+let chobool = Trail.Cho.create_key "Bool.cho"
 
-let make_dec node = Explanation.GCho(node,chobool,node)
+let make_dec node = Trail.GCho(node,chobool,node)
 
 let () = Variable.register_sort ~dec:make_dec ty
 (*
@@ -501,18 +501,18 @@ module ChoBool = struct
 
   let make_decision env dec node b =
     Debug.dprintf5 Conflict.print_decision
-      "[Bool] decide %b on %a at %a" b Node.pp node Explanation.print_dec dec;
-    let pexp = Explanation.mk_pcho dec chobool node b in
+      "[Bool] decide %b on %a at %a" b Node.pp node Trail.print_dec dec;
+    let pexp = Trail.mk_pcho dec chobool node b in
     set_bool env pexp node b
 
   let choose_decision env node =
-    match Solver.Delayed.get_dom env dom node with
+    match Egraph.Delayed.get_dom env dom node with
     | Some _ -> DecNo
     | None -> DecTodo true (** why not true? *)
 
-  let analyse (type a) t (con: a Explanation.con) node b =
+  let analyse (type a) t (con: a Trail.con) node b =
     let return (s:bool Types.Node.M.t) : a rescon =
-      match Explanation.Con.Eq.eq_type conclause con with
+      match Trail.Con.Eq.eq_type conclause con with
       | None -> GOther (conclause,s)
       | Some Types.Eq -> GRequested s in
     ComputeConflict.set_dec_cho t chobool node;
@@ -525,7 +525,7 @@ end
 
 module EChoBool = Conflict.RegisterCho(ChoBool)
 
-let choclause = Explanation.Cho.create_key "Bool.choclause"
+let choclause = Trail.Cho.create_key "Bool.choclause"
 
 module ChoClause = struct
   module Key = Th
@@ -573,19 +573,19 @@ let get_dom t age node s =
     let l = ComputeConflict.get_dom t age node dom in
     (* Format.fprintf (Debug.get_debug_formatter ()) *)
     (*   "[get_dom] @[%a@]" *)
-    (*   (Pp.list Pp.semi Explanation.print_mod_dom) l; *)
+    (*   (Pp.list Pp.semi Trail.print_mod_dom) l; *)
     List.fold_left (fun s mod_dom ->
         (* Format.fprintf (Debug.get_debug_formatter ()) *)
         (*   "[rlist] @[%a@]" *)
         (*   Conflict.print_rlist rlist; *)
-        let pexp = mod_dom.Explanation.modpexp in
+        let pexp = mod_dom.Trail.modpexp in
         let s = get_con s t (ComputeConflict.get_pexp t pexp conclause) in
         let s,deps =
           ComputeConflict.Equal.one_equal t
             ~from:node
-            ~to_:mod_dom.Explanation.modcl
+            ~to_:mod_dom.Trail.modcl
             conclause
-            s Explanation.Deps.empty
+            s Trail.Deps.empty
         in
         ComputeConflict.add_deps t deps;
         s) s l
@@ -607,10 +607,10 @@ module ExpMerge = struct
   let pp fmt = function
     | Merge  (pexp,cl1,cl2)   ->
       Format.fprintf fmt "Merge!(%a,%a,%a)"
-        Explanation.pp_pexp pexp Node.pp cl1 Node.pp cl2
+        Trail.pp_pexp pexp Node.pp cl1 Node.pp cl2
     | DomMerge (pexp,node) ->
       Format.fprintf fmt "DomMerge!(%a,%a)"
-        Explanation.pp_pexp pexp Node.pp node
+        Trail.pp_pexp pexp Node.pp node
 
 (*
   let need_dom t age node =
@@ -629,10 +629,10 @@ module ExpMerge = struct
 
   let analyse :
       type a. Conflict.ComputeConflict.t ->
-    Explanation.age -> a Explanation.con -> t -> a Conflict.rescon =
+    Trail.age -> a Trail.con -> t -> a Conflict.rescon =
     fun t age con exp ->
     let return (s:bool Types.Node.M.t) : a Conflict.rescon =
-      match Explanation.Con.Eq.eq_type conclause con with
+      match Trail.Con.Eq.eq_type conclause con with
       | None -> GOther (conclause,s)
       | Some Types.Eq -> GRequested s in
     match exp with
@@ -708,7 +708,7 @@ module ExpProp = struct
 
   let analyse :
       type a. Conflict.ComputeConflict.t ->
-    Explanation.age -> a Explanation.con -> t -> a Conflict.rescon =
+    Trail.age -> a Trail.con -> t -> a Conflict.rescon =
     fun t age con exp ->
     let s =
       match exp with
@@ -744,8 +744,8 @@ module ExpProp = struct
 
   let expdomlimit :
     type a b. Conflict.ComputeConflict.t ->
-      Explanation.age -> b dom -> Node.t ->
-      a Explanation.con -> b option -> t -> a Conflict.rescon =
+      Trail.age -> b dom -> Node.t ->
+      a Trail.con -> b option -> t -> a Conflict.rescon =
     fun t age dom' node con b _ ->
       (* should not fail since we only set the domain *)
       let b = Opt.get_exn Impossible b in
@@ -791,7 +791,7 @@ module ConClause = struct
               else acc) False v
       with Exit -> True
     method decide :
-      'a. 'a Conflict.fold_decisions -> Solver.Delayed.t -> 'a -> 'a =
+      'a. 'a Conflict.fold_decisions -> Egraph.Delayed.t -> 'a -> 'a =
       fun f d acc ->
         Node.M.fold_left (fun acc node b ->
             match is d node with
@@ -838,7 +838,7 @@ module ConClause = struct
 
   (* let propadom: *)
   (*   type a. ComputeConflict.t -> *)
-  (*     Explanation.Age.t -> a dom -> Node.t -> a option -> t rescon = *)
+  (*     Trail.Age.t -> a dom -> Node.t -> a option -> t rescon = *)
   (*     fun t age dom' node bval -> *)
   (*       if ComputeConflict.before_first_dec t age *)
   (*       then GRequested Node.M.empty *)

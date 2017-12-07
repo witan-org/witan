@@ -132,10 +132,10 @@ module Node = struct
     Simple_vector.set names i s;
     match to_reg with
     | None ->
-      Debug.dprintf1 debug_create "[Solver] @[fresh @@%s@]" s;
+      Debug.dprintf1 debug_create "[Egraph] @[fresh @@%s@]" s;
       Fresh(i,ty)
     | Some (dem,event) ->
-      Debug.dprintf1 debug_create "[Solver] @[fresh to reg @@%s@]" s;
+      Debug.dprintf1 debug_create "[Egraph] @[fresh to reg @@%s@]" s;
       Fresh_to_reg(i,ty,dem,event)
 
   let rename node s =
@@ -287,7 +287,7 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
       if Simple_vector.is_uninitialized Node.names i then
         let s = Strings.find_new_name Node.used_names ""
         (** TODO use Sem.pp or Sem.print_debug *) in
-        Debug.dprintf3 debug_create "[Solver] @[index %a into @@%s@]"
+        Debug.dprintf3 debug_create "[Egraph] @[index %a into @@%s@]"
           D.pp v s;
         Simple_vector.set Node.names i s
     end;
@@ -414,7 +414,7 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
       if Simple_vector.is_uninitialized Node.names i then
         let s = Strings.find_new_name Node.used_names ""
         (** TODO use Value.pp or Value.print_debug *) in
-        Debug.dprintf3 debug_create "[Solver] @[index %a into @@%s@]"
+        Debug.dprintf3 debug_create "[Egraph] @[index %a into @@%s@]"
           D.pp v s;
         Simple_vector.set Node.names i s
     end;

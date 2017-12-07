@@ -22,7 +22,7 @@
 (*************************************************************************)
 
 
-module Cho = Explanation.Cho
+module Cho = Trail.Cho
 
 type 'd decdone  =
 | DecNo
@@ -40,10 +40,10 @@ module type Cho = sig
   end
 
   val choose_decision:
-    Solver.Delayed.t -> OnWhat.t -> What.t decdone
+    Egraph.Delayed.t -> OnWhat.t -> What.t decdone
 
   val make_decision:
-    Solver.Delayed.t -> Explanation.dec -> OnWhat.t -> What.t -> unit
+    Egraph.Delayed.t -> Trail.dec -> OnWhat.t -> What.t -> unit
 
   val key: (OnWhat.t,What.t) Cho.t
 
@@ -54,7 +54,7 @@ module Conflict = struct
   type t
 end
 
-module Exp = Explanation.Exp
+module Exp = Trail.Exp
 module Con = Keys.Make_key(struct end)
 
 type congen =
@@ -66,10 +66,10 @@ module type Exp = sig
 
   val pp: t Pp.pp
 
-  val key: t Explanation.Exp.t
+  val key: t Trail.Exp.t
 
   val analyse  :
-    Conflict.t -> Explanation.Age.t -> t -> 'a Con.t -> 'a -> congen
+    Conflict.t -> Trail.Age.t -> t -> 'a Con.t -> 'a -> congen
 end
 
 let register_exp: (module Exp) -> unit = fun _ -> assert false

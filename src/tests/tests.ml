@@ -130,7 +130,7 @@ let run_test_tt_main ?(arg_specs=[]) suite =
 (*** End *)
 
 let () =
-  if not (Solver.check_initialization ()) then
+  if not (Egraph.check_initialization ()) then
     exit 1
 
 let _ =

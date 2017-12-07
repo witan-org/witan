@@ -36,22 +36,22 @@ val gen   : bool -> (Node.t * bool) list -> Node.t
     not_b0 (or (not_b1 cl1,not_b2 cl2)) with not_x f = if x then not f else f
 *)
 
-val set_true  : Solver.d -> Explanation.pexp -> Node.t -> unit
-val set_false : Solver.d -> Explanation.pexp -> Node.t -> unit
+val set_true  : Egraph.d -> Trail.pexp -> Node.t -> unit
+val set_false : Egraph.d -> Trail.pexp -> Node.t -> unit
 
-val is       : Solver.d -> Node.t -> bool option
-val is_true  : Solver.d -> Node.t -> bool
-val is_false : Solver.d -> Node.t -> bool
+val is       : Egraph.d -> Node.t -> bool option
+val is_true  : Egraph.d -> Node.t -> bool
+val is_false : Egraph.d -> Node.t -> bool
 (** is_true t node = false means the value is not constrained by the
     current constraints or due to incompletness *)
-val is_unknown : Solver.d -> Node.t -> bool
+val is_unknown : Egraph.d -> Node.t -> bool
 
-(* val true_is_false : Solver.d -> Node.t -> Explanation.pexp -> 'a *)
+(* val true_is_false : Egraph.d -> Node.t -> Trail.pexp -> 'a *)
 
-val th_register: Solver.d -> unit
-val th_register_alone: Solver.d -> unit
+val th_register: Egraph.d -> unit
+val th_register_alone: Egraph.d -> unit
 
-val chobool: (Node.t,bool) Explanation.Cho.t
+val chobool: (Node.t,bool) Trail.Cho.t
 
 val make_dec: Variable.make_dec
 

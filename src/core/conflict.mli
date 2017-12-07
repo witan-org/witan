@@ -24,7 +24,7 @@
 (** Decision, Conflict and Learning *)
 
 (** {2 Decision} *)
-module Cho = Explanation.Cho
+module Cho = Trail.Cho
 
 type 'd decdone  =
 | DecNo (** No decision to do *)
@@ -44,12 +44,12 @@ module type Cho = sig
   end
 
   val choose_decision:
-    Solver.Delayed.t -> OnWhat.t -> What.t decdone
+    Egraph.Delayed.t -> OnWhat.t -> What.t decdone
   (** Answer the question: Is the decision still needed? *)
 
   val make_decision:
-    Solver.Delayed.t -> Explanation.dec -> OnWhat.t -> What.t -> unit
-  (** Propagate the decision using {!Solver.Delayed.t} *)
+    Egraph.Delayed.t -> Trail.dec -> OnWhat.t -> What.t -> unit
+  (** Propagate the decision using {!Egraph.Delayed.t} *)
 
   val key: (OnWhat.t,What.t) Cho.t
 
@@ -62,7 +62,7 @@ module Conflict : sig
   type t
 end
 
-module Exp = Explanation.Exp
+module Exp = Trail.Exp
 module Con: Keys.Key
 
 type congen =
@@ -74,10 +74,10 @@ module type Exp = sig
 
   val pp: t Pp.pp
 
-  val key: t Explanation.Exp.t
+  val key: t Trail.Exp.t
 
   val analyse  :
-    Conflict.t -> Explanation.Age.t -> t -> 'a Con.t -> 'a -> congen
+    Conflict.t -> Trail.Age.t -> t -> 'a Con.t -> 'a -> congen
     (** One step of the analysis done on the trail. If the explanation
         as nothing to do with this conflict it should return it
         unchanged

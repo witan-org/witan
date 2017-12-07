@@ -24,7 +24,7 @@
 open Stdlib
 open Typedef
 
-type make_dec = Node.t -> Explanation.chogen
+type make_dec = Node.t -> Trail.chogen
 
 module Dem = struct
 
@@ -38,7 +38,7 @@ module Dem = struct
   let throttle = 100
   let wakeup d = function
     | Events.Fired.EventRegNode (node,make_dec) ->
-      Solver.Delayed.register_decision d (make_dec node)
+      Egraph.Delayed.register_decision d (make_dec node)
     | _ -> assert false
 end
 

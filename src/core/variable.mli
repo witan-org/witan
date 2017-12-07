@@ -23,7 +23,7 @@
 
 open Typedef
 
-type make_dec = Node.t -> Explanation.chogen
+type make_dec = Node.t -> Trail.chogen
 
 val cst: Ty.t -> string -> Node.t
 (** same string, same class *)
@@ -31,10 +31,10 @@ val cst: Ty.t -> string -> Node.t
 val fresh: Ty.t -> string -> Node.t
 (** always fresh *)
 
-val add_dec: dec:make_dec -> Solver.Delayed.t -> Node.t -> unit
+val add_dec: dec:make_dec -> Egraph.Delayed.t -> Node.t -> unit
 (** Ask for a decision for this *)
 
 val register_sort: dec:make_dec -> Ty.t -> unit
 
-val th_register: Solver.Delayed.t -> unit
+val th_register: Egraph.Delayed.t -> unit
 (** Run on every solver that will use these function *)

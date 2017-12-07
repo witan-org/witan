@@ -103,17 +103,17 @@ module Key = struct
 
     val immediate: bool
     val wakeup:
-      Solver.Delayed.t -> Key.t -> Data.t Events.Fired.t ->
+      Egraph.Delayed.t -> Key.t -> Data.t Events.Fired.t ->
       info -> Key.t alive
     (** the Events.t in wakeup is a subset of the one given in watch *)
   end
 
   (** mark it attached if it is not already the case *)
   let mark_dem :
-  type k d i. Solver.Delayed.t -> (k,d,i) t -> k -> unit =
+  type k d i. Egraph.Delayed.t -> (k,d,i) t -> k -> unit =
     fun d dem k ->
       try
-        let module DemTable = (val (Solver.Delayed.get_env d dem.dk_data)) in
+        let module DemTable = (val (Egraph.Delayed.get_env d dem.dk_data)) in
         let module DemTable' = struct
           include DemTable
           let state = DemTable.Key.M.change (function
@@ -123,13 +123,13 @@ module Key = struct
               | Some (Alive _) -> raise Exit)
               k DemTable.state
         end in
-        Solver.Delayed.set_env d dem.dk_data (module DemTable')
+        Egraph.Delayed.set_env d dem.dk_data (module DemTable')
       with Exit -> ()
 
   module Register(D:S) = struct
 
     let rec run d k =
-      let module DemTable = (val (Solver.Delayed.get_env d D.key.dk_data)) in
+      let module DemTable = (val (Egraph.Delayed.get_env d D.key.dk_data)) in
       match DemTable.Key.M.find k (DemTable.state) with
       | Dead ->
         Debug.dprintf4 debug "[Demon] @[Daemon %a for %a is dead@]"
@@ -151,7 +151,7 @@ module Key = struct
           let state = DemTable.Key.M.add k (Alive([],info)) (DemTable.state)
         end
         in
-        Solver.Delayed.set_env d D.key.dk_data (module DemTable');
+        Egraph.Delayed.set_env d D.key.dk_data (module DemTable');
         (** wakeup *)
         let alive = D.wakeup d k events info in
         (** delayed can be modified *)
@@ -165,7 +165,7 @@ module Key = struct
               Dem.pp D.key.dk_id DemTable.Key.pp k;
             begin
               let module DemTable =
-                (val (Solver.Delayed.get_env d D.key.dk_data)) in
+                (val (Egraph.Delayed.get_env d D.key.dk_data)) in
               (** Dead even if event have been added *)
               let state' = DemTable.Key.M.add k demstate (DemTable.state) in
               let module DemTable' = struct
@@ -173,7 +173,7 @@ module Key = struct
                 let state = state'
               end
               in
-              Solver.Delayed.set_env d D.key.dk_data (module DemTable')
+              Egraph.Delayed.set_env d D.key.dk_data (module DemTable')
             end
           | AliveReattached ->
             Debug.dprintf0 debug "[Demon] @[Reattach daemon@]";
@@ -181,7 +181,7 @@ module Key = struct
         None
 
     let enqueue d event =
-      let module DemTable = (val (Solver.Ro.get_env d D.key.dk_data)) in
+      let module DemTable = (val (Egraph.Ro.get_env d D.key.dk_data)) in
       let change_state k l =
           Debug.dprintf6 debug
           "[Demon] @[schedule %a for %a with %a@]"
@@ -191,7 +191,7 @@ module Key = struct
           include DemTable
           let state = DemTable.Key.M.add k l DemTable.state
         end in
-        Solver.Ro.set_env d D.key.dk_data (module DemTable')
+        Egraph.Ro.set_env d D.key.dk_data (module DemTable')
       in
       let rec update_state k data =
         match DemTable.Key.M.find_opt k DemTable.state with
@@ -244,7 +244,7 @@ module Key = struct
       let key = D.key.dk_id
       let immediate = D.immediate
     end in
-    Solver.Wait.register_dem (module Dem)
+    Egraph.Wait.register_dem (module Dem)
 
     let init d =
       let module DemTable = struct
@@ -253,12 +253,12 @@ module Key = struct
         type info = D.info let default = D.default
         let state = Key.M.empty
       end in
-      Solver.Delayed.set_env d D.key.dk_data (module DemTable);
+      Egraph.Delayed.set_env d D.key.dk_data (module DemTable);
 
   end
 
   let attach :
-    type k d i. Solver.Delayed.t -> (k,d,i) t -> k -> d Create.t -> unit =
+    type k d i. Egraph.Delayed.t -> (k,d,i) t -> k -> d Create.t -> unit =
     fun t dem k events ->
       mark_dem t dem k;
     (** record waiters *)
@@ -267,15 +267,15 @@ module Key = struct
         Create.pp ev;
         match ev with
         | Create.EventDom (node,dom,data) ->
-          Solver.Delayed.attach_dom t node dom dem.dk_id (k,data)
+          Egraph.Delayed.attach_dom t node dom dem.dk_id (k,data)
         | Create.EventValue (node,value,data) ->
-          Solver.Delayed.attach_value t node value dem.dk_id (k,data)
+          Egraph.Delayed.attach_value t node value dem.dk_id (k,data)
         | Create.EventChange (node,data) ->
-          Solver.Delayed.attach_node t node dem.dk_id (k,data)
+          Egraph.Delayed.attach_node t node dem.dk_id (k,data)
         | Create.EventRegCl (node,data) ->
-          Solver.Delayed.attach_reg_node t node dem.dk_id (k,data)
+          Egraph.Delayed.attach_reg_node t node dem.dk_id (k,data)
         | Create.EventRegSem (sem,data) ->
-          Solver.Delayed.attach_reg_sem t sem dem.dk_id (k,data)
+          Egraph.Delayed.attach_reg_sem t sem dem.dk_id (k,data)
       in
       List.iter iter events
 
@@ -287,7 +287,7 @@ module Key = struct
   | SRedirected of 'k
 
   let is_attached (type k) (type d) (type i) t (dem: (k,d,i) t) (k:k) =
-    let module DemTable = (val (Solver.Delayed.get_env t dem.dk_data)) in
+    let module DemTable = (val (Egraph.Delayed.get_env t dem.dk_data)) in
     match DemTable.Key.M.find_opt k DemTable.state with
     | None -> SUnborn
     | Some (Alive(_,i)) -> SAlive i
@@ -297,7 +297,7 @@ module Key = struct
   exception NotAlive
 
   let set_info (type k) (type d) (type i) t (dem: (k,d,i) t) (k:k) (i:i)  =
-    let module DemTable = (val (Solver.Delayed.get_env t dem.dk_data)) in
+    let module DemTable = (val (Egraph.Delayed.get_env t dem.dk_data)) in
     match DemTable.Key.M.find_exn NotAlive k DemTable.state with
     | Alive(w,_) ->
       let module DemTable' = struct
@@ -305,7 +305,7 @@ module Key = struct
         let state = DemTable.Key.M.add k (Alive(w,i)) DemTable.state
       end
       in
-      Solver.Delayed.set_env t dem.dk_data (module DemTable')
+      Egraph.Delayed.set_env t dem.dk_data (module DemTable')
     | _ -> raise NotAlive
 
 
@@ -313,7 +313,7 @@ module Key = struct
 
   let kill (type k) (type d) (type i) t (dem: (k,d,i) t) (k:k) =
     try
-      let module DemTable = (val (Solver.Delayed.get_env t dem.dk_data)) in
+      let module DemTable = (val (Egraph.Delayed.get_env t dem.dk_data)) in
       Debug.dprintf4 debug "[Demon] @[Kill dem %a %a@]"
         Dem.pp dem.dk_id DemTable.Key.pp k;
       let module DemTable' = struct
@@ -323,7 +323,7 @@ module Key = struct
           | _ -> Some Dead)
           k DemTable.state
       end in
-      Solver.Delayed.set_env t dem.dk_data (module DemTable')
+      Egraph.Delayed.set_env t dem.dk_data (module DemTable')
     with Exit -> ()
 
 end
@@ -358,7 +358,7 @@ module Fast = struct
     val immediate: bool
     val throttle: int (** todo int ref? *)
     (** number of time run in a row *)
-    val wakeup: Solver.Delayed.t -> Data.t Events.Fired.event -> unit
+    val wakeup: Egraph.Delayed.t -> Data.t Events.Fired.event -> unit
 
   end
 
@@ -378,10 +378,10 @@ module Fast = struct
             rem,(n-1)
           end
           else a::rem, n in
-      let events = Solver.Delayed.get_env d D.key.dk_data in
+      let events = Egraph.Delayed.get_env d D.key.dk_data in
       let events,n = last_rev D.key.dk_current D.throttle events in
       D.key.dk_remaining <- n;
-      Solver.Delayed.set_env d D.key.dk_data events;
+      Egraph.Delayed.set_env d D.key.dk_data events;
       let new_runable = if events != [] then Some () else None in
       let rec run_one () =
         if not (Queue.is_empty D.key.dk_current) then
@@ -392,7 +392,7 @@ module Fast = struct
             D.Data.pp (Events.Fired.get_data event);
           D.wakeup d event;
           Debug.dprintf0 debug "[Demon] @[Done@]";
-          if not D.immediate then Solver.Delayed.flush d;
+          if not D.immediate then Egraph.Delayed.flush d;
           run_one () in
       try
         run_one ();
@@ -409,11 +409,11 @@ module Fast = struct
     let enqueue d event =
       assert (D.key.dk_remaining >= 0);
       if D.key.dk_remaining = 0 then
-        let events = Solver.Ro.get_env d D.key.dk_data in
+        let events = Egraph.Ro.get_env d D.key.dk_data in
         Debug.dprintf4 debug
           "[Demon] @[schedule %a for %a@]"
           Dem.pp D.key.dk_id Events.Fired.pp event;
-        Solver.Ro.set_env d D.key.dk_data (event::events);
+        Egraph.Ro.set_env d D.key.dk_data (event::events);
         if events = [] then Events.Wait.EnqRun () else Events.Wait.EnqAlready
       else begin
         Debug.dprintf4 debug
@@ -444,10 +444,10 @@ module Fast = struct
       let key = D.key.dk_id
       let immediate = D.immediate
     end in
-    Solver.Wait.register_dem (module Dem)
+    Egraph.Wait.register_dem (module Dem)
 
     let init d =
-      Solver.Delayed.set_env d D.key.dk_data [];
+      Egraph.Delayed.set_env d D.key.dk_data [];
 
   end
 
@@ -455,15 +455,15 @@ module Fast = struct
     let open Create in
     List.iter (function
         | EventDom      (node,dom,data) ->
-          Solver.Delayed.attach_dom d node dom dem.dk_id data
+          Egraph.Delayed.attach_dom d node dom dem.dk_id data
         | EventValue    (node,value,data) ->
-          Solver.Delayed.attach_value d node value dem.dk_id data
+          Egraph.Delayed.attach_value d node value dem.dk_id data
         | EventRegCl  (node,data) ->
-          Solver.Delayed.attach_reg_node d node dem.dk_id data
+          Egraph.Delayed.attach_reg_node d node dem.dk_id data
         | EventChange   (node,data) ->
-          Solver.Delayed.attach_node d node dem.dk_id data
+          Egraph.Delayed.attach_node d node dem.dk_id data
         | EventRegSem (sem,data) ->
-          Solver.Delayed.attach_reg_sem d sem dem.dk_id data) events
+          Egraph.Delayed.attach_reg_sem d sem dem.dk_id data) events
 
   let fresh_with_reg_node dem s ty data =
     Node.fresh ~to_reg:(dem.dk_id,data) s ty
@@ -474,8 +474,8 @@ module Fast = struct
     ?(immediate=false)
     ?(throttle=100)
     (nodesem: (module Typedef.RegisteredSem with type t = a) )
-    (f:Solver.Delayed.t -> a -> unit)
-    (init_d:Solver.Delayed.t)
+    (f:Egraph.Delayed.t -> a -> unit)
+    (init_d:Egraph.Delayed.t)
     =
     let module NodeSem = (val nodesem) in
     let module DaemonInit = struct

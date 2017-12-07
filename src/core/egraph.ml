@@ -24,19 +24,19 @@
 open Stdlib
 open Typedef
 
-exception Contradiction of Explanation.pexp
+exception Contradiction of Trail.pexp
 
 let debug = Debug.register_info_flag
   ~desc:"for the core solver"
-  "Solver.all"
+  "Egraph.all"
 let debug_few = Debug.register_info_flag
   ~desc:"for the core solver"
-  "Solver.few"
+  "Egraph.few"
 
 let stats_set_dom =
-  Debug.register_stats_int ~name:"Solver.set_dom/merge" ~init:0
+  Debug.register_stats_int ~name:"Egraph.set_dom/merge" ~init:0
 let stats_set_value =
-  Debug.register_stats_int ~name:"Solver.set_value/merge" ~init:0
+  Debug.register_stats_int ~name:"Egraph.set_value/merge" ~init:0
 
 module DecTag = DInt
 
@@ -73,7 +73,7 @@ type t = {
           sem   : semtable VSemTable.t;
           value : unit VValueTable.t;
           envs  : unit Env.VectorH.t;
-          trail : Explanation.t;
+          trail : Trail.t;
   mutable current_delayed  : delayed_t; (** For assert-check *)
 }
 
@@ -82,11 +82,11 @@ and delayed_t = {
   env : t;
   todo_immediate_dem : action_immediate_dem Queue.t;
   todo_merge_dom : action_merge_dom Queue.t;
-  mutable todo_delayed_merge : (Explanation.pexp * Node.t * Node.t * bool) option;
+  mutable todo_delayed_merge : (Trail.pexp * Node.t * Node.t * bool) option;
   todo_merge : action_merge Queue.t;
   todo_ext_action : action_ext Queue.t;
   sched_daemon : Events.Wait.daemon_key -> unit;
-  sched_decision : Explanation.chogen -> unit;
+  sched_decision : Trail.chogen -> unit;
 }
 
 and action_immediate_dem =
@@ -94,10 +94,10 @@ and action_immediate_dem =
 
 and action_merge_dom =
 | SetMergeDomNode  :
-    Explanation.pexp * 'a Dom.t * Node.t * Node.t * bool -> action_merge_dom
+    Trail.pexp * 'a Dom.t * Node.t * Node.t * bool -> action_merge_dom
 
 and action_merge =
-| Merge of Explanation.pexp * Node.t * Node.t
+| Merge of Trail.pexp * Node.t * Node.t
 
 and action_ext =
 | ExtDem         : Events.Wait.daemon_key  -> action_ext
@@ -120,7 +120,7 @@ module Wait : Events.Wait.S with type delayed = delayed_t and type delayed_ro = 
   Events.Wait.Make(WaitDef)
 
 (** {2 Define domain registration} *)
-module VDom = Dom.Make(struct type delayed = delayed_t type pexp = Explanation.pexp end)
+module VDom = Dom.Make(struct type delayed = delayed_t type pexp = Trail.pexp end)
 include VDom
 
 let mk_dumb_delayed () = { env = Obj.magic 0;
@@ -147,7 +147,7 @@ let new_t () = {
   sem = VSemTable.create 5;
   value = VValueTable.create 5;
   envs = Env.VectorH.create 5;
-  trail = Explanation.create ();
+  trail = Trail.create ();
   current_delayed = dumb_delayed;
   }
 
@@ -162,7 +162,7 @@ let new_handle t =
   sem = VSemTable.copy t.sem;
   value = VValueTable.copy t.value;
   envs = Env.VectorH.copy t.envs;
-  trail = Explanation.new_handle t.trail;
+  trail = Trail.new_handle t.trail;
   current_delayed = t.current_delayed;
 }
 
@@ -403,7 +403,7 @@ module Delayed = struct
     Wait.wakeup_events_bag Events.Wait.translate_value t events (node,value)
 
   let add_pending_merge (t : t) pexp node node' =
-    Debug.dprintf4 debug "[Solver] @[add_pending_merge for %a and %a@]"
+    Debug.dprintf4 debug "[Egraph] @[add_pending_merge for %a and %a@]"
       Node.pp node Node.pp node';
     assert (is_registered t node);
     assert (is_registered t node');
@@ -425,9 +425,9 @@ module Delayed = struct
       if Debug.test_flag debug_few then begin
       match Only_for_solver.nodesem node with
       | None ->
-        Debug.dprintf2 debug_few "[Solver] @[register %a@]" Node.pp node
+        Debug.dprintf2 debug_few "[Egraph] @[register %a@]" Node.pp node
       | Some nodesem ->
-        Debug.dprintf4 debug_few "[Solver] @[register %a: %a@]"
+        Debug.dprintf4 debug_few "[Egraph] @[register %a: %a@]"
           Node.pp node NodeSem.pp nodesem
       end;
       assert ( check_no_dom t node );
@@ -477,11 +477,11 @@ module Delayed = struct
         *)
         t.env.repr <- Node.M.add node0' node t.env.repr;
         let pexp = pexp () in
-        Explanation.add_merge_start t.env.trail pexp
+        Trail.add_merge_start t.env.trail pexp
           ~node1:node0 ~node2:node0'
           ~node1_repr:node ~node2_repr:node0'
           ~new_repr:node;
-        Explanation.add_merge_finish t.env.trail pexp
+        Trail.add_merge_finish t.env.trail pexp
           ~node1:node0 ~node2:node0'
           ~node1_repr:node ~node2_repr:node0'
           ~new_repr:node;
@@ -503,14 +503,14 @@ module Delayed = struct
   let set_sem_pending t pexp node0 nodesem =
     let node0' = NodeSem.node nodesem in
     let pexp () =
-      Explanation.mk_pexp t.env.trail Explanation.exp_same_sem
+      Trail.mk_pexp t.env.trail Trail.exp_same_sem
         (ExpSameSem(pexp,node0,nodesem)) in
     set_semvalue_pending t pexp node0 node0'
 
   let set_value_pending t pexp node0 nodevalue =
     let node0' = NodeValue.node nodevalue in
     let pexp () =
-      Explanation.mk_pexp t.env.trail Explanation.exp_same_sem
+      Trail.mk_pexp t.env.trail Trail.exp_same_sem
         (ExpSameValue(pexp,node0,nodevalue)) in
     set_semvalue_pending t pexp node0 node0'
 
@@ -521,7 +521,7 @@ module Delayed = struct
     let new_table = Node.M.add_opt node new_v domtable.table in
     let domtable = { domtable with table = new_table } in
     VDomTable.set t.env.dom dom domtable;
-    Explanation.add_pexp_dom t.env.trail pexp dom ~node ~node0;
+    Trail.add_pexp_dom t.env.trail pexp dom ~node ~node0;
     let events = Node.M.find_opt node domtable.events in
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (node,dom)
 
@@ -534,7 +534,7 @@ module Delayed = struct
     let new_table = Node.M.add node new_v domtable.table in
     let domtable = { domtable with table = new_table } in
     VDomTable.set t.env.dom dom domtable;
-    Explanation.add_pexp_dom_premerge t.env.trail dom
+    Trail.add_pexp_dom_premerge t.env.trail dom
       ~nodefrom:node' ~nodefrom0:node0' ~nodeto:node;
     let events = Node.M.find_opt node domtable.events in
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (node0,dom)
@@ -549,7 +549,7 @@ module Delayed = struct
     let old_repr_s = Node.M.find_opt node2  domtable.table in
     let module Dom = (val (VDom.get_dom dom)) in
     Debug.dprintf12 debug_few
-      "[Solver] @[merge dom (%a(%a),%a)@ and (%a(%a),%a)@]"
+      "[Egraph] @[merge dom (%a(%a),%a)@ and (%a(%a),%a)@]"
       Node.pp node1 Node.pp node1_0
       (Pp.option Dom.pp) old_other_s
       Node.pp node2 Node.pp node2_0
@@ -590,7 +590,7 @@ module Delayed = struct
       let old_s'  = Node.M.find_opt node'  valuetable.table in
       let module Value = (val (Typedef.get_value value)) in
       Debug.dprintf12 debug_few
-        "[Solver] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
+        "[Egraph] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
         Node.pp node Node.pp node0
         (Pp.option (print_value value)) old_s
         Node.pp node' Node.pp node0'
@@ -607,7 +607,7 @@ module Delayed = struct
           (* already same value. Does that really happen? *)
           ()
         else
-          let pexp = Explanation.mk_pexp t.env.trail Explanation.exp_diff_value pexp in
+          let pexp = Trail.mk_pexp t.env.trail Trail.exp_diff_value pexp in
           raise (Contradiction(pexp))
     in
     VValueTable.iter_initializedi {VValueTable.iteri} t.env.value
@@ -619,12 +619,12 @@ module Delayed = struct
       if inv
       then node2_0,node2, node1_0, node1
       else node1_0, node1, node2_0, node2 in
-    Debug.dprintf8 debug_few "[Solver.few] merge %a(%a) -> %a(%a)"
+    Debug.dprintf8 debug_few "[Egraph.few] merge %a(%a) -> %a(%a)"
       Node.pp other_node Node.pp other_node0
       Node.pp repr_node Node.pp repr_node0;
     merge_values t pexp node1_0 node2_0;
     t.env.repr <- Node.M.add other_node repr_node t.env.repr;
-    Explanation.add_merge_finish t.env.trail pexp
+    Trail.add_merge_finish t.env.trail pexp
       ~node1:node1_0 ~node2:node2_0
       ~node1_repr:node1 ~node2_repr:node2
       ~new_repr:repr_node;
@@ -660,7 +660,7 @@ module Delayed = struct
     let dom_not_done = merge_dom t pexp node1_0 node2_0 inv in
     if dom_not_done
     then begin
-      Debug.dprintf4 debug "[Solver] @[merge %a %a dom not done@]"
+      Debug.dprintf4 debug "[Egraph] @[merge %a %a dom not done@]"
         Node.pp node1_0 Node.pp node2_0;
       t.todo_delayed_merge <- Some (pexp,node1_0,node2_0,inv)
     end
@@ -675,7 +675,7 @@ module Delayed = struct
       let ((other_node0,_),(_,repr_node)) =
         choose_repr (node1_0,node1) (node2_0,node2) in
       let inv = not (Node.equal node1_0 other_node0) in
-      Explanation.add_merge_start t.env.trail pexp
+      Trail.add_merge_start t.env.trail pexp
         ~node1:node1_0 ~node2:node2_0
         ~node1_repr:node1 ~node2_repr:node2
         ~new_repr:repr_node;
@@ -711,13 +711,13 @@ module Delayed = struct
     if not (Queue.is_empty t.todo_immediate_dem) then
       match Queue.pop t.todo_immediate_dem with
       | RunDem att ->
-        Debug.dprintf0 debug "[Solver] @[do_pending RunDem immediate@]";
+        Debug.dprintf0 debug "[Egraph] @[do_pending RunDem immediate@]";
         do_pending_daemon t att;
         do_pending t
     else if not (Queue.is_empty t.todo_merge_dom) then
       match Queue.pop t.todo_merge_dom with
       | SetMergeDomNode(pexp,dom,node1,node2,inv) ->
-        Debug.dprintf6 debug "[Solver] @[do_pending SetDomNode %a %a %a@]"
+        Debug.dprintf6 debug "[Egraph] @[do_pending SetDomNode %a %a %a@]"
           Dom.pp dom Node.pp node1 Node.pp node2;
         merge_dom_pending t pexp dom node1 node2 inv;
         do_pending t
@@ -733,14 +733,14 @@ module Delayed = struct
       if not (Queue.is_empty t.todo_merge) then
       match Queue.pop t.todo_merge with
       | Merge (pexp,node1,node2) ->
-        Debug.dprintf4 debug "[Solver] @[do_pending Merge %a %a@]"
+        Debug.dprintf4 debug "[Egraph] @[do_pending Merge %a %a@]"
           Node.pp node1 Node.pp node2;
         merge_pending t pexp node1 node2;
         do_pending t
     else if not (Queue.is_empty t.todo_ext_action) then
       (begin match Queue.pop t.todo_ext_action with
       | ExtDem att ->
-        Debug.dprintf0 debug "[Solver] @[do_pending RunDem@]";
+        Debug.dprintf0 debug "[Egraph] @[do_pending RunDem@]";
         let store_ext_action = Queue.create () in
         Queue.transfer t.todo_ext_action store_ext_action;
         do_pending_daemon t att;
@@ -748,11 +748,11 @@ module Delayed = struct
        end;
        do_pending t)
     else
-      Debug.dprintf0 debug "[Solver] Nothing to do"
+      Debug.dprintf0 debug "[Egraph] Nothing to do"
 
   and flush d =
     assert (d.env.current_delayed == d);
-    Debug.dprintf0 debug "[Solver] @[flush delayed@]";
+    Debug.dprintf0 debug "[Egraph] @[flush delayed@]";
     try
       if not (Queue.is_empty d.todo_ext_action) then
         let saved_ext_action = Queue.create () in
@@ -762,7 +762,7 @@ module Delayed = struct
       else
         do_pending d;
       assert (nothing_todo d);
-      Debug.dprintf0 debug "[Solver] @[flush delayed end@]"
+      Debug.dprintf0 debug "[Egraph] @[flush delayed end@]"
     with e when Debug.test_flag debug &&
                 not (Debug.test_flag Debug.stack_trace) ->
       raise e
@@ -781,34 +781,34 @@ module Delayed = struct
     assert (is_registered d node)
 
   let set_sem  d pexp node nodesem =
-    Debug.dprintf4 debug "[Solver] @[add_pending_set_sem for %a and %a@]"
+    Debug.dprintf4 debug "[Egraph] @[add_pending_set_sem for %a and %a@]"
       Node.pp node NodeSem.pp nodesem;
     check d node;
     set_sem_pending d pexp node nodesem
 
   let set_nodevalue  d pexp node nodevalue =
-    Debug.dprintf4 debug "[Solver] @[add_pending_set_nodevalue for %a and %a@]"
+    Debug.dprintf4 debug "[Egraph] @[add_pending_set_nodevalue for %a and %a@]"
       Node.pp node NodeValue.pp nodevalue;
     check d node;
     set_value_pending d pexp node nodevalue
 
   let set_value (type a)  d pexp (value : a Value.t) node v =
     Debug.dprintf4 debug_few
-      "[Solver] @[set_dom for %a with %a@]"
+      "[Egraph] @[set_dom for %a with %a@]"
       Node.pp node (print_value value) v;
     let nodevalue = NodeValue.index value v (Node.ty node) in
     set_value_pending d pexp node nodevalue
 
   let set_dom d pexp dom node v =
     Debug.dprintf4 debug_few
-      "[Solver] @[set_dom for %a with %a@]"
+      "[Egraph] @[set_dom for %a with %a@]"
       Node.pp node (print_dom dom) v;
     check d node;
     set_dom_pending d pexp dom node (Some v)
 
   let set_dom_premerge d dom node v =
     Debug.dprintf4 debug
-      "[Solver] @[set_dom_premerge for %a with %a@]"
+      "[Egraph] @[set_dom_premerge for %a with %a@]"
       Node.pp node (print_dom dom) v;
     check d node;
     let node' = match d.todo_delayed_merge with
@@ -821,7 +821,7 @@ module Delayed = struct
 
   let unset_dom d pexp dom node =
     Debug.dprintf2 debug
-      "[Solver] @[unset_dom for %a@]"
+      "[Egraph] @[unset_dom for %a@]"
       Node.pp node;
     check d node;
     set_dom_pending d pexp dom node None
@@ -829,8 +829,8 @@ module Delayed = struct
   let register_decision t chogen =
     t.sched_decision chogen
 
-  let mk_pexp t ?age ?tags kexp exp = Explanation.mk_pexp ?age ?tags t.env.trail kexp exp
-  let current_age t = Explanation.current_age t.env.trail
+  let mk_pexp t ?age ?tags kexp exp = Trail.mk_pexp ?age ?tags t.env.trail kexp exp
+  let current_age t = Trail.current_age t.env.trail
 
   let contradiction d pexp =
     d.env.current_delayed <- unsat_delayed;
@@ -939,7 +939,7 @@ let run_daemon d dem =
 let is_equal t node1 node2 =
   assert (t.current_delayed == dumb_delayed);
   let node1,node2 = Shuffle.shuffle2 (node1,node2) in
-  Debug.dprintf4 debug "[Solver] @[is_equal %a %a@]"
+  Debug.dprintf4 debug "[Egraph] @[is_equal %a %a@]"
     Node.pp node1 Node.pp node2;
   draw_graph t;
   is_equal t node1 node2
@@ -981,10 +981,10 @@ let get_trail t =
 let new_dec t =
   assert (t.current_delayed == dumb_delayed);
   let t' = new_handle t in
-  Explanation.new_dec t'.trail
+  Trail.new_dec t'.trail
 
-let current_age (t:t) = Explanation.current_age t.trail
-let current_nbdec (t:t) = Explanation.nbdec t.trail
+let current_age (t:t) = Trail.current_age t.trail
+let current_nbdec (t:t) = Trail.nbdec t.trail
 
 let get_direct_dom t dom node =
   assert (t.current_delayed == dumb_delayed ||

@@ -60,28 +60,28 @@ module NodeValue = Typedef.NodeValue
 
 module Dom = struct
   include Dom
-  let print = Solver.print_dom
+  let print = Egraph.print_dom
 
-  module type Dom = Solver.Dom
+  module type Dom = Egraph.Dom
 
-  let register = Solver.register_dom
+  let register = Egraph.register_dom
 end
 
 module Dem = struct
   include Typedef.Dem
 
-  module type Dem = Solver.Wait.Dem
+  module type Dem = Egraph.Wait.Dem
 
-  let register = Solver.Wait.register_dem
+  let register = Egraph.Wait.register_dem
 end
 
 module Env = Env
 
-module Exp = Explanation.Exp
+module Exp = Trail.Exp
 
-module Solver = Solver
+module Egraph = Egraph
 module Demon = Demon
-module Explanation = Explanation
+module Trail = Trail
 module Conflict = Conflict
 
 module Variable = Variable

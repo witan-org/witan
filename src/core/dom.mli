@@ -29,7 +29,7 @@ include Keys.Key
 
 type 'a dom = 'a t
 
-(** delayed and pexp are instanciated in Solver *)
+(** delayed and pexp are instanciated in Egraph *)
 module type Dom_partial = sig
   type delayed
   type pexp

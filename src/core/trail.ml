@@ -26,11 +26,11 @@ open Typedef
 
 let debugage = Debug.register_info_flag
     ~desc:"for@ the@ age in the trail."
-    "Explanation.age"
+    "Trail.age"
 
 let debug = Debug.register_flag (** not info just because duplicate of solver *)
   ~desc:"for@ the@ trail."
-  "Explanation.core"
+  "Trail.core"
 
 module Exp = Keys.Make_key(struct end)
 module Cho = Keys.Make_key2(struct end)
@@ -170,7 +170,7 @@ let add_pexp_dom_premerge:
     assert false (** TODO when domain will be needed *)
 
 
-let expfact : unit Exp.t = Exp.create_key "Explanation.fact"
+let expfact : unit Exp.t = Exp.create_key "Trail.fact"
 let pexpfact = Pexp(Age.bef,expfact,(),Tags.empty)
 
 type exp_same_sem =
@@ -178,8 +178,8 @@ type exp_same_sem =
 | ExpSameValue : pexp * Node.t * NodeValue.t -> exp_same_sem
 
 let exp_same_sem : exp_same_sem Exp.t =
-  Exp.create_key "Solver.exp_same_sem"
+  Exp.create_key "Egraph.exp_same_sem"
 
 (** TODO choose an appropriate data *)
 let exp_diff_value : pexp Exp.t =
-  Exp.create_key "Solver.exp_diff_value"
+  Exp.create_key "Egraph.exp_diff_value"

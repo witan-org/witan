@@ -64,13 +64,13 @@ module Key: sig
 
     val immediate: bool
     val wakeup:
-      Solver.Delayed.t -> Key.t -> Data.t Events.Fired.t ->
+      Egraph.Delayed.t -> Key.t -> Data.t Events.Fired.t ->
       info -> Key.t alive
       (** the Events.t in wakeup is a subset of the one given in watch *)
   end
 
   module Register (D:S): sig
-    val init: Solver.Delayed.t -> unit
+    val init: Egraph.Delayed.t -> unit
     (** to run for each new delayed *)
   end
 
@@ -80,15 +80,15 @@ module Key: sig
   | SDead
   | SRedirected of 'k
 
-  val attach: Solver.Delayed.t -> ('k,'d,'i) t -> 'k -> 'd Create.t -> unit
+  val attach: Egraph.Delayed.t -> ('k,'d,'i) t -> 'k -> 'd Create.t -> unit
   (** raise AlreadyDead if this key is already dead *)
 
-  val is_attached: Solver.d -> ('k,'d,'i) t -> 'k -> ('k,'i) state
+  val is_attached: Egraph.d -> ('k,'d,'i) t -> 'k -> ('k,'i) state
 
-  val set_info: Solver.d -> ('k, 'd, 'i) t -> 'k -> 'i -> unit
+  val set_info: Egraph.d -> ('k, 'd, 'i) t -> 'k -> 'i -> unit
 
   exception CantBeKilled
-  val kill : Solver.d -> ('a, 'b,'c) t -> 'a -> unit
+  val kill : Egraph.d -> ('a, 'b,'c) t -> 'a -> unit
 
 
 end
@@ -112,16 +112,16 @@ module Fast: sig
     val immediate: bool
     val throttle: int (** todo int ref? *)
     (** number of time run in a row *)
-    val wakeup: Solver.Delayed.t -> Data.t Events.Fired.event -> unit
+    val wakeup: Egraph.Delayed.t -> Data.t Events.Fired.event -> unit
 
   end
 
   module Register (D:S): sig
-    val init: Solver.Delayed.t -> unit
+    val init: Egraph.Delayed.t -> unit
     (** to run for each new delayed *)
   end
 
-  val attach: Solver.Delayed.t -> 'd t -> 'd Create.t -> unit
+  val attach: Egraph.Delayed.t -> 'd t -> 'd Create.t -> unit
   (** raise AlreadyDead if this key is already dead *)
 
   val fresh_with_reg_node: 'd t -> string -> Ty.t -> 'd -> Node.t
@@ -132,7 +132,7 @@ module Fast: sig
     ?immediate:bool ->
     ?throttle:int ->
     (module RegisteredSem with type t = 'a) ->
-    (Solver.Delayed.t -> 'a -> unit) ->
-    Solver.Delayed.t ->
+    (Egraph.Delayed.t -> 'a -> unit) ->
+    Egraph.Delayed.t ->
     unit
 end

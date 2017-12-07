@@ -40,21 +40,21 @@ let true_is_true () =
 
 let not_true_is_false () =
   let not_true = Bool._not Bool._true in
-  let env = run $$ fun env -> Solver.Delayed.register env not_true in
+  let env = run $$ fun env -> Egraph.Delayed.register env not_true in
   assert_bool "" (Bool.is_false env not_true);
   assert_bool "" (not (Bool.is_true env not_true))
 
 let and_true_is_true () =
   let _t = Bool._true in
   let _and = Bool._and [_t;_t;_t] in
-  let env = run $$ fun env -> Solver.Delayed.register env _and in
+  let env = run $$ fun env -> Egraph.Delayed.register env _and in
   assert_bool "" (Bool.is_true env _and);
   assert_bool "" (not (Bool.is_false env _and))
 
 let or_not_true_is_false () =
   let _f = (Bool._not Bool._true) in
   let _or = Bool._and [_f;_f;_f] in
-  let env = run $$ fun env -> Solver.Delayed.register env _or in
+  let env = run $$ fun env -> Egraph.Delayed.register env _or in
   assert_bool "" (Bool.is_false env _or);
   assert_bool "" (not (Bool.is_true env _or))
 
@@ -65,14 +65,14 @@ let merge_true () =
   let d  = Variable.fresh Bool.ty "d" in
   let _and = Bool._and [a;b;c] in
   let env = run $$ fun env ->
-      Solver.Delayed.register env _and;
-      List.iter (Solver.Delayed.register env) [a;b;c;d];
+      Egraph.Delayed.register env _and;
+      List.iter (Egraph.Delayed.register env) [a;b;c;d];
       Shuffle.seql
         [(fun () -> merge env a b);
          (fun () -> merge env a c);
         ];
       merge env a d;
-      Bool.set_true env Explanation.pexpfact d;
+      Bool.set_true env Trail.pexpfact d;
   in
   assert_bool "" (Bool.is_true env _and)
 

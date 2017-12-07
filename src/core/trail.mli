@@ -58,7 +58,7 @@ module Age: sig
 end
 type age = Age.t
 
-(** {2 Explanation, Conflict and Choices } *)
+(** {2 Trail, Conflict and Choices } *)
 
 module Exp: Keys.Key
 
@@ -84,7 +84,7 @@ val age_of_dec: dec -> age
 val new_dec: t -> dec
 val nbdec: t -> int
 
-(** {2 Explanations} *)
+(** {2 Trails} *)
 val mk_pexp:
   t ->
   ?age:age (* in which age it should be evaluated *) ->
@@ -133,7 +133,7 @@ type chogen =
   | GCho: Node.t * ('k,'d) Cho.t * 'k -> chogen
 
 
-(** {2 Explanation for domains, currently not used } *)
+(** {2 Trail for domains, currently not used } *)
 
 val add_pexp_dom:
   t -> pexp -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit

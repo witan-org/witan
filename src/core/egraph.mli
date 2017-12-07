@@ -21,13 +21,13 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-(** Solver is the main module of core *)
+(** Egraph is the main module of core *)
 
 (** The solver contains all the information. It keeps track of
     equivalence classes, values. It take care to schedule event that
     happened. *)
 
-open Explanation
+open Trail
 open Typedef
 
 exception NotRegistered
@@ -86,17 +86,17 @@ module Delayed : sig
   (** remove the dom of the equivalence class *)
 
   (** {3 Delayed modifications} *)
-  val set_sem  : t -> Explanation.pexp -> Node.t -> NodeSem.t -> unit
+  val set_sem  : t -> Trail.pexp -> Node.t -> NodeSem.t -> unit
   (** attach a sem to an equivalence class *)
 
-  val set_nodevalue: t -> Explanation.pexp -> Node.t -> NodeValue.t -> unit
+  val set_nodevalue: t -> Trail.pexp -> Node.t -> NodeValue.t -> unit
   (** attach value to an equivalence class *)
 
-  val set_value: t -> Explanation.pexp -> 'a Value.t -> Node.t -> 'a -> unit
+  val set_value: t -> Trail.pexp -> 'a Value.t -> Node.t -> 'a -> unit
   (** attach value to an equivalence class *)
 
   (** {3 Delayed modifications} *)
-  val merge    : t -> Explanation.pexp -> Node.t -> Node.t -> unit
+  val merge    : t -> Trail.pexp -> Node.t -> Node.t -> unit
 
   (** {3 Attach Event} *)
   val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) Dem.t -> 'event -> unit
@@ -110,15 +110,15 @@ module Delayed : sig
   val attach_node: t -> Node.t -> ('event,'r) Dem.t -> 'event -> unit
     (** wakeup when it is not anymore the representative class *)
 
-  val register_decision: t -> Explanation.chogen -> unit
+  val register_decision: t -> Trail.chogen -> unit
   (** register a decision that would be scheduled later. The
       [choose_decision] of the [Cho] will be called at that time to know
       if the decision is still needed. *)
 
-  (** {3 Explanations} *)
-  val mk_pexp: t -> ?age:age -> ?tags:tags -> 'a Exp.t -> 'a -> Explanation.pexp
+  (** {3 Trails} *)
+  val mk_pexp: t -> ?age:age -> ?tags:tags -> 'a Exp.t -> 'a -> Trail.pexp
   val current_age: t -> age
-  val contradiction: t -> Explanation.pexp -> 'b
+  val contradiction: t -> Trail.pexp -> 'b
 
   (** {3 Low level} *)
   val flush: t -> unit
@@ -133,7 +133,7 @@ module Wait : Events.Wait.S with type delayed = Delayed.t and type delayed_ro = 
 
 (** {2 Domains and Semantic Values key creation} *)
 
-module type Dom = Dom.Dom_partial with type delayed := Delayed.t and type pexp := Explanation.pexp
+module type Dom = Dom.Dom_partial with type delayed := Delayed.t and type pexp := Trail.pexp
 
 val register_dom : (module Dom with type t = 'a) -> unit
 
@@ -150,7 +150,7 @@ val new_delayed :
     calling flush. (flushd doesn't count)
 *)
 
-exception Contradiction of Explanation.pexp
+exception Contradiction of Trail.pexp
 
 val run_daemon: Delayed.t -> Events.Wait.daemon_key -> unit
 (** schedule the run of a deamon *)
@@ -168,9 +168,9 @@ val flush: Delayed.t -> unit
 val make_decisions : Delayed.t -> attached_daemons -> unit
 *)
 
-val get_trail : t -> Explanation.t
-val new_dec : t -> Explanation.dec
-val current_age : t -> Explanation.Age.t
+val get_trail : t -> Trail.t
+val new_dec : t -> Trail.dec
+val current_age : t -> Trail.Age.t
 val current_nbdec : t -> int
 
 (** {2 Implementation Specifics } *)

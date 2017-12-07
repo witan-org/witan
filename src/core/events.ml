@@ -23,7 +23,7 @@
 
 open Typedef
 
-let debug = Debug.register_info_flag ~desc:"for the events" "Solver.events"
+let debug = Debug.register_info_flag ~desc:"for the events" "Egraph.events"
 
 
 
@@ -264,7 +264,7 @@ module Wait = struct
     let wakeup_events_list translate t events info =
       match events with
       | None | Some [] ->
-        Debug.dprintf0 debug "[Solver] @[No scheduling@]"
+        Debug.dprintf0 debug "[Egraph] @[No scheduling@]"
       | Some events ->
         List.iter (wakeup_event translate t info) events
 
@@ -272,7 +272,7 @@ module Wait = struct
       let is_empty = match events with
         | None -> true
         | Some events -> Bag.is_empty events in
-      if is_empty then Debug.dprintf0 debug "[Solver] @[No scheduling@]"
+      if is_empty then Debug.dprintf0 debug "[Egraph] @[No scheduling@]"
       else Bag.iter (wakeup_event translate t info) (Opt.get events)
 
 

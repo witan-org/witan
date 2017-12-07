@@ -25,7 +25,7 @@ open Typedef
 
 let debug = Debug.register_info_flag
   ~desc:"for the domains"
-  "Solver.dom"
+  "Egraph.dom"
 
 module Dom = Keys.Make_key(struct end)
 include Dom
