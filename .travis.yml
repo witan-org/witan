@@ -30,6 +30,7 @@ before_install:
   - opam pin add --no-action witan .
   - opam install --deps-only witan
   - opam install ounit
+  - opam list --installed
 install:
   - make build-dev
 script:
