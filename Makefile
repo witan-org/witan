@@ -61,6 +61,7 @@ test: build
 	@cd tests && $(MAKE) --no-print-directory
 
 test-dev: build-dev
+	@opam lint witan.opam
 	@echo "run API tests…"
 	@jbuilder runtest --dev
 	@echo "run BIN tests…"
