@@ -28,3 +28,10 @@ val key: Term.t Sem.t
 include RegisteredSem with type s = Term.t
 
 val node_of_term : Term.t -> Node.t
+
+val init: Egraph.Delayed.t -> unit
+
+val register_converter:
+  Egraph.Delayed.t ->
+  (Egraph.Delayed.t -> Term.t -> Term.t list -> Node.t option) ->
+  unit
