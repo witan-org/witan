@@ -56,4 +56,3 @@ val chobool: (Node.t,bool) Trail.Cho.t
 val make_dec: Variable.make_dec
 
 val ty: Ty.t
-val ty_ctr: Ty.Constr.t

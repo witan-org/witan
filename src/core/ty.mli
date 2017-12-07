@@ -25,13 +25,10 @@ open Stdlib
 
 (** {2 Types} *)
 
-module Constr: Strings.Fresh
-(** type constructors *)
-
-type ty = private { ctr: Constr.t; args: ty IArray.t; tag: int}
+type ty = Term.t
 
 include Datatype with type t = ty
 (** types *)
 
-val app: Constr.t -> ty IArray.t -> ty
-val ctr: Constr.t -> ty
+(* val app: Constr.t -> ty IArray.t -> ty *)
+(* val ctr: Constr.t -> ty *)

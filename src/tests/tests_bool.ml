@@ -76,13 +76,27 @@ let merge_true () =
   in
   assert_bool "" (Bool.is_true env _and)
 
-
+let imply_implies () =
+  let a = Term.const (Id.mk "a" Term._Prop) in
+  let b = Term.const (Id.mk "b" Term._Prop) in
+  let t = Term.apply Term.imply_term [a;b] in
+  let an = Synsem.of_term a in
+  let bn = Synsem.of_term b in
+  let tn = Synsem.of_term t in
+  let env = run $$ fun env ->
+      Egraph.Delayed.register env tn;
+      Bool.set_true env Trail.pexpfact tn;
+      Egraph.Delayed.register env an;
+      Bool.set_true env Trail.pexpfact an;
+  in
+  assert_bool "" (Bool.is_true env bn)
 
 let basic = "Bool.Basic" >::: [ "true_is_true" >:: true_is_true;
                                 "not_true_is_false" >:: not_true_is_false;
                                 "and_true_is_true" >:: and_true_is_true;
                                 "or_not_true_is_false" >:: or_not_true_is_false;
                                 "merge_true" >:: merge_true;
+                                "imply_implies" >:: imply_implies;
                                 (* "modus_ponens"         >:: modus_ponens; *)
                               ]
 

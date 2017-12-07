@@ -25,6 +25,8 @@
 
 include Std
 
+module Id = Id
+module Term = Term
 module Ty = Ty
 
 module Keys = Keys
@@ -45,6 +47,7 @@ end
 
 module NodeSem = Typedef.NodeSem
 
+module Synsem = Synsem
 
 module Value = struct
   include Typedef.Value

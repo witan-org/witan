@@ -1,3 +1,25 @@
+(*************************************************************************)
+(*  This file is part of Witan.                                          *)
+(*                                                                       *)
+(*  Copyright (C) 2017                                                   *)
+(*    CEA   (Commissariat à l'énergie atomique et aux énergies           *)
+(*           alternatives)                                               *)
+(*    INRIA (Institut National de Recherche en Informatique et en        *)
+(*           Automatique)                                                *)
+(*    CNRS  (Centre national de la recherche scientifique)               *)
+(*                                                                       *)
+(*  you can redistribute it and/or modify it under the terms of the GNU  *)
+(*  Lesser General Public License as published by the Free Software      *)
+(*  Foundation, version 2.1.                                             *)
+(*                                                                       *)
+(*  It is distributed in the hope that it will be useful,                *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of       *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        *)
+(*  GNU Lesser General Public License for more details.                  *)
+(*                                                                       *)
+(*  See the GNU Lesser General Public License version 2.1                *)
+(*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
+(*************************************************************************)
 
 (* Proof terms *)
 (* ************************************************************************ *)
@@ -38,6 +60,7 @@ module Tmp = struct
   let hash = Id.hash
   let equal = Id.equal
   let compare = Id.compare
+  let pp = Id.pp
 end
 
 (** Memoised hash function *)
@@ -376,6 +399,7 @@ and print fmt t =
   | Binder (Arrow, _, _) -> print_arrow fmt t
   | Binder (b, _, _) -> print_binder fmt b t
 
+let pp = print
 
 (* Proof term constants *)
 (* ************************************************************************ *)
@@ -417,3 +441,11 @@ let equiv_term = const equiv_id
 
 module Id = Tmp
 
+
+let () = Exn_printer.register (fun fmt exn ->
+    match exn with
+    | Type_mismatch (t,ty) ->
+      Format.fprintf fmt "Type mismatch %a is not of type %a."
+        print t print ty
+    | exn -> raise exn
+  )

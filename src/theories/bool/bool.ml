@@ -30,8 +30,7 @@ let debug = Debug.register_info_flag
   ~desc:"for the boolean theory"
   "bool"
 
-let ty_ctr = Ty.Constr.create "Bool"
-let ty = Ty.ctr ty_ctr
+let ty = Term._Prop
 let dom : bool Value.t = Value.create_key "bool"
 
 module BoolValue = Value.Register(struct
@@ -419,19 +418,6 @@ end
 
 module RDaemonInit = Demon.Fast.Register(DaemonInit)
 
-let th_register' with_other_theories env =
-  with_other := with_other_theories;
-  RDaemonPropaNot.init env;
-  RDaemonPropa.init env;
-  RDaemonInit.init env;
-  Demon.Fast.attach env
-    DaemonInit.key [Demon.Create.EventRegSem(sem,())];
-  Delayed.register env cl_true;
-  Delayed.register env cl_false;
-  ()
-
-let th_register_alone = th_register' false
-let th_register = th_register' true
 
 let _true = cl_true
 let _not node =
@@ -486,6 +472,59 @@ let _false = cl_false
 let set_true env pexp node = set_bool env pexp node true
 
 let set_false env pexp node = set_bool env pexp node false
+
+module DaemonConvertTerm = struct
+  let key = Demon.Fast.create "Bool.DaemonConvertTerm"
+
+  module Data = DUnit
+
+  let immediate = false
+  let throttle = 100
+  let wakeup d = function
+    | Events.Fired.EventRegSem(nodesem,()) ->
+      begin try begin
+        let nodesem = Synsem.SynSem.coerce_nodesem nodesem in
+        let v = Synsem.SynSem.sem nodesem in
+        let node = match v with
+          | Synsem.Other _ -> raise Exit
+          | App(id,args) when Term.Id.equal id Term.or_id ->
+            _or args
+          | App(id,args) when Term.Id.equal id Term.and_id ->
+            (_and args)
+          | App(id,[arg1;arg2]) when Term.Id.equal id Term.imply_id ->
+            (gen false [arg1,true;arg2,false]);
+          | App(id,[arg]) when Term.Id.equal id Term.not_id ->
+            (_not arg);
+          | App(id,[]) when Term.Id.equal id Term.true_id ->
+            _true
+          | App(id,[]) when Term.Id.equal id Term.false_id ->
+            _false
+          | _ -> raise Exit in
+        Delayed.register d node;
+        Delayed.merge d Trail.pexpfact (Synsem.SynSem.node nodesem) node
+      end with Exit -> () end
+    | _ -> raise UnwaitedEvent
+
+end
+
+module RDaemonConvertTerm = Demon.Fast.Register(DaemonConvertTerm)
+
+let th_register' with_other_theories env =
+  with_other := with_other_theories;
+  RDaemonPropaNot.init env;
+  RDaemonPropa.init env;
+  RDaemonInit.init env;
+  Demon.Fast.attach env
+    DaemonInit.key [Demon.Create.EventRegSem(sem,())];
+  RDaemonConvertTerm.init env;
+  Demon.Fast.attach env
+    DaemonConvertTerm.key [Demon.Create.EventRegSem(Synsem.synsem,())];
+  Delayed.register env cl_true;
+  Delayed.register env cl_false;
+  ()
+
+let th_register_alone = th_register' false
+let th_register = th_register' true
 
 let chobool = Trail.Cho.create_key "Bool.cho"
 
