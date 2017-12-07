@@ -23,20 +23,8 @@
 
 open Typedef
 
-type descr = private
-  | App of Term.id * Node.t list
-  (** Simple applications *)
-  | Other of Term.t
+val key: Term.t Sem.t
 
-val synsem: descr Sem.t
+include RegisteredSem with type s = Term.t
 
-module SynSem : RegisteredSem with type s = descr
-
-
-val const: Term.id -> Node.t
-
-val app: Term.id -> Node.t list -> Node.t
-
-val of_term : Term.t -> Node.t
-
-val init: Egraph.Delayed.t -> unit
+val node_of_term : Term.t -> Node.t

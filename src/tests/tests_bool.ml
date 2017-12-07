@@ -80,9 +80,9 @@ let imply_implies () =
   let a = Term.const (Id.mk "a" Term._Prop) in
   let b = Term.const (Id.mk "b" Term._Prop) in
   let t = Term.apply Term.imply_term [a;b] in
-  let an = Synsem.of_term a in
-  let bn = Synsem.of_term b in
-  let tn = Synsem.of_term t in
+  let an = Synsem.node_of_term a in
+  let bn = Synsem.node_of_term b in
+  let tn = Synsem.node_of_term t in
   let env = run $$ fun env ->
       Egraph.Delayed.register env tn;
       Bool.set_true env Trail.pexpfact tn;

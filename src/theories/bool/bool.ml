@@ -483,25 +483,30 @@ module DaemonConvertTerm = struct
   let wakeup d = function
     | Events.Fired.EventRegSem(nodesem,()) ->
       begin try begin
-        let nodesem = Synsem.SynSem.coerce_nodesem nodesem in
-        let v = Synsem.SynSem.sem nodesem in
-        let node = match v with
-          | Synsem.Other _ -> raise Exit
-          | App(id,args) when Term.Id.equal id Term.or_id ->
-            _or args
-          | App(id,args) when Term.Id.equal id Term.and_id ->
-            (_and args)
-          | App(id,[arg1;arg2]) when Term.Id.equal id Term.imply_id ->
-            (gen false [arg1,true;arg2,false]);
-          | App(id,[arg]) when Term.Id.equal id Term.not_id ->
-            (_not arg);
-          | App(id,[]) when Term.Id.equal id Term.true_id ->
+        let nodesem = Synsem.coerce_nodesem nodesem in
+        let v = Synsem.sem nodesem in
+        let f, l = Term.uncurry v in
+        let of_term t =
+          let n = Synsem.node_of_term t in
+          Egraph.Delayed.register d n;
+          n
+        in
+        let node = match f, l with
+          | f,([_;_] as args) when Term.equal f Term.or_term ->
+            _or (List.map of_term args)
+          | f,([_;_] as args) when Term.equal f Term.and_term ->
+            _and (List.map of_term args)
+          | f,[arg1;arg2] when Term.equal f Term.imply_term ->
+            (gen false [of_term arg1,true;of_term arg2,false]);
+          | f,[arg] when Term.equal f Term.not_term ->
+            _not (of_term arg);
+          | f,[] when Term.equal f Term.true_term ->
             _true
-          | App(id,[]) when Term.Id.equal id Term.false_id ->
+          | f,[] when Term.equal f Term.false_term ->
             _false
           | _ -> raise Exit in
         Delayed.register d node;
-        Delayed.merge d Trail.pexpfact (Synsem.SynSem.node nodesem) node
+        Delayed.merge d Trail.pexpfact (Synsem.node nodesem) node
       end with Exit -> () end
     | _ -> raise UnwaitedEvent
 
@@ -518,7 +523,7 @@ let th_register' with_other_theories env =
     DaemonInit.key [Demon.Create.EventRegSem(sem,())];
   RDaemonConvertTerm.init env;
   Demon.Fast.attach env
-    DaemonConvertTerm.key [Demon.Create.EventRegSem(Synsem.synsem,())];
+    DaemonConvertTerm.key [Demon.Create.EventRegSem(Synsem.key,())];
   Delayed.register env cl_true;
   Delayed.register env cl_false;
   ()

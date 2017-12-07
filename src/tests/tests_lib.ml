@@ -73,7 +73,7 @@ let run_exn ~theories f =
   let t = new_solver () in
   begin try
       let d = new_delayed t in
-      List.iter (fun f -> f d) (Synsem.init::theories);
+      List.iter (fun f -> f d) theories;
       Egraph.flush d;
       f d;
       Egraph.flush d;
