@@ -22,6 +22,7 @@
 (*************************************************************************)
 
 open Stdlib
+open Witan_core_structures
 open Typedef
 
 type make_dec = Node.t -> Trail.chogen

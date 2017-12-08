@@ -21,6 +21,8 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_core_structures
+
 (** Decision, Conflict and Learning *)
 
 (** {2 Decision} *)

@@ -27,7 +27,7 @@ open Witan_core
 open Tests_lib
 open Witan_theories_bool
 
-let theories = [Variable.th_register; (* Uninterp.th_register; *) Bool.th_register]
+let theories = [Witan_solver.Variable.th_register; (* Uninterp.th_register; *) Bool.th_register]
 
 let ($$) f x = f x
 
@@ -59,10 +59,10 @@ let or_not_true_is_false () =
   assert_bool "" (not (Bool.is_true env _or))
 
 let merge_true () =
-  let a  = Variable.fresh Bool.ty "a" in
-  let b  = Variable.fresh Bool.ty "b" in
-  let c  = Variable.fresh Bool.ty "c" in
-  let d  = Variable.fresh Bool.ty "d" in
+  let a  = Witan_solver.Variable.fresh Bool.ty "a" in
+  let b  = Witan_solver.Variable.fresh Bool.ty "b" in
+  let c  = Witan_solver.Variable.fresh Bool.ty "c" in
+  let d  = Witan_solver.Variable.fresh Bool.ty "d" in
   let _and = Bool._and [a;b;c] in
   let env = run $$ fun env ->
       Egraph.Delayed.register env _and;
