@@ -41,6 +41,28 @@ let register_converter env r =
 
 let () = Env.register_env (fun _ _ -> ()) converters
 
+
+let uncurry_app t =
+  let lets t l = List.fold_left (fun t (v,e) -> Term.letin v e t) t l in
+  let rec aux binders args = function
+    | { Term.term = App (f, arg); _ } ->
+      aux binders ((lets arg binders) :: args) f
+    | { Term.term = Let (v,e,t); _ } ->
+      aux ((v,e)::binders) args t
+    | { Term.term = Id id; _ } as t ->
+      let rec find = function
+        | [] -> t, args
+        | (v,e)::binders when Id.equal v id ->
+          aux binders args e
+        | _::binders ->
+          find binders
+      in
+      find binders
+    | t -> t, args
+  in
+  aux [] [] t
+
+
 module DaemonConvertTerm = struct
   let key = Demon.Fast.create "Synsem.DaemonConvertTerm"
 
@@ -53,7 +75,7 @@ module DaemonConvertTerm = struct
       begin try begin
         let nodesem = Sem.coerce_nodesem nodesem in
         let v = Sem.sem nodesem in
-        let f, l = Term.uncurry v in
+        let f, l = uncurry_app v in
         let iter conv =
           match conv d f l with
           | None -> ()
