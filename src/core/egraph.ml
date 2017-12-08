@@ -805,7 +805,7 @@ module Delayed = struct
       Node.pp node (print_dom dom) v;
     check d node;
     set_dom_pending d pexp dom node (Some v)
-
+  
   let set_dom_premerge d dom node v =
     Debug.dprintf4 debug
       "[Egraph] @[set_dom_premerge for %a with %a@]"
@@ -818,7 +818,7 @@ module Delayed = struct
         "set_dom_premerge should be used only on the \
          nodeasses currently merged")) in
     set_dom_premerge_pending d dom ~from:node' node v
-
+  
   let unset_dom d pexp dom node =
     Debug.dprintf2 debug
       "[Egraph] @[unset_dom for %a@]"

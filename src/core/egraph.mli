@@ -75,13 +75,13 @@ module Delayed : sig
   (** {3 Immediate modifications} *)
   val set_dom  : t -> pexp -> 'a Dom.t -> Node.t -> 'a -> unit
   (** change the dom of the equivalence class *)
-
+  
   val set_dom_premerge  : t -> 'a Dom.t -> Node.t -> 'a -> unit
   (** [set_dom_premerge d node] must be used only during the merge of two class
         [cl1] and [cl2], with one of them being [node].
         The explication is the explication given for the merge
   *)
-
+  
   val unset_dom  : t -> pexp -> 'a Dom.t -> Node.t -> unit
   (** remove the dom of the equivalence class *)
 
@@ -164,9 +164,8 @@ val flush: Delayed.t -> unit
     The argument can be used after that *)
 
 
-(*
-val make_decisions : Delayed.t -> attached_daemons -> unit
-*)
+
+(* val make_decisions : Delayed.t -> attached_daemons -> unit *)
 
 val get_trail : t -> Trail.t
 val new_dec : t -> Trail.dec

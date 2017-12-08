@@ -20,7 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Witan_core
+open Witan_core_structures
 
 type t
 val sem: t Sem.t
@@ -53,6 +53,6 @@ val th_register_alone: Egraph.d -> unit
 
 val chobool: (Node.t,bool) Trail.Cho.t
 
-val make_dec: Variable.make_dec
+(* val make_dec: Variable.make_dec *)
 
 val ty: Ty.t

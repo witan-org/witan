@@ -21,6 +21,7 @@
 (**************************************************************************)
 
 open Stdlib
+open Std
 open Witan_core
 open Egraph
 
@@ -535,8 +536,8 @@ let chobool = Trail.Cho.create_key "Bool.cho"
 
 let make_dec node = Trail.GCho(node,chobool,node)
 
-let () = Variable.register_sort ~dec:make_dec ty
 (*
+let () = Variable.register_sort ~dec:make_dec ty
 module ChoBool = struct
   open Conflict
 

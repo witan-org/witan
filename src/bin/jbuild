@@ -4,11 +4,9 @@
 (executable
   ((name witan)
    (public_name witan)
-   (libraries (containers gen dolmen cmdliner spelll witan.open witan.core
-               witan.theories.LRA
-               witan.theories.ite
-               witan.theories.arrays
-               witan.theories.bitvectors
+   (libraries (containers gen dolmen cmdliner spelll
+               witan.open
+               witan.core
                witan.theories.bool
    ))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 -color always -open "Witan_open.Open"))

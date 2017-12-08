@@ -23,8 +23,6 @@
 
 (** Witan core: define basic types and the solver *)
 
-include Std
-
 module Id = Id
 module Term = Term
 module Ty = Ty
@@ -83,13 +81,10 @@ module Env = Env
 module Exp = Trail.Exp
 
 module Egraph = Egraph
-module Demon = Demon
 module Trail = Trail
-module Conflict = Conflict
-
-module Variable = Variable
 
 module Events = Events
+module Demon  = Demon
 
 exception UnwaitedEvent = Typedef.UnwaitedEvent
 (** Can be raised by daemon when receiving an event that they don't
