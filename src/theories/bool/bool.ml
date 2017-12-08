@@ -474,46 +474,28 @@ let set_true env pexp node = set_bool env pexp node true
 
 let set_false env pexp node = set_bool env pexp node false
 
-module DaemonConvertTerm = struct
-  let key = Demon.Fast.create "Bool.DaemonConvertTerm"
+let converter d f l =
+  let of_term t =
+    let n = Synsem.node_of_term t in
+    Egraph.Delayed.register d n;
+    n
+  in
+  let node = match f, l with
+    | f,([_;_] as args) when Term.equal f Term.or_term ->
+      Some (_or (List.map of_term args))
+    | f,([_;_] as args) when Term.equal f Term.and_term ->
+      Some (_and (List.map of_term args))
+    | f,[arg1;arg2] when Term.equal f Term.imply_term ->
+      Some (gen false [of_term arg1,true;of_term arg2,false])
+    | f,[arg] when Term.equal f Term.not_term ->
+      Some (_not (of_term arg))
+    | f,[] when Term.equal f Term.true_term ->
+      Some _true
+    | f,[] when Term.equal f Term.false_term ->
+      Some _false
+    | _ -> None in
+  node
 
-  module Data = DUnit
-
-  let immediate = false
-  let throttle = 100
-  let wakeup d = function
-    | Events.Fired.EventRegSem(nodesem,()) ->
-      begin try begin
-        let nodesem = Synsem.coerce_nodesem nodesem in
-        let v = Synsem.sem nodesem in
-        let f, l = Term.uncurry v in
-        let of_term t =
-          let n = Synsem.node_of_term t in
-          Egraph.Delayed.register d n;
-          n
-        in
-        let node = match f, l with
-          | f,([_;_] as args) when Term.equal f Term.or_term ->
-            _or (List.map of_term args)
-          | f,([_;_] as args) when Term.equal f Term.and_term ->
-            _and (List.map of_term args)
-          | f,[arg1;arg2] when Term.equal f Term.imply_term ->
-            (gen false [of_term arg1,true;of_term arg2,false]);
-          | f,[arg] when Term.equal f Term.not_term ->
-            _not (of_term arg);
-          | f,[] when Term.equal f Term.true_term ->
-            _true
-          | f,[] when Term.equal f Term.false_term ->
-            _false
-          | _ -> raise Exit in
-        Delayed.register d node;
-        Delayed.merge d Trail.pexpfact (Synsem.node nodesem) node
-      end with Exit -> () end
-    | _ -> raise UnwaitedEvent
-
-end
-
-module RDaemonConvertTerm = Demon.Fast.Register(DaemonConvertTerm)
 
 let th_register' with_other_theories env =
   with_other := with_other_theories;
@@ -522,11 +504,9 @@ let th_register' with_other_theories env =
   RDaemonInit.init env;
   Demon.Fast.attach env
     DaemonInit.key [Demon.Create.EventRegSem(sem,())];
-  RDaemonConvertTerm.init env;
-  Demon.Fast.attach env
-    DaemonConvertTerm.key [Demon.Create.EventRegSem(Synsem.key,())];
   Delayed.register env cl_true;
   Delayed.register env cl_false;
+  Synsem.register_converter env converter;
   ()
 
 let th_register_alone = th_register' false
