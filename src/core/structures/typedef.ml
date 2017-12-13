@@ -81,27 +81,16 @@ let check_value_registered = ValueRegistry.check_is_registered
 let print_value = ValueRegistry.print
 let get_value = ValueRegistry.get
 
-(** Dem *)
-
-module Dem = Keys.Make_key2(struct end)
-
-type ('k,'d) dem = ('k,'d) Dem.t
-
-
 module Node = struct
   type 'a r =
-    | Fresh: int * Ty.t -> [>`Fresh] r
-    | Fresh_to_reg: int * Ty.t * ('event,'r) dem * 'event -> [>`Fresh] r
     | Sem  : int * Ty.t * 'a sem * 'a -> [>`Sem] r
     | Value  : int * Ty.t * 'a value * 'a -> [>`Value] r
 
-  type t' = [ `Fresh | `Sem | `Value] r
+  type t' = [ `Sem | `Value] r
   type nodesem = [`Sem] r
   type nodevalue = [`Value] r
 
   let tag: t' -> int = function
-    | Fresh(tag,_) -> tag
-    | Fresh_to_reg(tag,_,_,_) -> tag
     | Sem(tag,_,_,_) -> tag
     | Value(tag,_,_,_) -> tag
 
@@ -124,28 +113,13 @@ module Node = struct
 
   let next_tag, incr_tag = Util.get_counter ()
 
-  let fresh ?to_reg s ty : t =
-    let i = next_tag () in
-    incr_tag ();
-    let s = Strings.find_new_name used_names s in
-    Simple_vector.inc_size (i+1) names;
-    Simple_vector.set names i s;
-    match to_reg with
-    | None ->
-      Debug.dprintf1 debug_create "[Egraph] @[fresh @@%s@]" s;
-      Fresh(i,ty)
-    | Some (dem,event) ->
-      Debug.dprintf1 debug_create "[Egraph] @[fresh to reg @@%s@]" s;
-      Fresh_to_reg(i,ty,dem,event)
-
   let rename node s =
     let s = Strings.find_new_name used_names s in
     Simple_vector.set names (tag node) s
 
-  let ty = function | Fresh (_,ty)
-                    | Fresh_to_reg (_,ty,_,_)
-                    | Sem(_,ty,_,_) -> ty
-                    | Value(_,ty,_,_) -> ty
+  let ty = function
+    | Sem(_,ty,_,_) -> ty
+    | Value(_,ty,_,_) -> ty
 
   module SemIndex = Sem.MkVector
       (struct type ('a,'unedeed) t = 'a -> Ty.t -> nodesem end)
@@ -449,7 +423,7 @@ module Only_for_solver = struct
     | Sem: 'a sem * 'a  -> sem_of_node
 
   let nodesem: Node.t -> NodeSem.t option = function
-    | Node.Fresh _ | Node.Fresh_to_reg _ | Node.Value _ -> None
+    | Node.Value _ -> None
     | Node.Sem _ as x -> Some (Obj.magic x: NodeSem.t)
 
   let sem_of_node: NodeSem.t -> sem_of_node = function
@@ -459,7 +433,7 @@ module Only_for_solver = struct
     | Value: 'a value * 'a  -> value_of_node
 
   let nodevalue: Node.t -> NodeValue.t option = function
-    | Node.Fresh _ | Node.Fresh_to_reg _ | Node.Sem _ -> None
+    | Node.Sem _ -> None
     | Node.Value _ as x -> Some (Obj.magic x: NodeValue.t)
 
   let value_of_node: NodeValue.t -> value_of_node = function
@@ -469,14 +443,10 @@ module Only_for_solver = struct
   let node_of_nodevalue : NodeValue.t -> Node.t = NodeValue.node
 
   type opened_node =
-    | Fresh: opened_node
-    | Fresh_to_reg: ('event,'r) dem * 'event -> opened_node
     | Sem  : NodeSem.t -> opened_node
     | Value  : NodeValue.t -> opened_node
 
-  let open_node = function
-    | Node.Fresh _ -> Fresh
-    | Node.Fresh_to_reg(_,_,dem,event) -> Fresh_to_reg(dem,event)
+  let open_node : Node.t -> opened_node = function
     | Node.Sem _ as x -> Sem (Obj.magic x: NodeSem.t)
     | Node.Value _ as x -> Value (Obj.magic x: NodeValue.t)
 end

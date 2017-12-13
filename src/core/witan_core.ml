@@ -69,7 +69,7 @@ module Dom = struct
 end
 
 module Dem = struct
-  include Typedef.Dem
+  include Events.Dem
 
   module type Dem = Egraph.Wait.Dem
 

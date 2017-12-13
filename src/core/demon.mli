@@ -124,8 +124,6 @@ module Fast: sig
   val attach: Egraph.Delayed.t -> 'd t -> 'd Create.t -> unit
   (** raise AlreadyDead if this key is already dead *)
 
-  val fresh_with_reg_node: 'd t -> string -> Ty.t -> 'd -> Node.t
-
   (** helper *)
   val register_init_daemon:
     name:string ->

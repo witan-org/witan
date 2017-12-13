@@ -36,18 +36,11 @@ exception AlreadyRedirected
 
 module Sem: Keys.Key
 module Value: Keys.Key
-module Dem: Keys.Key2
 
 (** Node *)
 
 module Node : sig
   include Datatype
-
-  val fresh: ?to_reg:(('event,'r) Dem.t * 'event) -> string -> Ty.t -> t
-  (** The string is used as the prefix for the debug output. [?to_reg]
-      allows to have an event emitted when this class is registered in
-      a solver.
-  *)
 
   val rename: t -> string -> unit
   (** Change the pretty printed string for this node, to use with care
@@ -227,8 +220,6 @@ module Only_for_solver: sig
   val node_of_nodevalue: NodeValue.t -> Node.t
 
   type opened_node =
-    | Fresh: opened_node
-    | Fresh_to_reg: ('event,'r) Dem.t * 'event -> opened_node
     | Sem  : NodeSem.t -> opened_node
     | Value  : NodeValue.t -> opened_node
 

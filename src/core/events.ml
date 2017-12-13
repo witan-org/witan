@@ -25,7 +25,9 @@ open Typedef
 
 let debug = Debug.register_info_flag ~desc:"for the events" "Egraph.events"
 
+(** Dem *)
 
+module Dem = Keys.Make_key2(struct end)
 
 module Print = struct (** Cutting the knot for pp *)
 

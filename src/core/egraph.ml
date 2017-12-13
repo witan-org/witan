@@ -441,11 +441,6 @@ module Delayed = struct
         t (Some t.env.event_any_reg) node;
       (** reg_sem *)
       match Only_for_solver.open_node node with
-      | Only_for_solver.Fresh -> ()
-      | Only_for_solver.Fresh_to_reg(dem,event) ->
-        Wait.wakeup_events_list Events.Wait.translate_regnode t
-          (Some [Events.Wait.Event(dem,event)])
-          node;
       | Only_for_solver.Sem nodesem ->
         begin match Only_for_solver.sem_of_node nodesem with
         | Only_for_solver.Sem(sem,_) ->
@@ -880,29 +875,29 @@ module Delayed = struct
     Sem.Vector.set t.env.sem sem reg_events
 
   let attached_reg_node
-      (type k) (type d) d node (dem:(k,d) Dem.t) : k Enum.t =
+      (type k) (type d) d node (dem:(k,d) Events.Dem.t) : k Enum.t =
     Enum.from_list
       ~filter:(function
           | Events.Wait.Event(dem',_) ->
-            Dem.equal dem dem'
+            Events.Dem.equal dem dem'
         )
       ~map:(function
           | Events.Wait.Event(dem',event) ->
-            match Dem.Eq.coerce_type dem dem' with
+            match Events.Dem.Eq.coerce_type dem dem' with
             | Keys.Eq, Keys.Eq -> (event:k)
         )
       (Node.M.find_def [] node d.env.event_reg)
 
   let attached_node
-      (type k) (type d) d node (dem:(k,d) Dem.t) : k Enum.t =
+      (type k) (type d) d node (dem:(k,d) Events.Dem.t) : k Enum.t =
     Enum.from_bag
       ~filter:(function
           | Events.Wait.Event(dem',_) ->
-            Dem.equal dem dem'
+            Events.Dem.equal dem dem'
         )
       ~map:(function
           | Events.Wait.Event(dem',event) ->
-            match Dem.Eq.coerce_type dem dem' with
+            match Events.Dem.Eq.coerce_type dem dem' with
             | Keys.Eq, Keys.Eq -> (event:k)
         )
       (Node.M.find_def Bag.empty node d.env.event)

@@ -82,12 +82,12 @@ module Key = struct
                                           and type info = 'i)
 
   type ('k,'d,'i) t = {
-    dk_id : ('k * 'd, 'k) Dem.t;
+    dk_id : ('k * 'd, 'k) Events.Dem.t;
     dk_data : ('k,'d,'i) demtable Env.t;
   }
 
   let create name = {
-    dk_id   = Dem.create_key name;
+    dk_id   = Events.Dem.create_key name;
     dk_data = Env.create_key name;
   }
 
@@ -133,17 +133,17 @@ module Key = struct
       match DemTable.Key.M.find k (DemTable.state) with
       | Dead ->
         Debug.dprintf4 debug "[Demon] @[Daemon %a for %a is dead@]"
-          Dem.pp D.key.dk_id DemTable.Key.pp k;
+          Events.Dem.pp D.key.dk_id DemTable.Key.pp k;
         None
       | Redirected k' ->
         Debug.dprintf6 debug
         "[Demon] @[Daemon %a for %a is redirected to %a@]"
-        Dem.pp D.key.dk_id DemTable.Key.pp
+        Events.Dem.pp D.key.dk_id DemTable.Key.pp
         k DemTable.Key.pp k';
         run d k'
       | Alive (events,info) ->
         Debug.dprintf6 debug "[Demon] @[Run daemon %a for %a:@[%a@]@]"
-          Dem.pp D.key.dk_id DemTable.Key.pp k
+          Events.Dem.pp D.key.dk_id DemTable.Key.pp k
           (Pp.list Pp.newline Events.Fired.pp) events;
         (** event can be added during wakeup *)
         let module DemTable' = struct
@@ -162,7 +162,7 @@ module Key = struct
               | AliveRedirected k' -> mark_dem d D.key k'; Redirected k'
               | AliveReattached -> assert false  in
             Debug.dprintf4 debug "[Demon] @[Stop daemon %a %a@]"
-              Dem.pp D.key.dk_id DemTable.Key.pp k;
+              Events.Dem.pp D.key.dk_id DemTable.Key.pp k;
             begin
               let module DemTable =
                 (val (Egraph.Delayed.get_env d D.key.dk_data)) in
@@ -185,7 +185,7 @@ module Key = struct
       let change_state k l =
           Debug.dprintf6 debug
           "[Demon] @[schedule %a for %a with %a@]"
-          Dem.pp D.key.dk_id D.Key.pp k
+          Events.Dem.pp D.key.dk_id D.Key.pp k
           Events.Fired.pp event;
         let module DemTable' = struct
           include DemTable
@@ -199,7 +199,7 @@ module Key = struct
         | Some Dead ->
           Debug.dprintf4 debug
             "[Demon] @[Dem %a is dead for %a@]"
-            Dem.pp D.key.dk_id Events.Fired.pp event;
+            Events.Dem.pp D.key.dk_id Events.Fired.pp event;
           Events.Wait.EnqStopped
         | Some (Redirected k') -> update_state k' data
         | (Some Alive([],info))  ->
@@ -315,7 +315,7 @@ module Key = struct
     try
       let module DemTable = (val (Egraph.Delayed.get_env t dem.dk_data)) in
       Debug.dprintf4 debug "[Demon] @[Kill dem %a %a@]"
-        Dem.pp dem.dk_id DemTable.Key.pp k;
+        Events.Dem.pp dem.dk_id DemTable.Key.pp k;
       let module DemTable' = struct
         include DemTable
         let state = DemTable.Key.M.change (function
@@ -331,7 +331,7 @@ end
 module Fast = struct
 
   type 'd t = {
-    dk_id : ('d, unit) Dem.t;
+    dk_id : ('d, unit) Events.Dem.t;
     dk_data : 'd Events.Fired.event list Env.t;
     (** for throttling *)
     mutable dk_remaining: int; (** 0 if the demon is not the current one *)
@@ -339,7 +339,7 @@ module Fast = struct
   }
 
   let create name = {
-    dk_id   = Dem.create_key name;
+    dk_id   = Events.Dem.create_key name;
     dk_data = Env.create_key name;
     dk_remaining = 0;
     dk_current = Queue.create ();
@@ -388,7 +388,7 @@ module Fast = struct
           let event = Queue.pop D.key.dk_current in
           Debug.dprintf6 debug
             "[Demon] @[Run daemon fast %a:@[%a@ %a@]@]"
-            Dem.pp D.key.dk_id Events.Fired.pp event
+            Events.Dem.pp D.key.dk_id Events.Fired.pp event
             D.Data.pp (Events.Fired.get_data event);
           D.wakeup d event;
           Debug.dprintf0 debug "[Demon] @[Done@]";
@@ -412,13 +412,13 @@ module Fast = struct
         let events = Egraph.Ro.get_env d D.key.dk_data in
         Debug.dprintf4 debug
           "[Demon] @[schedule %a for %a@]"
-          Dem.pp D.key.dk_id Events.Fired.pp event;
+          Events.Dem.pp D.key.dk_id Events.Fired.pp event;
         Egraph.Ro.set_env d D.key.dk_data (event::events);
         if events = [] then Events.Wait.EnqRun () else Events.Wait.EnqAlready
       else begin
         Debug.dprintf4 debug
           "[Demon] @[schedule %a for %a now@]"
-          Dem.pp D.key.dk_id Events.Fired.pp event;
+          Events.Dem.pp D.key.dk_id Events.Fired.pp event;
         Queue.add event D.key.dk_current;
         D.key.dk_remaining <- D.key.dk_remaining - 1;
         assert (D.key.dk_remaining >= 0);
@@ -464,9 +464,6 @@ module Fast = struct
           Egraph.Delayed.attach_node d node dem.dk_id data
         | EventRegSem (sem,data) ->
           Egraph.Delayed.attach_reg_sem d sem dem.dk_id data) events
-
-  let fresh_with_reg_node dem s ty data =
-    Node.fresh ~to_reg:(dem.dk_id,data) s ty
 
   let register_init_daemon
     (type a)

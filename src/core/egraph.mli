@@ -99,15 +99,15 @@ module Delayed : sig
   val merge    : t -> Trail.pexp -> Node.t -> Node.t -> unit
 
   (** {3 Attach Event} *)
-  val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) Dem.t -> 'event -> unit
+  val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when the dom change *)
-  val attach_value: t -> Node.t -> 'a Value.t -> ('event,'r) Dem.t -> 'event -> unit
+  val attach_value: t -> Node.t -> 'a Value.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when a value is attached to this equivalence class *)
-  val attach_reg_node: t -> Node.t -> ('event,'r) Dem.t -> 'event -> unit
+  val attach_reg_node: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when this node is registered *)
-  val attach_reg_sem: t -> 'a Sem.t -> ('event,'r) Dem.t -> 'event -> unit
+  val attach_reg_sem: t -> 'a Sem.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when a new semantical class is registered *)
-  val attach_node: t -> Node.t -> ('event,'r) Dem.t -> 'event -> unit
+  val attach_node: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when it is not anymore the representative class *)
 
   val register_decision: t -> Trail.chogen -> unit

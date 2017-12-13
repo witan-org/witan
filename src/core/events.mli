@@ -49,6 +49,8 @@ module Fired : sig
 
 end
 
+module Dem: Keys.Key2
+
 module Wait : sig
   type t =
     | Event: ('k,'d) Dem.t * 'k -> t

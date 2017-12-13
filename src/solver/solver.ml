@@ -22,6 +22,3 @@
 (*************************************************************************)
 
 module Conflict = Conflict
-
-module Variable = Variable
-
