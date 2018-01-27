@@ -64,7 +64,7 @@ module Fired = struct
     (** This class is not the representant of its eq-class anymore *)
     | EventChange : Node.t *                'b -> 'b event
     (** a new semantical term 'a appear *)
-    | EventRegSem : NodeSem.t * 'b -> 'b event
+    | EventRegSem : ThTerm.t * 'b -> 'b event
     (** a new value 'a appear *)
     | EventRegValue : NodeValue.t * 'b -> 'b event
 
@@ -82,9 +82,9 @@ module Fired = struct
       Format.fprintf fmt "registration of %a" Node.pp node
     | EventChange   (node, _)    ->
       Format.fprintf fmt "change of %a" Node.pp node
-    | EventRegSem (nodesem, _) ->
-      let node = Only_for_solver.node_of_nodesem nodesem in
-      begin match Only_for_solver.sem_of_node nodesem with
+    | EventRegSem (thterm, _) ->
+      let node = Only_for_solver.node_of_thterm thterm in
+      begin match Only_for_solver.sem_of_node thterm with
         | Only_for_solver.Sem(sem,v) ->
           Format.fprintf fmt "registration of sem:%a of %a with %a"
             Sem.pp sem Node.pp node (print_sem sem) v
@@ -147,7 +147,7 @@ module Wait = struct
   let translate_change =
     {translate = fun node data -> EventChange(node,data)}
   let translate_regsem =
-    {translate = fun nodesem data -> EventRegSem(nodesem,data)}
+    {translate = fun thterm data -> EventRegSem(thterm,data)}
   let translate_regvalue =
     {translate = fun nodeval data -> EventRegValue(nodeval,data)}
 

@@ -40,10 +40,20 @@ val register_converter:
 (** TODO: Id.t -> Term.t list *)
 (** Interpretation: Id.t -> Term.t list *)
 (**
-    NodeSem -> Node
+    ThTerm -> Node
     Node -> InternalNode
     NodeValue -> Values
 *)
 (**
-   Supprimer Cl et ClFresh 
+   Supprimer Cl et ClFresh
 *)
+
+
+(** V2 *)
+
+(** ThTerm -> ThTerm *)
+(** Synsem  -> SynTerm *)
+
+
+
+(** Node -> Var? *)

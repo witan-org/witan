@@ -26,21 +26,21 @@ open Typedef
 module Fired : sig
   type 'b event =
     (** the domain dom of the class change *)
-    | EventDom    : Node.t * 'a Dom.t  *      'b -> 'b event
+    | EventDom      : Node.t * 'a Dom.t  *      'b -> 'b event
     (** the value of the node has been set *)
-    | EventValue    : Node.t * 'a Value.t  *  'b -> 'b event
+    | EventValue    : Node.t * 'a Value.t  *    'b -> 'b event
     (** a new semantical term 'a point to this class (not complete) *)
-    | EventSem    : Node.t * 'a Sem.t  * 'a * 'b -> 'b event
+    | EventSem      : Node.t * 'a Sem.t  * 'a * 'b -> 'b event
     (** we want to register a class *)
-    | EventReg  : Node.t *                  'b -> 'b event
+    | EventReg      : Node.t *                  'b -> 'b event
     (** we want to register this class *)
-    | EventRegNode: Node.t *                  'b -> 'b event
+    | EventRegNode  : Node.t *                  'b -> 'b event
     (** This class is not the representant of its eq-class anymore *)
-    | EventChange : Node.t *                'b -> 'b event
+    | EventChange   : Node.t *                  'b -> 'b event
     (** a new semantical term 'a appear *)
-    | EventRegSem : NodeSem.t * 'b -> 'b event
+    | EventRegSem   : ThTerm.t *               'b -> 'b event
     (** a new value 'a appear *)
-    | EventRegValue : NodeValue.t * 'b -> 'b event
+    | EventRegValue : NodeValue.t *             'b -> 'b event
 
   val pp: 'b event Pp.pp
   val get_data: 'b event -> 'b
@@ -74,7 +74,7 @@ module Wait : sig
   val translate_reg : Node.t translate
   val translate_regnode : Node.t translate
   val translate_change : Node.t translate
-  val translate_regsem : NodeSem.t translate
+  val translate_regsem : ThTerm.t translate
   val translate_regvalue : NodeValue.t translate
 
   module type S = sig

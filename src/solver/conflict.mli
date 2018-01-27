@@ -50,7 +50,7 @@ module type Cho = sig
   (** Answer the question: Is the decision still needed? *)
 
   val make_decision:
-    Egraph.Delayed.t -> Trail.dec -> OnWhat.t -> What.t -> unit
+    Egraph.Delayed.t -> Trail.pexp -> OnWhat.t -> What.t -> unit
   (** Propagate the decision using {!Egraph.Delayed.t} *)
 
   val key: (OnWhat.t,What.t) Cho.t
@@ -68,7 +68,7 @@ module Exp = Trail.Exp
 module Con: Keys.Key
 
 type congen =
-  | GCon: 'a Con.t * 'a -> congen
+  | GCon: 'a Con.t * 'a * Trail.Age.t -> congen
 
 module type Exp = sig
 
@@ -79,7 +79,7 @@ module type Exp = sig
   val key: t Trail.Exp.t
 
   val analyse  :
-    Conflict.t -> Trail.Age.t -> t -> 'a Con.t -> 'a -> congen
+    Conflict.t -> Trail.Age.t -> t -> 'a Con.t -> 'a -> congen list
     (** One step of the analysis done on the trail. If the explanation
         as nothing to do with this conflict it should return it
         unchanged
@@ -96,7 +96,7 @@ val is_con_contradiction: 'a Con.t -> bool
 
 (** {2 Learning} *)
 
-type levels = {levels: 'a. Typedef.Node.t -> 'a Typedef.Value.t -> unit}
+(* type levels = {levels: 'a. Typedef.Node.t -> 'a Typedef.Value.t -> unit} *)
 
 module type Con = sig
 
@@ -107,7 +107,7 @@ module type Con = sig
   val apply_learnt: t -> Typedef.Node.t
   (** Build the constraint that correspond to the conflict learnt *)
 
-  val levels: levels -> t -> unit
+  val levels: Conflict.t -> t -> Trail.Age.t
   (** iterate on what depends the conflict (classe and value).
       It is used for computing the back-jumping level.
   *)

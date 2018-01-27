@@ -253,9 +253,9 @@ module DaemonPropaNot = struct
       end;
     | _ -> raise UnwaitedEvent
 
-  let init d nodesem node =
-    let v = ThE.sem nodesem in
-    let own = ThE.node nodesem in
+  let init d thterm node =
+    let v = ThE.sem thterm in
+    let own = ThE.node thterm in
     match is d own with
     | Some b ->
       let pexp = Delayed.mk_pexp d expprop (ExpNot((v,own,node))) in
@@ -285,41 +285,41 @@ module DaemonPropa = struct
   module Data = struct
     type t = d
     let pp fmt = function
-      | Lit (nodesem,w,n) ->
-        Format.fprintf fmt "Lit(%a,%i,%i,%a)" ThE.pp nodesem w n
-          Node.pp (ThE.node nodesem)
-      | All nodesem -> Format.fprintf fmt "All(%a)" ThE.pp nodesem
+      | Lit (thterm,w,n) ->
+        Format.fprintf fmt "Lit(%a,%i,%i,%a)" ThE.pp thterm w n
+          Node.pp (ThE.node thterm)
+      | All thterm -> Format.fprintf fmt "All(%a)" ThE.pp thterm
   end
 
   let immediate = false
   let throttle = 100
 
-  let wakeup_lit ~first d nodesem watched next =
-    let v = ThE.sem nodesem in
-    let own = ThE.node nodesem in
+  let wakeup_lit ~first d thterm watched next =
+    let v = ThE.sem thterm in
+    let own = ThE.node thterm in
     let pexp exp = Delayed.mk_pexp d expprop exp in
     let set_dom_up_true d own leaf _ =
       let b = (not v.topnot) in
       match Delayed.get_value d dom own with
       | Some b' when b' == b -> ()
-      | _ -> set_bool d (pexp (ExpUp(nodesem,leaf))) own b in
+      | _ -> set_bool d (pexp (ExpUp(thterm,leaf))) own b in
     let merge_bcp node sign =
       Debug.dprintf2 debug "[Bool] @[merge_bcp %a@]" Node.pp node;
       match Delayed.get_value d dom own with
       | Some b' ->
         let b = mulbool sign (mulbool b' v.topnot) in
-        let pexp = pexp (ExpBCP(nodesem,node,BCPOwnKnown)) in
+        let pexp = pexp (ExpBCP(thterm,node,BCPOwnKnown)) in
         set_bool d pexp node b
       | None -> (** merge *)
         match Delayed.get_value d dom node with
         | Some b' ->
           let b = mulbool sign (mulbool b' v.topnot) in
-          let pexp = pexp (ExpBCP(nodesem,node,BCPLeavesKnown)) in
+          let pexp = pexp (ExpBCP(thterm,node,BCPLeavesKnown)) in
           set_bool d pexp own b
         | None -> (** merge *)
           if mulbool v.topnot sign
-          then DaemonPropaNot.init d nodesem node
-          else Delayed.merge d (pexp (ExpBCP(nodesem,node,BCP))) own node in
+          then DaemonPropaNot.init d thterm node
+          else Delayed.merge d (pexp (ExpBCP(thterm,node,BCP))) own node in
     let rec find_watch dir pos bound =
       assert (dir == 1 || dir == -1);
       if pos == bound
@@ -340,49 +340,49 @@ module DaemonPropa = struct
       let clwatched, watched = find_watch dir watched next in
       let clnext   , next    = find_watch (-dir) next watched in
       let events = [Demon.Create.EventValue(clwatched,dom,
-                                          Lit(nodesem,watched,next))] in
+                                          Lit(thterm,watched,next))] in
       let events =
         if first then
           Demon.Create.EventValue(clnext,dom,
-                                       Lit(nodesem,next,watched))::events
+                                       Lit(thterm,next,watched))::events
         else events in
       Demon.Fast.attach d key events;
       true
     with Exit -> false
 
-  let wakeup_own ~first d nodesem =
-    let v = ThE.sem nodesem in
-    let own = ThE.node nodesem in
+  let wakeup_own ~first d thterm =
+    let v = ThE.sem thterm in
+    let own = ThE.node thterm in
     let pexp exp = Delayed.mk_pexp d expprop exp in
     begin match Delayed.get_value d dom own with
     | None -> assert (first);
       Demon.Fast.attach d key
-        [Demon.Create.EventValue(own, dom, All nodesem)];
+        [Demon.Create.EventValue(own, dom, All thterm)];
       true
     (** \/ c1 c2 = false ==> c1 = false /\ c2 = false *)
     | Some b when not (mulbool v.topnot b) ->
       let set_dom_down_false (node,sign) =
-        set_bool d (pexp (ExpDown(nodesem,node))) node sign in
+        set_bool d (pexp (ExpDown(thterm,node))) node sign in
       IArray.iter set_dom_down_false v.lits;
       false
     | Some _ -> true
     end
 
   (** return true if things should be propagated *)
-  let init d nodesem =
-    let v = ThE.sem nodesem in
-    wakeup_own ~first:true d nodesem &&
+  let init d thterm =
+    let v = ThE.sem thterm in
+    wakeup_own ~first:true d thterm &&
       let last = IArray.length v.lits - 1 in
-      wakeup_lit ~first:true d nodesem 0 last
+      wakeup_lit ~first:true d thterm 0 last
 
   let wakeup d = function
-    | Events.Fired.EventValue(_,dom',Lit(nodesem,watched,next)) ->
+    | Events.Fired.EventValue(_,dom',Lit(thterm,watched,next)) ->
       assert( Value.equal dom dom' );
-      ignore (wakeup_lit ~first:false d nodesem watched next)
-    | Events.Fired.EventValue(_ownr,dom',All nodesem) ->
+      ignore (wakeup_lit ~first:false d thterm watched next)
+    | Events.Fired.EventValue(_ownr,dom',All thterm) ->
       assert( Value.equal dom dom' );
       (** use this own because the other is the representant *)
-      ignore (wakeup_own ~first:false d nodesem)
+      ignore (wakeup_own ~first:false d thterm)
     | _ -> raise UnwaitedEvent
 
 
@@ -398,18 +398,18 @@ module DaemonInit = struct
   let immediate = false
   let throttle = 100
   let wakeup d = function
-    | Events.Fired.EventRegSem(nodesem,()) ->
+    | Events.Fired.EventRegSem(thterm,()) ->
       begin try
-          let nodesem = ThE.coerce_nodesem nodesem in
-          let v = ThE.sem nodesem in
+          let thterm = ThE.coerce_thterm thterm in
+          let v = ThE.sem thterm in
           match isnot v with
           | Some node ->
             Delayed.register d node;
-            DaemonPropaNot.init d nodesem node
+            DaemonPropaNot.init d thterm node
           | None ->
             assert (not lazy_propagation);
             IArray.iter (fun (node,_) -> Delayed.register d node) v.lits;
-            if DaemonPropa.init d nodesem then ()
+            if DaemonPropa.init d thterm then ()
         (* Delayed.ask_decision d (dec v) *)
         with Exit -> ()
       end
@@ -476,7 +476,7 @@ let set_false env pexp node = set_bool env pexp node false
 
 let converter d f l =
   let of_term t =
-    let n = Synsem.node_of_term t in
+    let n = SynTerm.node_of_term t in
     Egraph.Delayed.register d n;
     n
   in
@@ -506,7 +506,7 @@ let th_register' with_other_theories env =
     DaemonInit.key [Demon.Create.EventRegSem(sem,())];
   Delayed.register env cl_true;
   Delayed.register env cl_false;
-  Synsem.register_converter env converter;
+  SynTerm.register_converter env converter;
   ()
 
 let th_register_alone = th_register' false
@@ -689,19 +689,19 @@ module ExpProp = struct
   type t = expprop
 
   let pp fmt = function
-    | ExpBCP  (nodesem,node,kind) ->
+    | ExpBCP  (thterm,node,kind) ->
       Format.fprintf fmt "Bcp(%a,%a = %a;%t)"
-        ThE.pp nodesem Node.pp (ThE.node nodesem) Node.pp node
+        ThE.pp thterm Node.pp (ThE.node thterm) Node.pp node
         (fun _ -> match kind with
            | BCPOwnKnown -> Format.fprintf fmt "Own"
            | BCPLeavesKnown -> Format.fprintf fmt "Leaves"
            | BCP -> ())
-    | ExpUp  (nodesem,leaf)    ->
+    | ExpUp  (thterm,leaf)    ->
       Format.fprintf fmt "Up(%a,%a <- %a)"
-        ThE.pp nodesem Node.pp (ThE.node nodesem) Node.pp leaf
-    | ExpDown (nodesem,node)    ->
+        ThE.pp thterm Node.pp (ThE.node thterm) Node.pp leaf
+    | ExpDown (thterm,node)    ->
       Format.fprintf fmt "Down(%a,%a,%a ->)"
-        ThE.pp nodesem Node.pp (ThE.node nodesem) Node.pp node
+        ThE.pp thterm Node.pp (ThE.node thterm) Node.pp node
     | ExpNot ((v,clf,clt))    ->
       Format.fprintf fmt "Not(%a,%a,%a)"
         Th.pp v Node.pp clf Node.pp clt
@@ -737,11 +737,11 @@ module ExpProp = struct
     fun t age con exp ->
     let s =
       match exp with
-      | ExpBCP  (nodesem,_,_) when IArray.length (ThE.sem nodesem).lits = 1 ->
+      | ExpBCP  (thterm,_,_) when IArray.length (ThE.sem thterm).lits = 1 ->
         raise Impossible
-      | ExpBCP  (nodesem,propa,kind) ->
-        let v = ThE.sem nodesem in
-        let own = ThE.node nodesem in
+      | ExpBCP  (thterm,propa,kind) ->
+        let v = ThE.sem thterm in
+        let own = ThE.node thterm in
         let s = Node.M.empty in
         let s = if kind == BCPOwnKnown then get_dom t age own s else s in
         fold (fun s (node,_) ->
@@ -751,8 +751,8 @@ module ExpProp = struct
         let s = Node.M.empty in
         let s = get_dom  t age leaf s in
         s
-      | ExpDown  (nodesem,_)    ->
-        let own = ThE.node nodesem in
+      | ExpDown  (thterm,_)    ->
+        let own = ThE.node thterm in
         let s = Node.M.empty in
         let s = get_dom  t age own s in
         s

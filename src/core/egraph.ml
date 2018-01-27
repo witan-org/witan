@@ -295,10 +295,10 @@ let output_graph filename t =
         then Format.fprintf fmt ": %a" Ty.pp (Node.ty node)
       in
       let print_sem fmt node =
-        match Only_for_solver.nodesem node with
+        match Only_for_solver.thterm node with
         | None -> ()
-        | Some nodesem ->
-          match Only_for_solver.sem_of_node nodesem with
+        | Some thterm ->
+          match Only_for_solver.sem_of_node thterm with
           | Only_for_solver.Sem(sem,v) ->
             let module S = (val get_sem sem) in
             Format.fprintf fmt "| {%a | %s}"
@@ -423,12 +423,12 @@ module Delayed = struct
     assert (is_current_env t);
     if not (is_registered t node) then begin
       if Debug.test_flag debug_few then begin
-      match Only_for_solver.nodesem node with
+      match Only_for_solver.thterm node with
       | None ->
         Debug.dprintf2 debug_few "[Egraph] @[register %a@]" Node.pp node
-      | Some nodesem ->
+      | Some thterm ->
         Debug.dprintf4 debug_few "[Egraph] @[register %a: %a@]"
-          Node.pp node NodeSem.pp nodesem
+          Node.pp node ThTerm.pp thterm
       end;
       assert ( check_no_dom t node );
       t.env.repr <- Node.M.add node node t.env.repr;
@@ -441,12 +441,12 @@ module Delayed = struct
         t (Some t.env.event_any_reg) node;
       (** reg_sem *)
       match Only_for_solver.open_node node with
-      | Only_for_solver.Sem nodesem ->
-        begin match Only_for_solver.sem_of_node nodesem with
+      | Only_for_solver.Sem thterm ->
+        begin match Only_for_solver.sem_of_node thterm with
         | Only_for_solver.Sem(sem,_) ->
           let reg_events = get_table_sem t.env sem in
           Wait.wakeup_events_list Events.Wait.translate_regsem
-            t (Some reg_events) (nodesem)
+            t (Some reg_events) (thterm)
         end
       | Only_for_solver.Value nodevalue ->
         begin match Only_for_solver.value_of_node nodevalue with
@@ -495,11 +495,11 @@ module Delayed = struct
         add_pending_merge t pexp node0 node0'
     end
 
-  let set_sem_pending t pexp node0 nodesem =
-    let node0' = NodeSem.node nodesem in
+  let set_sem_pending t pexp node0 thterm =
+    let node0' = ThTerm.node thterm in
     let pexp () =
       Trail.mk_pexp t.env.trail Trail.exp_same_sem
-        (ExpSameSem(pexp,node0,nodesem)) in
+        (ExpSameSem(pexp,node0,thterm)) in
     set_semvalue_pending t pexp node0 node0'
 
   let set_value_pending t pexp node0 nodevalue =
@@ -775,11 +775,11 @@ module Delayed = struct
     assert (d.env.current_delayed == d);
     assert (is_registered d node)
 
-  let set_sem  d pexp node nodesem =
+  let set_sem  d pexp node thterm =
     Debug.dprintf4 debug "[Egraph] @[add_pending_set_sem for %a and %a@]"
-      Node.pp node NodeSem.pp nodesem;
+      Node.pp node ThTerm.pp thterm;
     check d node;
-    set_sem_pending d pexp node nodesem
+    set_sem_pending d pexp node thterm
 
   let set_nodevalue  d pexp node nodevalue =
     Debug.dprintf4 debug "[Egraph] @[add_pending_set_nodevalue for %a and %a@]"

@@ -87,7 +87,7 @@ module Node = struct
     | Value  : int * Ty.t * 'a value * 'a -> [>`Value] r
 
   type t' = [ `Sem | `Value] r
-  type nodesem = [`Sem] r
+  type thterm = [`Sem] r
   type nodevalue = [`Value] r
 
   let tag: t' -> int = function
@@ -122,11 +122,11 @@ module Node = struct
     | Value(_,ty,_,_) -> ty
 
   module SemIndex = Sem.MkVector
-      (struct type ('a,'unedeed) t = 'a -> Ty.t -> nodesem end)
+      (struct type ('a,'unedeed) t = 'a -> Ty.t -> thterm end)
 
   let semindex : unit SemIndex.t = SemIndex.create 8
 
-  let nodesem sem v ty : nodesem =
+  let thterm sem v ty : thterm =
     SemRegistry.check_is_registered sem;
     (SemIndex.get semindex sem) v ty
 
@@ -140,13 +140,13 @@ module Node = struct
     (ValueIndex.get valueindex value) v ty
 
   (** Just used for checking the typability *)
-  let _of_nodesem : nodesem -> t = function
+  let _of_thterm : thterm -> t = function
     | Sem(tag,ty,sem,v) -> Sem(tag,ty,sem,v)
 
   (** IF the previous function is typable this one is correct:
       I'm not able to defined is without obj.magic
   *)
-  let of_nodesem : nodesem -> t = Obj.magic
+  let of_thterm : thterm -> t = Obj.magic
 
   (** Just used for checking the typability *)
   let _of_nodevalue : nodevalue -> t = function
@@ -157,22 +157,22 @@ module Node = struct
   *)
   let of_nodevalue : nodevalue -> t = Obj.magic
 
-  let index_sem   sem v ty = of_nodesem (nodesem sem v ty)
+  let index_sem   sem v ty = of_thterm (thterm sem v ty)
   let index_value sem v ty = of_nodevalue (nodevalue sem v ty)
 
 end
 
-module NodeSem = struct
+module ThTerm = struct
   include Stdlib.MakeMSH(struct
-      type t = Node.nodesem
+      type t = Node.thterm
       let tag: t -> int = function
         | Node.Sem(tag,_,_,_) -> tag
       let pp fmt : t -> unit = function
         | Node.Sem(_,_,sem,v) -> print_sem sem fmt v
     end)
 
-  let index = Node.nodesem
-  let node = Node.of_nodesem
+  let index = Node.thterm
+  let node = Node.of_thterm
   let ty : t -> Ty.t = function
     | Node.Sem(_,ty,_,_) -> ty
 
@@ -182,25 +182,25 @@ end
 module type RegisteredSem = sig
   type s
   val key: s sem
-  (** nodesem *)
+  (** thterm *)
   include Datatype
 
   val index: s -> Ty.t -> t
-  (** Return a nodesem from a semantical value *)
+  (** Return a thterm from a semantical value *)
 
   val node: t -> Node.t
-  (** Return a node from a nodesem *)
+  (** Return a node from a thterm *)
 
   val ty: t -> Ty.t
-  (** Return the type from a nodesem *)
+  (** Return the type from a thterm *)
 
   val sem: t -> s
-  (** Return the sem from a nodesem *)
+  (** Return the sem from a thterm *)
 
-  val nodesem: t -> NodeSem.t
-  val of_nodesem: NodeSem.t -> t option
+  val thterm: t -> ThTerm.t
+  val of_thterm: ThTerm.t -> t option
 
-  val coerce_nodesem: NodeSem.t -> t
+  val coerce_thterm: ThTerm.t -> t
 
 end
 
@@ -210,7 +210,7 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
 
   module HC = Hashcons.MakeTag(struct
       open Node
-      type t = nodesem
+      type t = thterm
 
       let next_tag = Node.next_tag
       let incr_tag = Node.incr_tag
@@ -267,22 +267,22 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
     end;
     node
 
-  let node = Node.of_nodesem
+  let node = Node.of_thterm
 
   let sem : t -> D.t = function
     | Node.Sem(_,_,sem,v) ->
       match Sem.Eq.coerce_type sem D.key with
       | Keys.Eq -> v
 
-  let ty = NodeSem.ty
+  let ty = ThTerm.ty
 
-  let nodesem: t -> NodeSem.t = fun x -> x
+  let thterm: t -> ThTerm.t = fun x -> x
 
-  let of_nodesem: NodeSem.t -> t option = function
+  let of_thterm: ThTerm.t -> t option = function
     | Node.Sem(_,_,sem',_) as v when Sem.equal sem' D.key -> Some v
     | _ -> None
 
-  let coerce_nodesem: NodeSem.t -> t = function
+  let coerce_thterm: ThTerm.t -> t = function
     | Node.Sem(_,_,sem',_) as v -> assert (Sem.equal sem' D.key); v
 
   let () =
@@ -422,11 +422,11 @@ module Only_for_solver = struct
   type sem_of_node =
     | Sem: 'a sem * 'a  -> sem_of_node
 
-  let nodesem: Node.t -> NodeSem.t option = function
+  let thterm: Node.t -> ThTerm.t option = function
     | Node.Value _ -> None
-    | Node.Sem _ as x -> Some (Obj.magic x: NodeSem.t)
+    | Node.Sem _ as x -> Some (Obj.magic x: ThTerm.t)
 
-  let sem_of_node: NodeSem.t -> sem_of_node = function
+  let sem_of_node: ThTerm.t -> sem_of_node = function
     | Node.Sem (_,_,sem,v) -> Sem(sem,v)
 
   type value_of_node =
@@ -439,15 +439,15 @@ module Only_for_solver = struct
   let value_of_node: NodeValue.t -> value_of_node = function
     | Node.Value (_,_,value,v) -> Value(value,v)
 
-  let node_of_nodesem : NodeSem.t -> Node.t = NodeSem.node
+  let node_of_thterm : ThTerm.t -> Node.t = ThTerm.node
   let node_of_nodevalue : NodeValue.t -> Node.t = NodeValue.node
 
   type opened_node =
-    | Sem  : NodeSem.t -> opened_node
+    | Sem  : ThTerm.t -> opened_node
     | Value  : NodeValue.t -> opened_node
 
   let open_node : Node.t -> opened_node = function
-    | Node.Sem _ as x -> Sem (Obj.magic x: NodeSem.t)
+    | Node.Sem _ as x -> Sem (Obj.magic x: ThTerm.t)
     | Node.Value _ as x -> Value (Obj.magic x: NodeValue.t)
 end
 

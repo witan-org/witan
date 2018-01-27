@@ -71,17 +71,17 @@ module DaemonConvertTerm = struct
   let immediate = false
   let throttle = 100
   let wakeup d = function
-    | Events.Fired.EventRegSem(nodesem,()) ->
+    | Events.Fired.EventRegSem(thterm,()) ->
       begin try begin
-        let nodesem = Sem.coerce_nodesem nodesem in
-        let v = Sem.sem nodesem in
+        let thterm = Sem.coerce_thterm thterm in
+        let v = Sem.sem thterm in
         let f, l = uncurry_app v in
         let iter conv =
           match conv d f l with
           | None -> ()
           | Some node ->
             Egraph.Delayed.register d node;
-            Egraph.Delayed.merge d Trail.pexpfact (Sem.node nodesem) node
+            Egraph.Delayed.merge d Trail.pexpfact (Sem.node thterm) node
         in
         List.iter iter (Egraph.Delayed.get_env d converters)
       end with Exit -> () end

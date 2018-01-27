@@ -174,7 +174,7 @@ let expfact : unit Exp.t = Exp.create_key "Trail.fact"
 let pexpfact = Pexp(Age.bef,expfact,(),Tags.empty)
 
 type exp_same_sem =
-| ExpSameSem   : pexp * Node.t * NodeSem.t -> exp_same_sem
+| ExpSameSem   : pexp * Node.t * ThTerm.t -> exp_same_sem
 | ExpSameValue : pexp * Node.t * NodeValue.t -> exp_same_sem
 
 let exp_same_sem : exp_same_sem Exp.t =

@@ -43,9 +43,9 @@ module Sem = struct
   module Register = Typedef.RegisterSem
 end
 
-module NodeSem = Typedef.NodeSem
+module ThTerm = Typedef.ThTerm
 
-module Synsem = Synsem
+module SynTerm = SynTerm
 
 module Value = struct
   include Typedef.Value

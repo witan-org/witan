@@ -86,7 +86,7 @@ module Delayed : sig
   (** remove the dom of the equivalence class *)
 
   (** {3 Delayed modifications} *)
-  val set_sem  : t -> Trail.pexp -> Node.t -> NodeSem.t -> unit
+  val set_sem  : t -> Trail.pexp -> Node.t -> ThTerm.t -> unit
   (** attach a sem to an equivalence class *)
 
   val set_nodevalue: t -> Trail.pexp -> Node.t -> NodeValue.t -> unit

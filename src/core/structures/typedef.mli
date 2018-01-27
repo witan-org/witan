@@ -72,7 +72,7 @@ val get_sem: 'a Sem.t -> (module Sem with type t = 'a)
 val check_sem_registered: 'a Sem.t -> unit
 val print_sem : 'a Sem.t -> 'a Pp.pp
 
-module NodeSem: sig
+module ThTerm: sig
   include Datatype
 
 
@@ -96,27 +96,27 @@ module type RegisteredSem = sig
 
   val key: s Sem.t
 
-  (** nodesem *)
+  (** thterm *)
   include Datatype
 
   val index: s -> Ty.t -> t
   (** Return a semantical term from the user type *)
 
   val node: t -> Node.t
-  (** Return a class from a nodesem *)
+  (** Return a class from a thterm *)
 
   val ty: t -> Ty.t
-  (** Return the type from a nodesem *)
+  (** Return the type from a thterm *)
 
   val sem: t -> s
-  (** Return the sem from a nodesem *)
+  (** Return the sem from a thterm *)
 
-  val nodesem: t -> NodeSem.t
-  val of_nodesem: NodeSem.t -> t option
-  (** Return the user type if the NodeSem belongs to this module *)
+  val thterm: t -> ThTerm.t
+  val of_thterm: ThTerm.t -> t option
+  (** Return the user type if the ThTerm belongs to this module *)
 
-  val coerce_nodesem: NodeSem.t -> t
-  (** Return the user type. Raise if the NodeSem does not belong to this
+  val coerce_thterm: ThTerm.t -> t
+  (** Return the user type. Raise if the ThTerm does not belong to this
       module *)
 
 end
@@ -193,13 +193,13 @@ module Only_for_solver: sig
   type sem_of_node =
     | Sem: 'a Sem.t * 'a -> sem_of_node
 
-  val nodesem:
-    Node.t -> NodeSem.t option
+  val thterm:
+    Node.t -> ThTerm.t option
     (** give the sem associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
   val sem_of_node:
-    NodeSem.t -> sem_of_node
+    ThTerm.t -> sem_of_node
     (** give the sem associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
@@ -216,11 +216,11 @@ module Only_for_solver: sig
     (** give the value associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
-  val node_of_nodesem: NodeSem.t -> Node.t
+  val node_of_thterm: ThTerm.t -> Node.t
   val node_of_nodevalue: NodeValue.t -> Node.t
 
   type opened_node =
-    | Sem  : NodeSem.t -> opened_node
+    | Sem  : ThTerm.t -> opened_node
     | Value  : NodeValue.t -> opened_node
 
   val open_node: Node.t -> opened_node

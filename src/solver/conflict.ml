@@ -44,7 +44,7 @@ module type Cho = sig
     Egraph.Delayed.t -> OnWhat.t -> What.t decdone
 
   val make_decision:
-    Egraph.Delayed.t -> Trail.dec -> OnWhat.t -> What.t -> unit
+    Egraph.Delayed.t -> Trail.pexp -> OnWhat.t -> What.t -> unit
 
   val key: (OnWhat.t,What.t) Cho.t
 

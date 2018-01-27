@@ -113,7 +113,7 @@ val pexpfact: pexp
     for proof generation *)
 
 type exp_same_sem =
-| ExpSameSem   : pexp * Node.t * NodeSem.t -> exp_same_sem
+| ExpSameSem   : pexp * Node.t * ThTerm.t -> exp_same_sem
 | ExpSameValue : pexp * Node.t * NodeValue.t -> exp_same_sem
 
 val exp_same_sem : exp_same_sem Exp.t

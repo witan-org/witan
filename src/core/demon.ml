@@ -470,25 +470,25 @@ module Fast = struct
     ~name
     ?(immediate=false)
     ?(throttle=100)
-    (nodesem: (module Typedef.RegisteredSem with type t = a) )
+    (thterm: (module Typedef.RegisteredSem with type t = a) )
     (f:Egraph.Delayed.t -> a -> unit)
     (init_d:Egraph.Delayed.t)
     =
-    let module NodeSem = (val nodesem) in
+    let module ThTerm = (val thterm) in
     let module DaemonInit = struct
       let key = create name
       module Data = Stdlib.DUnit
       let immediate = immediate
       let throttle = throttle
       let wakeup d = function
-        | Events.Fired.EventRegSem(nodesem,()) ->
-          let nodesem = NodeSem.coerce_nodesem nodesem in
-          f d nodesem
+        | Events.Fired.EventRegSem(thterm,()) ->
+          let thterm = ThTerm.coerce_thterm thterm in
+          f d thterm
         | _ -> raise UnwaitedEvent
     end in
     let module RDaemonInit = Register(DaemonInit) in
     RDaemonInit.init init_d;
-    attach init_d DaemonInit.key [Create.EventRegSem(NodeSem.key,())]
+    attach init_d DaemonInit.key [Create.EventRegSem(ThTerm.key,())]
 
 
 end
