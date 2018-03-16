@@ -503,7 +503,7 @@ module Delayed = struct
     set_semvalue_pending t pexp node0 node0'
 
   let set_value_pending t pexp node0 nodevalue =
-    let node0' = NodeValue.node nodevalue in
+    let node0' = Values.node nodevalue in
     let pexp () =
       Trail.mk_pexp t.env.trail Trail.exp_same_sem
         (ExpSameValue(pexp,node0,nodevalue)) in
@@ -783,7 +783,7 @@ module Delayed = struct
 
   let set_nodevalue  d pexp node nodevalue =
     Debug.dprintf4 debug "[Egraph] @[add_pending_set_nodevalue for %a and %a@]"
-      Node.pp node NodeValue.pp nodevalue;
+      Node.pp node Values.pp nodevalue;
     check d node;
     set_value_pending d pexp node nodevalue
 
@@ -791,7 +791,7 @@ module Delayed = struct
     Debug.dprintf4 debug_few
       "[Egraph] @[set_dom for %a with %a@]"
       Node.pp node (print_value value) v;
-    let nodevalue = NodeValue.index value v (Node.ty node) in
+    let nodevalue = Values.index value v (Node.ty node) in
     set_value_pending d pexp node nodevalue
 
   let set_dom d pexp dom node v =

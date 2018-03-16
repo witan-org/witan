@@ -66,7 +66,7 @@ module Fired = struct
     (** a new semantical term 'a appear *)
     | EventRegSem : ThTerm.t * 'b -> 'b event
     (** a new value 'a appear *)
-    | EventRegValue : NodeValue.t * 'b -> 'b event
+    | EventRegValue : Values.t * 'b -> 'b event
 
   let pp fmt = function
     | EventDom      (node, dom, _) ->

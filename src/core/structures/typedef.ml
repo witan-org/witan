@@ -291,7 +291,7 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
 
 end
 
-module NodeValue = struct
+module Values = struct
   include Stdlib.MakeMSH(struct
       type t = Node.nodevalue
       let tag: t -> int = function
@@ -326,10 +326,10 @@ module type RegisteredValue = sig
   val value: t -> s
   (** Return the value from a nodevalue *)
 
-  val nodevalue: t -> NodeValue.t
-  val of_nodevalue: NodeValue.t -> t option
+  val nodevalue: t -> Values.t
+  val of_nodevalue: Values.t -> t option
 
-  val coerce_nodevalue: NodeValue.t -> t
+  val coerce_nodevalue: Values.t -> t
 
 end
 
@@ -401,15 +401,15 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
       match Value.Eq.coerce_type value D.key with
       | Keys.Eq -> v
 
-  let ty = NodeValue.ty
+  let ty = Values.ty
 
-  let nodevalue: t -> NodeValue.t = fun x -> x
+  let nodevalue: t -> Values.t = fun x -> x
 
-  let of_nodevalue: NodeValue.t -> t option = function
+  let of_nodevalue: Values.t -> t option = function
     | Node.Value(_,_,value',_) as v when Value.equal value' D.key -> Some v
     | _ -> None
 
-  let coerce_nodevalue: NodeValue.t -> t = function
+  let coerce_nodevalue: Values.t -> t = function
     | Node.Value(_,_,value',_) as v -> assert (Value.equal value' D.key); v
 
   let () =
@@ -432,23 +432,23 @@ module Only_for_solver = struct
   type value_of_node =
     | Value: 'a value * 'a  -> value_of_node
 
-  let nodevalue: Node.t -> NodeValue.t option = function
+  let nodevalue: Node.t -> Values.t option = function
     | Node.Sem _ -> None
-    | Node.Value _ as x -> Some (Obj.magic x: NodeValue.t)
+    | Node.Value _ as x -> Some (Obj.magic x: Values.t)
 
-  let value_of_node: NodeValue.t -> value_of_node = function
+  let value_of_node: Values.t -> value_of_node = function
     | Node.Value (_,_,value,v) -> Value(value,v)
 
   let node_of_thterm : ThTerm.t -> Node.t = ThTerm.node
-  let node_of_nodevalue : NodeValue.t -> Node.t = NodeValue.node
+  let node_of_nodevalue : Values.t -> Node.t = Values.node
 
   type opened_node =
     | Sem  : ThTerm.t -> opened_node
-    | Value  : NodeValue.t -> opened_node
+    | Value  : Values.t -> opened_node
 
   let open_node : Node.t -> opened_node = function
     | Node.Sem _ as x -> Sem (Obj.magic x: ThTerm.t)
-    | Node.Value _ as x -> Value (Obj.magic x: NodeValue.t)
+    | Node.Value _ as x -> Value (Obj.magic x: Values.t)
 end
 
 

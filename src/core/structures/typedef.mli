@@ -142,7 +142,7 @@ val check_value_registered: 'a Value.t -> unit
 
 (** {3 Module for handling generically values} *)
 
-module NodeValue: sig
+module Values: sig
   include Datatype
 
 
@@ -176,10 +176,10 @@ module type RegisteredValue = sig
   val value: t -> s
   (** Return the value from a nodevalue *)
 
-  val nodevalue: t -> NodeValue.t
-  val of_nodevalue: NodeValue.t -> t option
+  val nodevalue: t -> Values.t
+  val of_nodevalue: Values.t -> t option
 
-  val coerce_nodevalue: NodeValue.t -> t
+  val coerce_nodevalue: Values.t -> t
 
 end
 
@@ -207,21 +207,21 @@ module Only_for_solver: sig
     | Value: 'a Value.t * 'a -> value_of_node
 
   val nodevalue:
-    Node.t -> NodeValue.t option
+    Node.t -> Values.t option
     (** give the value associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
   val value_of_node:
-    NodeValue.t -> value_of_node
+    Values.t -> value_of_node
     (** give the value associated with a node, make sense only for not merged
         class. So only the module solver can use it *)
 
   val node_of_thterm: ThTerm.t -> Node.t
-  val node_of_nodevalue: NodeValue.t -> Node.t
+  val node_of_nodevalue: Values.t -> Node.t
 
   type opened_node =
     | Sem  : ThTerm.t -> opened_node
-    | Value  : NodeValue.t -> opened_node
+    | Value  : Values.t -> opened_node
 
   val open_node: Node.t -> opened_node
 

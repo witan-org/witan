@@ -42,7 +42,7 @@ val register_converter:
 (**
     ThTerm -> Node
     Node -> InternalNode
-    NodeValue -> Values
+    Values -> Values
 *)
 (**
    Supprimer Cl et ClFresh

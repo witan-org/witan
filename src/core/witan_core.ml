@@ -56,7 +56,7 @@ module Value = struct
   module Register = Typedef.RegisterValue
 end
 
-module NodeValue = Typedef.NodeValue
+module Values = Typedef.Values
 
 
 module Dom = struct

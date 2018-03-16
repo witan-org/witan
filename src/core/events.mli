@@ -40,7 +40,7 @@ module Fired : sig
     (** a new semantical term 'a appear *)
     | EventRegSem   : ThTerm.t *               'b -> 'b event
     (** a new value 'a appear *)
-    | EventRegValue : NodeValue.t *             'b -> 'b event
+    | EventRegValue : Values.t *             'b -> 'b event
 
   val pp: 'b event Pp.pp
   val get_data: 'b event -> 'b
@@ -75,7 +75,7 @@ module Wait : sig
   val translate_regnode : Node.t translate
   val translate_change : Node.t translate
   val translate_regsem : ThTerm.t translate
-  val translate_regvalue : NodeValue.t translate
+  val translate_regvalue : Values.t translate
 
   module type S = sig
     type delayed
