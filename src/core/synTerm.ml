@@ -27,7 +27,6 @@ let synsem = Sem.create_key "syntax"
 
 module Sem = RegisterSem(struct
     let key = synsem
-    include Stdlib.MkDatatype(Term)
     include Term
   end)
 

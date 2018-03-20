@@ -58,6 +58,7 @@ end
 
 module Values = Typedef.Values
 
+module Interp = Interp
 
 module Dom = struct
   include Dom

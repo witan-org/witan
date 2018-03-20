@@ -99,6 +99,7 @@ val print : Format.formatter -> t -> unit
 val pp: t Pp.pp
 (** Print a term (quite verbose). *)
 
+include Stdlib.Datatype with type t := t
 
 (** {2 Term creation} *)
 

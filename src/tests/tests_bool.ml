@@ -33,6 +33,40 @@ let ($$) f x = f x
 
 let run = Tests_lib.run_exn ~theories
 
+let bool_interp () =
+  let ta = Term.const (Id.mk "a" Bool.ty) in
+  let tb = Term.const (Id.mk "b" Bool.ty) in
+  let tc = Term.const (Id.mk "c" Bool.ty) in
+  let to_n x = SynTerm.node_of_term x in
+  let na = to_n ta in
+  let nb = to_n tb in
+  let nc = to_n tc in
+  let leaf ~a ~b ~c t =
+    if Term.equal t ta
+    then Some (Values.index Bool.dom a Bool.ty)
+    else if Term.equal t tb
+    then Some (Values.index Bool.dom b Bool.ty)
+    else if Term.equal t tc
+    then Some (Values.index Bool.dom c Bool.ty)
+    else None
+  in
+  let l = [
+    "true", Bool._true, true, (fun _-> None);
+    "false", Bool._false, false, (fun _-> None);
+    "or(a,b,c)", Bool._or [na;nb;nc], false, leaf ~a:false ~b:false ~c:false;
+    "or(a,b,c)", Bool._or [na;nb;nc], true, leaf ~a:false ~b:true ~c:false;
+    "not(or(a,not b,and(c,c)))",
+       Bool.gen true [na,false;nb,true;(Bool._and [nc;nc]),false], true, leaf ~a:false ~b:true ~c:false;
+  ]
+  in
+  let test (msg,n,v,leaf) =
+    let v' = Interp.node ~leaf n in
+    match Values.value Bool.dom v' with
+    | None -> assert_failure (Printf.sprintf "Not a value of type bool: %s" msg)
+    | Some v' -> assert_bool msg (v = v')
+  in
+  List.iter test l
+
 let true_is_true () =
   let env = run (fun _ -> ()) in
   assert_bool "" (Bool.is_true env Bool._true);
@@ -80,9 +114,9 @@ let imply_implies () =
   let a = Term.const (Id.mk "a" Term._Prop) in
   let b = Term.const (Id.mk "b" Term._Prop) in
   let t = Term.apply Term.imply_term [a;b] in
-  let an = Synsem.node_of_term a in
-  let bn = Synsem.node_of_term b in
-  let tn = Synsem.node_of_term t in
+  let an = SynTerm.node_of_term a in
+  let bn = SynTerm.node_of_term b in
+  let tn = SynTerm.node_of_term t in
   let env = run $$ fun env ->
       Egraph.Delayed.register env tn;
       Bool.set_true env Trail.pexpfact tn;
@@ -91,7 +125,8 @@ let imply_implies () =
   in
   assert_bool "" (Bool.is_true env bn)
 
-let basic = "Bool.Basic" >::: [ "true_is_true" >:: true_is_true;
+let basic = "Bool.Basic" >::: [ "bool_interp" >:: bool_interp;
+                                "true_is_true" >:: true_is_true;
                                 "not_true_is_false" >:: not_true_is_false;
                                 "and_true_is_true" >:: and_true_is_true;
                                 "or_not_true_is_false" >:: or_not_true_is_false;

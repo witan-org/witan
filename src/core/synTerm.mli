@@ -36,24 +36,3 @@ val register_converter:
   (Egraph.Delayed.t -> Term.t -> Term.t list -> Node.t option) ->
   unit
 (** register converters between syntactic terms *)
-
-(** TODO: Id.t -> Term.t list *)
-(** Interpretation: Id.t -> Term.t list *)
-(**
-    ThTerm -> Node
-    Node -> InternalNode
-    Values -> Values
-*)
-(**
-   Supprimer Cl et ClFresh
-*)
-
-
-(** V2 *)
-
-(** ThTerm -> ThTerm *)
-(** Synsem  -> SynTerm *)
-
-
-
-(** Node -> Var? *)

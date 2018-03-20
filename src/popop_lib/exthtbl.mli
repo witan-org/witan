@@ -98,7 +98,7 @@ module type S =
   (** change the value of all the key,
       don't modify the table during this run *)
 
-  val memo : int -> (key -> 'a) -> key -> 'a
+  val memo : (key -> 'a) -> 'a t -> key -> 'a
   (** convenience function, memoize a function *)
 
   val is_empty : 'a t -> bool

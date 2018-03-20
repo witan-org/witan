@@ -1,2 +1,8 @@
 - .header file for easy inclusion to new files
 - separate witan into two packages (witan-lib and witan-bin)
+
+
+- naming:
+ - TODO: Id.t -> Term.t list
+ - Interpretation: Id.t -> Term.t list
+ - Node -> Var?

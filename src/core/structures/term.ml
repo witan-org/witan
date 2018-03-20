@@ -115,22 +115,21 @@ and compare t t' =
 
 let equal t t' = compare t t' = 0
 
-
 (* Bound variables *)
 (* ************************************************************************ *)
 
-module S = Set.Make(Tmp)
+module SId = Set.Make(Tmp)
 
 let rec free_vars acc t =
   match t.term with
   | Type -> acc
-  | Id v -> S.add v acc
+  | Id v -> SId.add v acc
   | App (f, arg) ->
     free_vars (free_vars acc f) arg
   | Let (v, e, body) ->
-    S.remove v (free_vars (free_vars acc e) body)
+    SId.remove v (free_vars (free_vars acc e) body)
   | Binder (_, v, body) ->
-    S.remove v (free_vars acc body)
+    SId.remove v (free_vars acc body)
 
 
 (** Creating terms *)
@@ -157,8 +156,8 @@ let letin v e body =
 let rec bind b v body =
   match b with
   | Lambda ->
-    let fv = free_vars S.empty body.ty in
-    let ty_b = if S.mem v fv then Pi else Arrow in
+    let fv = free_vars SId.empty body.ty in
+    let ty_b = if SId.mem v fv then Pi else Arrow in
     let res_ty = bind ty_b v body.ty in
     mk res_ty (Binder (b, v, body))
   | Pi | Arrow ->
@@ -435,6 +434,14 @@ let false_term = const false_id
 let equal_term = const equal_id
 let imply_term = const imply_id
 let equiv_term = const equiv_id
+
+include Stdlib.MkDatatype(struct
+    type nonrec t = t
+    let equal = equal
+    let compare = compare
+    let hash = hash
+    let pp = pp
+  end)
 
 (* Module alias *)
 (* ************************************************************************ *)

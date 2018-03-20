@@ -28,7 +28,7 @@ open Witan_core
 let debug = Debug.register_flag
   ~desc:" Run the test in verbose mode." "ounit"
 
-let fresh ty s = Synsem.node_of_term (Term.const (Id.mk s ty))
+let fresh ty s = SynTerm.node_of_term (Term.const (Id.mk s ty))
 
 let (&:) s l = s >::: (List.map (fun f -> TestCase f) l)
 
@@ -75,7 +75,7 @@ let run_exn ~theories f =
   let t = new_solver () in
   begin try
       let d = new_delayed t in
-      List.iter (fun f -> f d) (Synsem.init::theories);
+      List.iter (fun f -> f d) (SynTerm.init::theories);
       Egraph.flush d;
       f d;
       Egraph.flush d;

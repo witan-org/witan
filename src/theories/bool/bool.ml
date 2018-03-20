@@ -127,6 +127,20 @@ type t =
 
 let sem : t Sem.t = Sem.create_key "Prop"
 
+let () =
+  let interp ~interp t =
+    let v =
+      IArray.fold (fun acc (n,b) ->
+          acc ||
+          let v = BoolValue.value (BoolValue.coerce_nodevalue (interp n)) in
+          if b then not v else v
+        ) false t.lits
+    in
+    let v = if t.topnot then not v else v in
+    BoolValue.nodevalue (if v then value_true else value_false)
+  in
+  Interp.Register.thterm sem interp
+
 (* let iter f x = IArray.iter f x.lits *)
 
 let fold f acc x = IArray.fold f acc x.lits

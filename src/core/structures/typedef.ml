@@ -305,6 +305,12 @@ module Values = struct
   let ty : t -> Ty.t = function
     | Node.Value(_,ty,_,_) -> ty
 
+  let value : type a. a Value.t -> t -> a option = fun value t ->
+    match t with
+    | Node.Value(_,_,value',v) ->
+      match Value.Eq.eq_type value value' with
+      | None -> None
+      | Some Keys.Eq -> Some v
 
 end
 

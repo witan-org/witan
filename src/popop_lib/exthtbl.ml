@@ -91,7 +91,7 @@ module type S =
   val find_opt : 'a t -> key -> 'a option
   val find_exn : 'a t -> exn -> key -> 'a
   val mapi : (key -> 'a -> 'a) -> 'a t -> unit
-  val memo : int -> (key -> 'a) -> key -> 'a
+  val memo : (key -> 'a) -> 'a t -> key -> 'a
   val is_empty : 'a t -> bool
   val remove_all: 'a t -> key -> unit
   val change   : ('a option -> 'a option) -> 'a t -> key -> unit
@@ -379,10 +379,9 @@ module MakeSeeded(H: SeededHashedType) =
 
     let find h k = find_exn h Not_found k
 
-    let memo size f =
-      let h = create size in
-      fun x -> try find h x
-        with Not_found -> let y = f x in add h x y; y
+    let memo f h x =
+      try find h x
+      with Not_found -> let y = f x in add h x y; y
 
     let find_def h d k =
       try find h k with Not_found -> d

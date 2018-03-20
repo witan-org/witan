@@ -59,7 +59,7 @@ module Exp = Trail.Exp
 module Con = Keys.Make_key(struct end)
 
 type congen =
-  | GCon: 'a Con.t * 'a -> congen
+  | GCon: 'a Con.t * 'a * Trail.Age.t -> congen
 
 module type Exp = sig
 
@@ -70,12 +70,12 @@ module type Exp = sig
   val key: t Trail.Exp.t
 
   val analyse  :
-    Conflict.t -> Trail.Age.t -> t -> 'a Con.t -> 'a -> congen
+    Conflict.t -> Trail.Age.t -> t -> 'a Con.t -> 'a -> congen list
 end
 
 let register_exp: (module Exp) -> unit = fun _ -> assert false
 
-type levels = {levels: 'a. Typedef.Node.t -> 'a Typedef.Value.t -> unit}
+(* type levels = {levels: 'a. Typedef.Node.t -> 'a Typedef.Value.t -> unit} *)
 
 module type Con = sig
 
@@ -85,7 +85,7 @@ module type Con = sig
 
   val apply_learnt: t -> Typedef.Node.t
 
-  val levels: levels -> t -> unit
+  val levels: Conflict.t -> t -> Trail.Age.t
 
 end
 

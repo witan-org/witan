@@ -21,6 +21,16 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-type ty = Term.t
 
-include Term
+module Register: sig
+  val id: (Term.id -> Typedef.Values.t list -> Typedef.Values.t option) -> unit
+
+  val thterm: 'a Typedef.Sem.t -> (interp:(Typedef.Node.t -> Typedef.Values.t) -> 'a -> Typedef.Values.t) -> unit
+
+end
+
+type leaf = Term.t -> Typedef.Values.t option
+
+val term   : ?leaf:leaf -> Term.t -> Typedef.Values.t
+val thterm : ?leaf:leaf -> Typedef.ThTerm.t -> Typedef.Values.t
+val node   : ?leaf:leaf -> Typedef.Node.t -> Typedef.Values.t

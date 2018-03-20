@@ -153,6 +153,7 @@ module Values: sig
 
   val ty: t -> Ty.t
 
+  val value: 'a Value.t -> t -> 'a option
 end
 
 (** {3 For building a particular value} *)
