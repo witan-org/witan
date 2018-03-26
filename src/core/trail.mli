@@ -25,22 +25,6 @@
 
 open Typedef
 
-
-(** {2 Allows to track information (ex:unsat core),
-    but currently not used } *)
-module Tag: Keys.Key
-type 'a tag = 'a Tag.t
-
-module Tags : sig
-  type t
-  val empty: t
-  val add: t -> 'a tag -> 'a Bag.t -> t
-  val find: t -> 'a tag -> 'a Bag.t
-  val union: t -> t -> t
-  val pp: t Pp.pp
-end
-type tags = Tags.t
-
 (** {2 Age: position in the trail } *)
 
 (** The age is a position in the trail. So it is also a way to
@@ -62,10 +46,20 @@ type age = Age.t
 
 module Exp: Keys.Key
 
-type pexp =
-| Pexp: age * 'a Exp.t * 'a * tags -> pexp
-(** An explanation. The age indicate the state to consider *)
+module Pexp : sig
+  type t =
+    | Pexp: age * 'a Exp.t * 'a -> t
+    (** An explanation. The age indicate the state to consider *)
 
+end
+
+module Con: Keys.Key
+
+module Pcon : sig
+  type t =
+    | PCon: 'a Con.t * 'a -> t
+
+end
 
 (** trail and additional information *)
 type t
@@ -73,6 +67,9 @@ val create: unit -> t
 val new_handle: t -> t
 
 val current_age: t -> age
+val before_last_dec: t -> age -> bool
+
+val get_pexp: t -> age -> Pexp.t
 
 (** {2 Decisions} *)
 type dec
@@ -88,18 +85,17 @@ val nbdec: t -> int
 val mk_pexp:
   t ->
   ?age:age (* in which age it should be evaluated *) ->
-  ?tags:tags ->
-  'a Exp.t -> 'a -> pexp
+  'a Exp.t -> 'a -> Pexp.t
 (** create a new explanation using by default the current age *)
 
 val add_merge_start:
-  t -> pexp ->
+  t -> Pexp.t ->
   node1:Node.t -> node2:Node.t ->
   node1_repr:Node.t -> node2_repr:Node.t -> new_repr:Node.t -> unit
 (** Start of merge, indicative mainly for domains *)
 
 val add_merge_finish:
-  t -> pexp ->
+  t -> Pexp.t ->
   node1:Node.t -> node2:Node.t ->
   node1_repr:Node.t -> node2_repr:Node.t -> new_repr:Node.t -> unit
 (** End of a merge, pexp is added to the trail  *)
@@ -108,19 +104,19 @@ val add_merge_finish:
 (** {2 Predefined explanation} *)
 
 val expfact: unit Exp.t
-val pexpfact: pexp
+val pexpfact: Pexp.t
 (** No need of any explanation it is a fact. Perhaps should be avoided
     for proof generation *)
 
 type exp_same_sem =
-| ExpSameSem   : pexp * Node.t * ThTerm.t -> exp_same_sem
-| ExpSameValue : pexp * Node.t * Values.t -> exp_same_sem
+| ExpSameSem   : Pexp.t * Node.t * ThTerm.t -> exp_same_sem
+| ExpSameValue : Pexp.t * Node.t * Values.t -> exp_same_sem
 
 val exp_same_sem : exp_same_sem Exp.t
 (** Two nodes have been merged because they shared the same semantical
     terms or value *)
 
-val exp_diff_value: pexp Exp.t
+val exp_diff_value: Pexp.t Exp.t
 (** A contradiction have been reached because the given explanation
     makes one equivalence class be associated to two different values *)
 
@@ -136,7 +132,7 @@ type chogen =
 (** {2 Trail for domains, currently not used } *)
 
 val add_pexp_dom:
-  t -> pexp -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit
+  t -> Pexp.t -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit
 (** A domain has been modified *)
 
 val add_pexp_dom_premerge:
@@ -146,3 +142,8 @@ val add_pexp_dom_premerge:
   nodefrom0:Node.t ->
   unit
 (** A domain has been modified during the merge of classes *)
+
+(** {2 Get information from trail for conflict} *)
+
+val age_merge: t -> Node.t -> Node.t -> Age.t
+(** Give the age at which the given node merged *)

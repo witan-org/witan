@@ -24,7 +24,7 @@
 open Stdlib
 open Typedef
 
-exception Contradiction of Trail.pexp
+exception Contradiction of Trail.Pexp.t
 
 let debug = Debug.register_info_flag
   ~desc:"for the core solver"
@@ -82,7 +82,7 @@ and delayed_t = {
   env : t;
   todo_immediate_dem : action_immediate_dem Queue.t;
   todo_merge_dom : action_merge_dom Queue.t;
-  mutable todo_delayed_merge : (Trail.pexp * Node.t * Node.t * bool) option;
+  mutable todo_delayed_merge : (Trail.Pexp.t * Node.t * Node.t * bool) option;
   todo_merge : action_merge Queue.t;
   todo_ext_action : action_ext Queue.t;
   sched_daemon : Events.Wait.daemon_key -> unit;
@@ -94,10 +94,10 @@ and action_immediate_dem =
 
 and action_merge_dom =
 | SetMergeDomNode  :
-    Trail.pexp * 'a Dom.t * Node.t * Node.t * bool -> action_merge_dom
+    Trail.Pexp.t * 'a Dom.t * Node.t * Node.t * bool -> action_merge_dom
 
 and action_merge =
-| Merge of Trail.pexp * Node.t * Node.t
+| Merge of Trail.Pexp.t * Node.t * Node.t
 
 and action_ext =
 | ExtDem         : Events.Wait.daemon_key  -> action_ext
@@ -120,7 +120,7 @@ module Wait : Events.Wait.S with type delayed = delayed_t and type delayed_ro = 
   Events.Wait.Make(WaitDef)
 
 (** {2 Define domain registration} *)
-module VDom = Dom.Make(struct type delayed = delayed_t type pexp = Trail.pexp end)
+module VDom = Dom.Make(struct type delayed = delayed_t type pexp = Trail.Pexp.t end)
 include VDom
 
 let mk_dumb_delayed () = { env = Obj.magic 0;
@@ -824,7 +824,7 @@ module Delayed = struct
   let register_decision t chogen =
     t.sched_decision chogen
 
-  let mk_pexp t ?age ?tags kexp exp = Trail.mk_pexp ?age ?tags t.env.trail kexp exp
+  let mk_pexp t ?age kexp exp = Trail.mk_pexp ?age t.env.trail kexp exp
   let current_age t = Trail.current_age t.env.trail
 
   let contradiction d pexp =

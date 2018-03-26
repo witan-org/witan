@@ -49,42 +49,23 @@ module Age = struct
 end
 type age = Age.t (* position in the trail *)
 
-module Tag = Keys.Make_key(struct end)
-type 'a tag = 'a Tag.t
-
-module Tags : sig
-  type t
-  val empty: t
-  val add: t -> 'a tag -> 'a Bag.t -> t
-  val find: t -> 'a tag -> 'a Bag.t
-  val union: t -> t -> t
-  val pp: t Pp.pp
-end = struct
-  type exi
-  type t = exi Bag.t Tag.K.M.t
-  let empty = Tag.K.M.empty
-  let add : type a. t -> a tag -> a Bag.t -> t =
-    fun tags tag l ->
-      Tag.K.M.add ((tag : a tag) :> Tag.K.t)
-        (Obj.magic (l : a Bag.t) :> exi Bag.t) tags
-  let find : type a. t -> a tag -> a Bag.t =
-    fun tags tag ->
-      (Obj.magic (Tag.K.M.find_def Bag.empty ((tag : a tag) :> Tag.K.t)
-                    tags : exi Bag.t) : a Bag.t)
-  let union : t -> t -> t = fun t1 t2 ->
-         Tag.K.M.union (fun _ a b -> Some (Bag.concat a b)) t1 t2
-  let pp fmt _ = Format.pp_print_string fmt "!Tags!"
-end
-type tags = Tags.t
-
 type dec = age
 let age_of_dec x = x
 let print_dec = Age.pp
 
-type pexp =
-| Pexp: age * 'a Exp.t * 'a * tags -> pexp
+module Pexp = struct
+  type t =
+    | Pexp: age * 'a Exp.t * 'a -> t
+end
 
-(** Indicate when a node stopped to be the representative, a what it becomes.
+module Con = Keys.Make_key(struct end)
+
+module Pcon = struct
+  type t =
+    | PCon: 'a Con.t * 'a -> t
+end
+
+(** Indicate when a node stopped to be the representative, and what it becomes.
     Can be used to know the state of the classes at any point in the past.
 *)
 type nodehist = (age * Node.t) Node.M.t
@@ -94,9 +75,13 @@ type t = {
   mutable first_dec : Age.t;
   mutable nbdec    : int;
   mutable age      : Age.t;
-  trail            : pexp Simple_vector.t;
+  trail            : Pexp.t Simple_vector.t;
   mutable nodehist : nodehist;
 }
+
+let before_last_dec t a = Age.compare a t.last_dec < 0
+
+let get_pexp t age = Simple_vector.get t.trail age
 
 let create () = {
   last_dec = Age.bef;
@@ -130,24 +115,23 @@ let nbdec t = t.nbdec
 let mk_pexp:
   t ->
   ?age:age (* in which age it should be evaluated *) ->
-  ?tags:tags ->
-  'a Exp.t -> 'a -> pexp =
-  fun t ?(age=t.age) ?(tags=Tags.empty) exp e ->
-    Pexp(age,exp,e,tags)
+  'a Exp.t -> 'a -> Pexp.t =
+  fun t ?(age=t.age) exp e ->
+    Pexp(age,exp,e)
 
 let add_pexp t pexp =
   t.age <- Age.succ t.age;
   Simple_vector.push t.trail pexp
 
 let add_merge_start:
-  t -> pexp -> node1:Node.t -> node2:Node.t ->
+  t -> Pexp.t -> node1:Node.t -> node2:Node.t ->
   node1_repr:Node.t -> node2_repr:Node.t -> new_repr:Node.t -> unit
   =
   fun _t _pexp ~node1:_ ~node2:_ ~node1_repr:_ ~node2_repr:_ ~new_repr:_ ->
     ()
 
 let add_merge_finish:
-  t -> pexp -> node1:Node.t -> node2:Node.t ->
+  t -> Pexp.t -> node1:Node.t -> node2:Node.t ->
   node1_repr:Node.t -> node2_repr:Node.t -> new_repr:Node.t -> unit
   =
   fun t pexp ~node1:_ ~node2:_ ~node1_repr ~node2_repr ~new_repr ->
@@ -156,7 +140,7 @@ let add_merge_finish:
     t.nodehist <- Node.M.add old_repr (t.age,new_repr) t.nodehist
 
 let add_pexp_dom:
-  t -> pexp -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit =
+  t -> Pexp.t -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit =
   fun _t _pexp _dom ~node:_ ~node0:_ ->
     assert false (** TODO when domain will be needed *)
 
@@ -171,15 +155,35 @@ let add_pexp_dom_premerge:
 
 
 let expfact : unit Exp.t = Exp.create_key "Trail.fact"
-let pexpfact = Pexp(Age.bef,expfact,(),Tags.empty)
+let pexpfact = Pexp.Pexp(Age.bef,expfact,())
 
 type exp_same_sem =
-| ExpSameSem   : pexp * Node.t * ThTerm.t -> exp_same_sem
-| ExpSameValue : pexp * Node.t * Values.t -> exp_same_sem
+| ExpSameSem   : Pexp.t * Node.t * ThTerm.t -> exp_same_sem
+| ExpSameValue : Pexp.t * Node.t * Values.t -> exp_same_sem
 
 let exp_same_sem : exp_same_sem Exp.t =
   Exp.create_key "Egraph.exp_same_sem"
 
 (** TODO choose an appropriate data *)
-let exp_diff_value : pexp Exp.t =
+let exp_diff_value : Pexp.t Exp.t =
   Exp.create_key "Egraph.exp_diff_value"
+
+
+let age_merge t n1 n2 =
+  if Node.equal n1 n2 then Age.min
+  else
+    let rec aux t n1 n2 =
+      assert (not (Node.equal n1 n2));
+      let age, n1, n2 =
+        match n1, Node.M.find_opt n1 t.nodehist, n2, Node.M.find_opt n2 t.nodehist with
+        | _, None, _, None -> invalid_arg "age_merge: node not merged"
+        | n1, None, _, Some(age,n2) | _, Some(age,n2), n1, None ->
+          age, n1, n2
+        | n1, Some(age1,n1'), n2, Some(age2,n2') ->
+          let c = Age.compare age1 age2 in
+          assert ( c <> 0);
+          if c < 0 then age1, n1', n2 else age2, n1, n2'
+      in
+      if Node.equal n1 n2 then age else aux t n1 n2
+    in
+    aux t n1 n2

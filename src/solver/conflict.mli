@@ -39,7 +39,7 @@ module type Cho = sig
     val pp: t Pp.pp
   end
 
-  (** Allows to transfer any information from {!choose_decision} and {!make_decision} *)
+  (** Allows to transfer any information from {!choose_decision} to {!make_decision} *)
   module What: sig
     type t
     val pp: t Pp.pp
@@ -50,7 +50,7 @@ module type Cho = sig
   (** Answer the question: Is the decision still needed? *)
 
   val make_decision:
-    Egraph.Delayed.t -> Trail.pexp -> OnWhat.t -> What.t -> unit
+    Egraph.Delayed.t -> Trail.Pexp.t -> OnWhat.t -> What.t -> unit
   (** Propagate the decision using {!Egraph.Delayed.t} *)
 
   val key: (OnWhat.t,What.t) Cho.t
@@ -62,13 +62,14 @@ end
 module Conflict : sig
   (** Environment used during conflict resolution *)
   type t
+
+  val age_merge: t -> Node.t -> Node.t -> Trail.Age.t
+  (** Give the age at which the given node merged *)
+
 end
 
 module Exp = Trail.Exp
-module Con: Keys.Key
-
-type congen =
-  | GCon: 'a Con.t * 'a * Trail.Age.t -> congen
+module Con = Trail.Con
 
 module type Exp = sig
 
@@ -78,21 +79,31 @@ module type Exp = sig
 
   val key: t Trail.Exp.t
 
+  val from_contradiction:
+    Conflict.t (* -> Trail.Age.t *) -> t -> Trail.Pcon.t list
+    (** First step of the analysis done on the trail. *)
+
   val analyse  :
-    Conflict.t -> Trail.Age.t -> t -> 'a Con.t -> 'a -> congen list
-    (** One step of the analysis done on the trail. If the explanation
-        as nothing to do with this conflict it should return it
-        unchanged
-    *)
+    Conflict.t (* -> Trail.Age.t *) -> t -> 'a Con.t -> 'a -> Trail.Pcon.t list
+    (** One step of the analysis done on the trail. This function is
+       called on the explanation that correspond to last_level of the
+        conflict *)
+
 end
 
 val register_exp: (module Exp) -> unit
 
-val is_con_contradiction: 'a Con.t -> bool
-(** Tests if it is the start of the conflict analysis. It means false.
-    It should be replaced by {!Exp.analyse} by the conflict of the
-    explanation given to {!Delayed.contradiction}
-*)
+(** {2 Levels} *)
+
+module Levels : sig
+
+  type t
+
+  val empty: t
+
+  val add: Conflict.t -> Trail.age -> t -> t
+
+end
 
 (** {2 Learning} *)
 
@@ -104,14 +115,21 @@ module type Con = sig
 
   val pp: t Pp.pp
 
+  val key: t Trail.Con.t
+
   val apply_learnt: t -> Typedef.Node.t
   (** Build the constraint that correspond to the conflict learnt *)
 
-  val levels: Conflict.t -> t -> Trail.Age.t
-  (** iterate on what depends the conflict (classe and value).
-      It is used for computing the back-jumping level.
-  *)
+  val levels: Conflict.t -> t -> Levels.t
+  (** iterate on what depends the conflict (classe and value). *)
 
 end
 
 val register_con: (module Con) -> unit
+
+(** {2 Conflict analysis} *)
+
+val learn: Trail.t -> Trail.Pexp.t -> Trail.Age.t * Node.t
+
+
+val _or: (Node.t list -> Node.t) ref

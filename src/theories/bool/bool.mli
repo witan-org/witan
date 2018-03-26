@@ -36,8 +36,8 @@ val gen   : bool -> (Node.t * bool) list -> Node.t
     not_b0 (or (not_b1 cl1,not_b2 cl2)) with not_x f = if x then not f else f
 *)
 
-val set_true  : Egraph.d -> Trail.pexp -> Node.t -> unit
-val set_false : Egraph.d -> Trail.pexp -> Node.t -> unit
+val set_true  : Egraph.d -> Trail.Pexp.t -> Node.t -> unit
+val set_false : Egraph.d -> Trail.Pexp.t -> Node.t -> unit
 
 val is       : Egraph.d -> Node.t -> bool option
 val is_true  : Egraph.d -> Node.t -> bool
@@ -46,7 +46,7 @@ val is_false : Egraph.d -> Node.t -> bool
     current constraints or due to incompletness *)
 val is_unknown : Egraph.d -> Node.t -> bool
 
-(* val true_is_false : Egraph.d -> Node.t -> Trail.pexp -> 'a *)
+(* val true_is_false : Egraph.d -> Node.t -> Trail.Pexp.t -> 'a *)
 
 val th_register: Egraph.d -> unit
 val th_register_alone: Egraph.d -> unit

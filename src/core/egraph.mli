@@ -73,7 +73,7 @@ module Delayed : sig
   include Ro with type t := t
 
   (** {3 Immediate modifications} *)
-  val set_dom  : t -> pexp -> 'a Dom.t -> Node.t -> 'a -> unit
+  val set_dom  : t -> Pexp.t -> 'a Dom.t -> Node.t -> 'a -> unit
   (** change the dom of the equivalence class *)
   
   val set_dom_premerge  : t -> 'a Dom.t -> Node.t -> 'a -> unit
@@ -82,21 +82,21 @@ module Delayed : sig
         The explication is the explication given for the merge
   *)
   
-  val unset_dom  : t -> pexp -> 'a Dom.t -> Node.t -> unit
+  val unset_dom  : t -> Pexp.t -> 'a Dom.t -> Node.t -> unit
   (** remove the dom of the equivalence class *)
 
   (** {3 Delayed modifications} *)
-  val set_sem  : t -> Trail.pexp -> Node.t -> ThTerm.t -> unit
+  val set_sem  : t -> Trail.Pexp.t -> Node.t -> ThTerm.t -> unit
   (** attach a sem to an equivalence class *)
 
-  val set_nodevalue: t -> Trail.pexp -> Node.t -> Values.t -> unit
+  val set_nodevalue: t -> Trail.Pexp.t -> Node.t -> Values.t -> unit
   (** attach value to an equivalence class *)
 
-  val set_value: t -> Trail.pexp -> 'a Value.t -> Node.t -> 'a -> unit
+  val set_value: t -> Trail.Pexp.t -> 'a Value.t -> Node.t -> 'a -> unit
   (** attach value to an equivalence class *)
 
   (** {3 Delayed modifications} *)
-  val merge    : t -> Trail.pexp -> Node.t -> Node.t -> unit
+  val merge    : t -> Trail.Pexp.t -> Node.t -> Node.t -> unit
 
   (** {3 Attach Event} *)
   val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) Events.Dem.t -> 'event -> unit
@@ -116,9 +116,9 @@ module Delayed : sig
       if the decision is still needed. *)
 
   (** {3 Trails} *)
-  val mk_pexp: t -> ?age:age -> ?tags:tags -> 'a Exp.t -> 'a -> Trail.pexp
+  val mk_pexp: t -> ?age:age -> 'a Exp.t -> 'a -> Trail.Pexp.t
   val current_age: t -> age
-  val contradiction: t -> Trail.pexp -> 'b
+  val contradiction: t -> Trail.Pexp.t -> 'b
 
   (** {3 Low level} *)
   val flush: t -> unit
@@ -133,7 +133,7 @@ module Wait : Events.Wait.S with type delayed = Delayed.t and type delayed_ro = 
 
 (** {2 Domains and Semantic Values key creation} *)
 
-module type Dom = Dom.Dom_partial with type delayed := Delayed.t and type pexp := Trail.pexp
+module type Dom = Dom.Dom_partial with type delayed := Delayed.t and type pexp := Trail.Pexp.t
 
 val register_dom : (module Dom with type t = 'a) -> unit
 
@@ -150,7 +150,7 @@ val new_delayed :
     calling flush. (flushd doesn't count)
 *)
 
-exception Contradiction of Trail.pexp
+exception Contradiction of Trail.Pexp.t
 
 val run_daemon: Delayed.t -> Events.Wait.daemon_key -> unit
 (** schedule the run of a deamon *)
