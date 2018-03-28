@@ -87,6 +87,8 @@ module Trail = Trail
 module Events = Events
 module Demon  = Demon
 
+module Conflict = Conflict
+
 exception UnwaitedEvent = Typedef.UnwaitedEvent
 (** Can be raised by daemon when receiving an event that they don't
     waited for. It is the sign of a bug in the core solver *)

@@ -40,10 +40,10 @@ module BoolValue = Value.Register(struct
   end)
 
 let value_true = BoolValue.index true ty
-let cl_true = BoolValue.node value_true
+let node_true = BoolValue.node value_true
 
 let value_false = BoolValue.index false ty
-let cl_false = BoolValue.node value_false
+let node_false = BoolValue.node value_false
 
 let union_disjoint m1 m2 =
   Node.M.union (fun _ b1 b2 -> assert (b1 == b2); Some b1) m1 m2
@@ -58,8 +58,8 @@ let with_other = ref false
 
 
 let is env node = Egraph.Delayed.get_value env dom node
-let is_true  env node = Node.equal node cl_true || is env node = Some true
-let is_false env node = Node.equal node cl_false || is env node = Some false
+let is_true  env node = Node.equal node node_true || is env node = Some true
+let is_false env node = Node.equal node node_false || is env node = Some false
 let is_unknown env node = is env node = None
 
 (*
@@ -81,7 +81,7 @@ module D = struct
   let set_bool env pexp node b =
     if !with_other then
       Delayed.merge env pexp node
-        (if b then cl_true else cl_false)
+        (if b then node_true else node_false)
     else
       match Delayed.get_value env dom node with
       | Some b' when DBool.equal b b' -> ()
@@ -116,7 +116,7 @@ module DE = RegisterDom(D)
 let set_bool env pexp node b =
   if !with_other then
     Delayed.merge env pexp node
-      (if b then cl_true else cl_false)
+      (if b then node_true else node_false)
   else
     Delayed.set_value env pexp dom node b
 
@@ -145,6 +145,9 @@ let () =
 
 let fold f acc x = IArray.fold f acc x.lits
 
+let find x n =
+  fold (fun acc (n1,b) -> if Node.equal n1 n then Some b else acc) None x
+
 let isnot v =
   if IArray.length v.lits == 1 then
     let node,sign = IArray.get v.lits 0 in
@@ -154,6 +157,9 @@ let isnot v =
     None
 
 let mulbool b1 b2 = b1 != b2
+
+let node_of_bool b =
+  if b then node_true else node_false
 
 module T = struct
   type r = t
@@ -230,17 +236,18 @@ end
 
 module ThE = Sem.Register(Th)
 
+(** At least all the leaves except one are known and can be discarded *)
 type bcpkind =
-  | BCPOwnKnown
-  | BCPLeavesKnown
-  | BCP
+  | BCPOwnKnown      (** Top is known and true modulo topnot, propagate true modulo sign to propa *)
+  | BCPLeavesKnown   (** All leaves are known and false modulo sign, propagate false modulo topnot to own *)
+  | BCP              (** Merge top with the remaining leave *)
 
 type expprop =
 | ExpBCP  of ThE.t (* own *) * Node.t (* propa *) * bcpkind
 | ExpUp  of ThE.t (* own *) * Node.t  (* one leaf to own *)
 | ExpDown of ThE.t (* own *) * Node.t (* leaf *)(* own to leaf *)
-| ExpNot  of (Th.t * Node.t * Node.t)
-(* | ExpNot  of Th.t * Node.t * Node.t (* t <> not t or t = not (not t) *) *)
+| ExpNot  of (Th.t * Node.t * Node.t) * bool (* what have been propagated *)
+| ExpDec  of Node.t * bool
 
 let expprop : expprop Exp.t = Exp.create_key "Bool.prop"
 
@@ -262,7 +269,7 @@ module DaemonPropaNot = struct
       begin match Delayed.get_value d dom node with
         | None -> raise Impossible
         | Some b ->
-          let pexp = Delayed.mk_pexp d expprop (ExpNot(x)) in
+          let pexp = Delayed.mk_pexp d expprop (ExpNot(x,not b)) in
           set_bool d pexp ncl (not b)
       end;
     | _ -> raise UnwaitedEvent
@@ -272,13 +279,13 @@ module DaemonPropaNot = struct
     let own = ThE.node thterm in
     match is d own with
     | Some b ->
-      let pexp = Delayed.mk_pexp d expprop (ExpNot((v,own,node))) in
+      let pexp = Delayed.mk_pexp d expprop (ExpNot((v,own,node),not b)) in
       set_bool d pexp node (not b)
     | None ->
       match is d node with
       | Some b ->
         let pexp = Delayed.mk_pexp d expprop
-            (ExpNot((v,node,own))) in
+            (ExpNot((v,node,own),not b)) in
         set_bool d pexp own (not b)
       | None ->
         let events = [Demon.Create.EventValue(own,dom,(v,own,node));
@@ -321,14 +328,20 @@ module DaemonPropa = struct
       Debug.dprintf2 debug "[Bool] @[merge_bcp %a@]" Node.pp node;
       match Delayed.get_value d dom own with
       | Some b' ->
+        let pexp = if (mulbool b' v.topnot)
+          then pexp (ExpBCP(thterm,node,BCPOwnKnown))
+          else pexp (ExpDown(thterm,node))
+        in
         let b = mulbool sign (mulbool b' v.topnot) in
-        let pexp = pexp (ExpBCP(thterm,node,BCPOwnKnown)) in
         set_bool d pexp node b
       | None -> (** merge *)
         match Delayed.get_value d dom node with
         | Some b' ->
+          let pexp = if (mulbool b' sign)
+            then pexp (ExpUp(thterm,node))
+            else pexp (ExpBCP(thterm,node,BCPLeavesKnown))
+          in
           let b = mulbool sign (mulbool b' v.topnot) in
-          let pexp = pexp (ExpBCP(thterm,node,BCPLeavesKnown)) in
           set_bool d pexp own b
         | None -> (** merge *)
           if mulbool v.topnot sign
@@ -434,7 +447,7 @@ end
 module RDaemonInit = Demon.Fast.Register(DaemonInit)
 
 
-let _true = cl_true
+let _true = node_true
 let _not node =
   index sem {topnot = true; lits = IArray.of_list [node,false]}
 
@@ -450,29 +463,29 @@ let gen topnot l =
   try
     let l = filter (fun f acc -> List.fold_left f acc l) in
     match l with
-    | [] -> if topnot then cl_true else cl_false
+    | [] -> if topnot then node_true else node_false
     | [node,b] when mulbool topnot b -> _not node
     | [node,_] -> node
     | l ->
       index sem {topnot; lits = IArray.of_list l}
-  with Exit -> if topnot then cl_false else cl_true
+  with Exit -> if topnot then node_false else node_true
 
 let _or_and b l =
   try
     let l = filter (fun f acc ->
         List.fold_left (fun acc e -> f acc (e,b)) acc l) in
     match l with
-    | [] -> if b then cl_true else cl_false
+    | [] -> if b then node_true else node_false
     | [a,b'] -> assert (b == b'); a
     | l ->
       index sem {topnot = b; lits = IArray.of_list l}
-  with Exit -> if b then cl_false else cl_true
+  with Exit -> if b then node_false else node_true
 
 let _or  = _or_and false
 let _and = _or_and true
 
 let mk_clause m =
-  if Node.M.is_empty m then cl_false
+  if Node.M.is_empty m then node_false
   else let len = Node.M.cardinal m in
     if len = 1 then
       let node,b = Node.M.choose m in
@@ -482,9 +495,13 @@ let mk_clause m =
                      lits = IArray.of_iter len
                          (fun iter -> Node.M.iter (fun node b -> iter (node,b)) m)}
 
-let _false = cl_false
+let _false = node_false
 
 let set_true env pexp node = set_bool env pexp node true
+
+let () =
+  Conflict._or := _or;
+  Conflict._set_true := set_true
 
 let set_false env pexp node = set_bool env pexp node false
 
@@ -518,52 +535,43 @@ let th_register' with_other_theories env =
   RDaemonInit.init env;
   Demon.Fast.attach env
     DaemonInit.key [Demon.Create.EventRegSem(sem,())];
-  Delayed.register env cl_true;
-  Delayed.register env cl_false;
+  Delayed.register env node_true;
+  Delayed.register env node_false;
   SynTerm.register_converter env converter;
   ()
 
 let th_register_alone = th_register' false
 let th_register = th_register' true
 
+(** {2 Choice on bool} *)
+
 let chobool = Trail.Cho.create_key "Bool.cho"
 
 let make_dec node = Trail.GCho(node,chobool,node)
 
-(*
-let () = Variable.register_sort ~dec:make_dec ty
 module ChoBool = struct
   open Conflict
 
-  module Key = Node
-  module Data = DBool
+  module OnWhat = Node
+  module What = DBool
 
-  let make_decision env dec node b =
-    Debug.dprintf5 Conflict.print_decision
-      "[Bool] decide %b on %a at %a" b Node.pp node Trail.print_dec dec;
-    let pexp = Trail.mk_pcho dec chobool node b in
+  let make_decision env node b =
+    Debug.dprintf3 print_decision "[Bool] decide %b on %a" b Node.pp node;
+    let pexp = Egraph.Delayed.mk_pexp env expprop (ExpDec(node,b)) in
     set_bool env pexp node b
 
   let choose_decision env node =
-    match Egraph.Delayed.get_dom env dom node with
+    match Egraph.Delayed.get_value env dom node with
     | Some _ -> DecNo
-    | None -> DecTodo true (** why not true? *)
-
-  let analyse (type a) t (con: a Trail.con) node b =
-    let return (s:bool Types.Node.M.t) : a rescon =
-      match Trail.Con.Eq.eq_type conclause con with
-      | None -> GOther (conclause,s)
-      | Some Types.Eq -> GRequested s in
-    ComputeConflict.set_dec_cho t chobool node;
-    return (Node.M.singleton node b)
-
+    | None -> DecTodo (fun env -> make_decision env node true) (** why not true? *)
 
   let key = chobool
 
 end
 
-module EChoBool = Conflict.RegisterCho(ChoBool)
+let () = Conflict.register_cho (module ChoBool)
 
+(*
 let choclause = Trail.Cho.create_key "Bool.choclause"
 
 module ChoClause = struct
@@ -591,7 +599,10 @@ module ChoClause = struct
 end
 
 module EChoClause = Conflict.RegisterCho(ChoClause)
+*)
 
+
+(*
 open Conflict
 type clause_conflict = bool Types.Node.M.t
 
@@ -607,7 +618,7 @@ let get_con acc t rescon =
     acc t rescon
 
 let get_dom t age node s =
-  if Node.equal node cl_true || Node.equal node cl_false then s
+  if Node.equal node node_true || Node.equal node node_false then s
   else
     let l = ComputeConflict.get_dom t age node dom in
     (* Format.fprintf (Debug.get_debug_formatter ()) *)
@@ -653,7 +664,7 @@ module ExpMerge = struct
 
 (*
   let need_dom t age node =
-    if not (Node.equal node cl_true || Node.equal node cl_false) then
+    if not (Node.equal node node_true || Node.equal node node_false) then
       IterExp.need_dom t age node dom
 
   let iterexp t age = function
@@ -697,6 +708,7 @@ module ExpMerge = struct
 end
 
 module EM = Conflict.RegisterExp(ExpMerge)
+*)
 
 module ExpProp = struct
 
@@ -716,9 +728,12 @@ module ExpProp = struct
     | ExpDown (thterm,node)    ->
       Format.fprintf fmt "Down(%a,%a,%a ->)"
         ThE.pp thterm Node.pp (ThE.node thterm) Node.pp node
-    | ExpNot ((v,clf,clt))    ->
-      Format.fprintf fmt "Not(%a,%a,%a)"
-        Th.pp v Node.pp clf Node.pp clt
+    | ExpNot ((v,clf,clt),b)    ->
+      Format.fprintf fmt "Not(%a,%a,%a,%b)"
+        Th.pp v Node.pp clf Node.pp clt b
+    | ExpDec (n,b) ->
+      Format.fprintf fmt "Dec(%a,%b)"
+        Node.pp n b
 
 
 (*
@@ -745,63 +760,93 @@ module ExpProp = struct
 
 *)
 
-  let analyse :
-      type a. Conflict.ComputeConflict.t ->
-    Trail.age -> a Trail.con -> t -> a Conflict.rescon =
-    fun t age con exp ->
-    let s =
-      match exp with
-      | ExpBCP  (thterm,_,_) when IArray.length (ThE.sem thterm).lits = 1 ->
-        raise Impossible
-      | ExpBCP  (thterm,propa,kind) ->
-        let v = ThE.sem thterm in
-        let own = ThE.node thterm in
-        let s = Node.M.empty in
-        let s = if kind == BCPOwnKnown then get_dom t age own s else s in
-        fold (fun s (node,_) ->
-          if kind != BCPLeavesKnown && (Node.equal node propa) then s
-          else get_dom t age node s) s v
-      | ExpUp (_,leaf)    ->
-        let s = Node.M.empty in
-        let s = get_dom  t age leaf s in
-        s
-      | ExpDown  (thterm,_)    ->
-        let own = ThE.node thterm in
-        let s = Node.M.empty in
-        let s = get_dom  t age own s in
-        s
-      | ExpNot  ((v,clfrom,clto))->
-        let s = Node.M.empty in
-        assert (check_sem v clto || check_sem v clfrom);
-        let s = get_dom t age clfrom s in
-        fold (fun s (node,_) ->
-          if (Node.equal node clfrom) ||
-             (Node.equal node clto) then s
-          else get_dom t age node s) s v
-    in
-    Conflict.return con conclause s
+  let eq_of_bool n b =
+    let nb = node_of_bool b in
+    { Conflict.EqCon.l = n; r = nb }
 
-  let expdomlimit :
-    type a b. Conflict.ComputeConflict.t ->
-      Trail.age -> b dom -> Node.t ->
-      a Trail.con -> b option -> t -> a Conflict.rescon =
-    fun t age dom' node con b _ ->
-      (* should not fail since we only set the domain *)
-      let b = Opt.get_exn Impossible b in
-      let b = Dom.Eq.coerce dom' dom b in
-      if ComputeConflict.before_first_dec t age
-      then Conflict.return con conclause Node.M.empty
-      else Conflict.return con conclause (Node.M.singleton node b)
+
+  let analyse_one_to_one t c to_ to_b from_ from_b =
+    (** we have
+        c: a = b
+        we propagated: to_ = to_b
+        because      : from_   = not from_b
+    *)
+    let to_not = node_of_bool to_b in
+    let eqs = Conflict.EqCon.split t c to_ to_not in
+    let eq = eq_of_bool from_ from_b in
+    (eq::eqs)
+
+  let analyse :
+    type a. Conflict.Conflict.t ->
+    t -> a Trail.Con.t -> a -> Trail.Pcon.t list =
+    fun t exp con c ->
+      let c = Conflict.Con.Eq.coerce con Conflict.EqCon.key c in
+      let eqs = match exp with
+        | ExpBCP  (thterm,_,_) when IArray.length (ThE.sem thterm).lits = 1 ->
+          raise Impossible
+        | ExpBCP  (thterm,propa,kind) ->
+          let v = ThE.sem thterm in
+          let own = ThE.node thterm in
+          let eqs =
+            match kind with
+            | BCP -> Conflict.EqCon.split t c own propa
+            | BCPOwnKnown ->
+              let propa_sign = mulbool true (Opt.get (find v propa)) in
+              Conflict.EqCon.split t c propa (node_of_bool propa_sign)
+            | BCPLeavesKnown ->
+              let sign = mulbool false v.topnot in
+              Conflict.EqCon.split t c propa (node_of_bool sign)
+          in
+          let eqs = if kind == BCPOwnKnown then (eq_of_bool own (mulbool true v.topnot))::eqs else eqs in
+          fold (fun eqs (node,sign) ->
+              if kind != BCPLeavesKnown && (Node.equal node propa) then eqs
+              else (eq_of_bool own (mulbool false sign))::eqs) eqs v
+        | ExpUp (thterm,leaf)    ->
+          let v = ThE.sem thterm in
+          let own = ThE.node thterm in
+          analyse_one_to_one t c
+            own (mulbool true v.topnot)
+            leaf (mulbool true (Opt.get (find v leaf)))
+        | ExpDown  (thterm,leaf)    ->
+          let v = ThE.sem thterm in
+          let own = ThE.node thterm in
+          analyse_one_to_one t c
+            leaf (mulbool false (Opt.get (find v leaf)))
+            own (mulbool false v.topnot)
+        | ExpNot  ((_,clfrom,clto),b)->
+          analyse_one_to_one t c
+            clto b
+            clfrom (not b)
+        | ExpDec _ ->
+          assert false (** absurd: a decision should be the last *)
+      in
+      Trail.Pcon.map Conflict.EqCon.key eqs
 
   let key = expprop
 
-  let same_sem t age _sem _v con exp _cl1 _cl2 =
-    analyse  t age con exp
-
+  let from_contradiction _ _ =
+    assert false (** absurd: never used for contradiction *)
 end
 
-module EP = Conflict.RegisterExp(ExpProp)
+let () = Conflict.register_exp(module ExpProp)
 
+let () = Conflict.EqCon.register_apply_learnt ty
+    (fun l ->
+       let l = List.map (fun {Conflict.EqCon.l;r} ->
+           if Node.equal l node_false
+           then (r,not true)
+           else if Node.equal l node_true
+           then (r,not false)
+           else if Node.equal r node_false
+           then (l,not true)
+           else if Node.equal r node_true
+           then (l,not false)
+           else invalid_arg "Not implemented"
+         ) l in
+       [gen false l]
+    )
+
+(*
 module ConClause = struct
   open Conflict
 
@@ -860,16 +905,16 @@ module ConClause = struct
     then GRequested Node.M.empty
     else
       match clo, rcl with
-      | (_true, node) when Node.equal _true cl_true ->
+      | (_true, node) when Node.equal _true node_true ->
         ComputeConflict.set_dec_cho t chobool node;
         GRequested (Node.M.singleton node true)
-      | (node, _true) when Node.equal _true cl_true ->
+      | (node, _true) when Node.equal _true node_true ->
         ComputeConflict.set_dec_cho t chobool node;
         GRequested (Node.M.singleton node true)
-      | (_false, node) when Node.equal _false cl_false ->
+      | (_false, node) when Node.equal _false node_false ->
         ComputeConflict.set_dec_cho t chobool node;
         GRequested (Node.M.singleton node false)
-      | (node, _false) when Node.equal _false cl_false ->
+      | (node, _false) when Node.equal _false node_false ->
         ComputeConflict.set_dec_cho t chobool node;
         GRequested (Node.M.singleton node false)
       | _ ->
@@ -884,7 +929,7 @@ module ConClause = struct
   (*       else *)
   (*         match Dom.Eq.coerce_type dom dom' with *)
   (*         | Types.Eq -> *)
-  (*           if Node.equal node cl_true || Node.equal node cl_false then *)
+  (*           if Node.equal node node_true || Node.equal node node_false then *)
   (*             GRequested Node.M.empty *)
   (*           else *)
   (*             GRequested (Node.M.singleton node (Opt.get bval)) *)

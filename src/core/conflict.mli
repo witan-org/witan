@@ -22,8 +22,11 @@
 (*************************************************************************)
 
 open Witan_core_structures
+open Typedef
 
 (** Decision, Conflict and Learning *)
+
+val print_decision: Debug.flag
 
 (** {2 Decision} *)
 module Cho = Trail.Cho
@@ -34,28 +37,21 @@ type 'd decdone  =
 
 module type Cho = sig
   (** Allows to keep any information for the potential decision *)
-  module OnWhat  : sig
-    type t
-    val pp: t Pp.pp
-  end
-
-  (** Allows to transfer any information from {!choose_decision} to {!make_decision} *)
-  module What: sig
-    type t
-    val pp: t Pp.pp
-  end
+  module OnWhat  : Stdlib.Datatype
 
   val choose_decision:
-    Egraph.Delayed.t -> OnWhat.t -> What.t decdone
+    Egraph.Delayed.t -> OnWhat.t -> (Egraph.Delayed.t -> unit) decdone
   (** Answer the question: Is the decision still needed? *)
 
-  val make_decision:
-    Egraph.Delayed.t -> Trail.Pexp.t -> OnWhat.t -> What.t -> unit
-  (** Propagate the decision using {!Egraph.Delayed.t} *)
-
-  val key: (OnWhat.t,What.t) Cho.t
+  val key: OnWhat.t Cho.t
 
 end
+
+val register_cho: (module Cho with type OnWhat.t = 'a) -> unit
+
+val choose_decision: Egraph.Delayed.t -> Trail.chogen -> (Egraph.Delayed.t -> unit) decdone
+
+module ChoGenH : Stdlib.XHashtbl.S with type key = Trail.chogen
 
 (** {2 Conflict} *)
 
@@ -117,19 +113,44 @@ module type Con = sig
 
   val key: t Trail.Con.t
 
-  val apply_learnt: t -> Typedef.Node.t
+  val apply_learnt: t list -> Typedef.Node.t list
   (** Build the constraint that correspond to the conflict learnt *)
 
   val levels: Conflict.t -> t -> Levels.t
   (** iterate on what depends the conflict (classe and value). *)
 
+  val useful_nodes: t -> Node.t Bag.t
+  (** used at the end to know which node are useful for decision heuristics *)
 end
 
 val register_con: (module Con) -> unit
 
 (** {2 Conflict analysis} *)
 
-val learn: Trail.t -> Trail.Pexp.t -> Trail.Age.t * Node.t
+module Learnt: Stdlib.Datatype
+
+val learn: Trail.t -> Trail.Pexp.t -> Trail.Age.t * Learnt.t * Node.t Bag.t
+(** Return the backtracking age, the constraint learnt and the useful nodes *)
+
+val apply_learnt: Egraph.Delayed.t -> Learnt.t -> unit
 
 
+(** {2 Generic conflict} *)
+
+module EqCon : sig
+
+  type t = {
+    l: Node.t;
+    r: Node.t;
+  }
+
+  val key : t Con.t
+
+  val register_apply_learnt: Ty.t -> (t list -> Node.t list) -> unit
+
+  val split: Conflict.t -> t -> Node.t -> Node.t -> t list
+end
+
+(** {2 From boolean theory } *)
 val _or: (Node.t list -> Node.t) ref
+val _set_true: (Egraph.Delayed.t -> Trail.Pexp.t -> Node.t -> unit) ref

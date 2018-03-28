@@ -37,7 +37,7 @@ let register d cl =
   Egraph.Delayed.flush d
 
 let merge d cl1 cl2 =
-  Egraph.Delayed.merge d Trail.pexpfact cl1 cl2;
+  Egraph.Delayed.merge d Trail.pexp_fact cl1 cl2;
   Egraph.Delayed.flush d
 
 let is_equal = Egraph.Delayed.is_equal
@@ -62,29 +62,4 @@ let new_delayed t =
 exception ReachStepLimit
 exception Contradiction
 
-let rec run_inf_step ?limit t d =
-  (match limit with | Some n when n <= 0 -> raise ReachStepLimit | _ -> ());
-  Egraph.flush d;
-  match Queue.pop t.wakeup_daemons with
-  | exception Queue.Empty -> ()
-  | dem ->
-    Egraph.run_daemon d dem;
-    run_inf_step ?limit:(Opt.map pred limit) t d
-
-let run_exn ~theories f =
-  let t = new_solver () in
-  begin try
-      let d = new_delayed t in
-      List.iter (fun f -> f d) (SynTerm.init::theories);
-      Egraph.flush d;
-      f d;
-      Egraph.flush d;
-      Egraph.delayed_stop d
-    with Egraph.Contradiction _ ->
-      Debug.dprintf0 debug
-        "[Scheduler] Contradiction during initial assertion";
-      raise Contradiction
-  end;
-  let d = new_delayed t in
-  run_inf_step t d;
-  d
+let run_exn = Witan_solver.Scheduler.run_exn

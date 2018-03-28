@@ -33,10 +33,10 @@ let debug = Debug.register_flag (** not info just because duplicate of solver *)
   "Trail.core"
 
 module Exp = Keys.Make_key(struct end)
-module Cho = Keys.Make_key2(struct end)
+module Cho = Keys.Make_key(struct end)
 
 type chogen =
-  | GCho: Node.t * ('k,'d) Cho.t * 'k -> chogen
+  | GCho: Node.t * 'k Cho.t * 'k -> chogen
 
 module Age = struct
   include DIntOrd
@@ -46,6 +46,12 @@ module Age = struct
   let pred x = x - 1
   let succ x = x + 1
   let to_int x = x
+
+  let (<)  : t -> t -> bool = (<)
+  let (<=) : t -> t -> bool = (<=)
+  let (>)  : t -> t -> bool = (>)
+  let (>=) : t -> t -> bool = (>=)
+
 end
 type age = Age.t (* position in the trail *)
 
@@ -62,7 +68,10 @@ module Con = Keys.Make_key(struct end)
 
 module Pcon = struct
   type t =
-    | PCon: 'a Con.t * 'a -> t
+    | Pcon: 'a Con.t * 'a -> t
+
+  let pcon c v = Pcon(c,v)
+  let map c l = List.map (pcon c) l
 end
 
 (** Indicate when a node stopped to be the representative, and what it becomes.
@@ -110,6 +119,7 @@ let new_dec (t:t)  =
   dec
 
 let current_age t = t.age
+let last_dec t = t.last_dec
 let nbdec t = t.nbdec
 
 let mk_pexp:
@@ -154,8 +164,8 @@ let add_pexp_dom_premerge:
     assert false (** TODO when domain will be needed *)
 
 
-let expfact : unit Exp.t = Exp.create_key "Trail.fact"
-let pexpfact = Pexp.Pexp(Age.bef,expfact,())
+let exp_fact : unit Exp.t = Exp.create_key "Trail.fact"
+let pexp_fact = Pexp.Pexp(Age.bef,exp_fact,())
 
 type exp_same_sem =
 | ExpSameSem   : Pexp.t * Node.t * ThTerm.t -> exp_same_sem
@@ -165,7 +175,7 @@ let exp_same_sem : exp_same_sem Exp.t =
   Exp.create_key "Egraph.exp_same_sem"
 
 (** TODO choose an appropriate data *)
-let exp_diff_value : Pexp.t Exp.t =
+let exp_diff_value : (Node.t * Node.t * Pexp.t) Exp.t =
   Exp.create_key "Egraph.exp_diff_value"
 
 

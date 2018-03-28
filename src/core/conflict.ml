@@ -23,6 +23,10 @@
 
 open Witan_core_structures
 
+let print_decision = Debug.register_info_flag
+  ~desc:"for@ the@ printing@ of@ the@ decisions@ done."
+  "decisions"
+
 module Levels = struct
   type t =
     | No
@@ -97,26 +101,52 @@ type 'd decdone  =
 | DecTodo of 'd
 
 module type Cho = sig
-  module OnWhat  : sig
-    type t
-    val pp: t Pp.pp
-  end
-
-  module What: sig
-    type t
-    val pp: t Pp.pp
-  end
+  module OnWhat  : Stdlib.Datatype
 
   val choose_decision:
-    Egraph.Delayed.t -> OnWhat.t -> What.t decdone
+    Egraph.Delayed.t -> OnWhat.t -> (Egraph.Delayed.t -> unit) decdone
 
-  val make_decision:
-    Egraph.Delayed.t -> Trail.Pexp.t -> OnWhat.t -> What.t -> unit
-
-  val key: (OnWhat.t,What.t) Cho.t
+  val key: OnWhat.t Cho.t
 
 end
 
+module ChoRegistry = Cho.Make_Registry(struct
+    type 'a data = (module Cho with type OnWhat.t = 'a)
+    let pp (type a) (cho: a data) =
+      let module Cho = (val cho) in
+      Cho.OnWhat.pp
+    let key (type a) (cho: a data) =
+      let module Cho = (val cho) in
+      Cho.key
+  end)
+
+let register_cho (type a) (cho:(module Cho with type OnWhat.t = a)) =
+  let module Cho = (val cho) in
+  let cho = (module Cho : Cho with type OnWhat.t = Cho.OnWhat.t) in
+  ChoRegistry.register cho
+
+let choose_decision d (Trail.GCho(_,cho,c)) =
+  let module C = (val ChoRegistry.get cho) in
+  C.choose_decision d c
+
+module ChoGenH = Stdlib.XHashtbl.Make(struct
+    type t = Trail.chogen
+    let hash = function
+      | Trail.GCho (n,cho,k) ->
+        let module C = (val ChoRegistry.get cho) in
+        Hashcons.combine2 (Typedef.Node.hash n) (Cho.hash cho) (C.OnWhat.hash k)
+
+    let equal (Trail.GCho(n1,cho1,k1)) (Trail.GCho(n2,cho2,k2)) =
+      Typedef.Node.equal n1 n2 &&
+      match Cho.Eq.eq_type cho1 cho2 with
+      | Some Keys.Eq ->
+        let f (type a) (cho: a Cho.t) k1 k2 =
+          let module C = (val ChoRegistry.get cho) in
+          C.OnWhat.equal k1 k2
+        in
+        f cho1 k1 k2
+      | None -> false
+  end)
 
 module Conflict = struct
   type t = Trail.t
@@ -143,6 +173,7 @@ module type Exp = sig
 
   val analyse  :
     Conflict.t (* -> Trail.Age.t *) -> t -> 'a Con.t -> 'a -> Trail.Pcon.t list
+
 end
 
 module ExpRegistry = Exp.Make_Registry(struct
@@ -170,9 +201,11 @@ module type Con = sig
 
   val key: t Trail.Con.t
 
-  val apply_learnt: t -> Typedef.Node.t
+  val apply_learnt: t list -> Typedef.Node.t list
 
   val levels: Conflict.t -> t -> Levels.t
+
+  val useful_nodes: t -> Typedef.Node.t Bag.t
 
 end
 
@@ -196,7 +229,7 @@ let convert_lcon t l =
     let module Con = (val (ConRegistry.get con) : Con with type t = a) in
     (Con.levels t c, pc)
   in
-  List.map (fun (Trail.Pcon.PCon(con,c) as pc) -> map con c pc) l
+  List.map (fun (Trail.Pcon.Pcon(con,c) as pc) -> map con c pc) l
 
 let compare_level_con (l1,_) (l2,_) = - (Levels.compare l1 l2)
 
@@ -204,14 +237,30 @@ let sort_lcon l = List.sort compare_level_con l
 
 let merge_lcon l1 l2 = List.merge compare_level_con l1 l2
 
+let map_by_kind ~create ~change ~fold ~kind ~map l =
+  let h = create 16 in
+  let chg c = function Some l -> Some (c::l) | None -> Some [c] in
+  List.iter (fun c -> change (chg c) h (kind c)) l;
+  fold (fun kind l acc ->
+      List.rev_append (map kind l) acc)
+    h []
+
 let lcon_to_node l =
-  let map (type a) con (c:a) =
+  let module H = Con.MkVector(struct type ('a,'b) t = 'a list end) in
+  let h = H.create (Con.hint_size ()) in
+  Con.iter {iter=fun con -> H.set h con []};
+  List.iter (fun (Trail.Pcon.Pcon(con,c)) -> H.set h con (c::(H.get h con))) l;
+  let foldi (type a) acc con (c:a list) =
     let module Con = (val (ConRegistry.get con) : Con with type t = a) in
-    Con.apply_learnt c
+    List.rev_append (Con.apply_learnt c) acc
   in
-  List.map (fun (Trail.Pcon.PCon(con,c)) -> map con c) l
+  H.fold_initializedi {foldi} [] h
 
 let _or = ref (fun _ -> assert false)
+let _set_true = ref (fun _ _ _ -> assert false)
+let apply_learnt d n = !_set_true d Trail.pexp_fact n
+
+module Learnt = Typedef.Node
 
 let learn trail (Trail.Pexp.Pexp(_,exp,x)) =
   let t = trail in
@@ -227,7 +276,7 @@ let learn trail (Trail.Pexp.Pexp(_,exp,x)) =
     | (l1,_)::(l2,_)::_ as l when Levels.at_most_one_after_last_dec t l1 && Levels.before_last_dec t l2 ->
       let l1 = Levels.merge l1 l2 in
       (Levels.get_second_last l1, List.map snd l)
-    | (l1,Trail.Pcon.PCon(con,c))::lcon ->
+    | (l1,Trail.Pcon.Pcon(con,c))::lcon ->
       let f (type a) exp (e:a) =
         let module Exp = (val (ExpRegistry.get exp) : Exp with type t = a) in
         Exp.analyse t e con c
@@ -239,5 +288,134 @@ let learn trail (Trail.Pexp.Pexp(_,exp,x)) =
       aux lcon
   in
   let backtrack_level, l = aux lcon in
+  let fold useful (type a) (con:a Con.t) (c:a) =
+    let module Con = (val ConRegistry.get con) in
+    Bag.concat useful (Con.useful_nodes c)
+  in
+  let useful =
+    List.fold_left
+      (fun acc (Trail.Pcon.Pcon(con,c)) -> fold acc con c)
+      Bag.empty l
+  in
   let l = lcon_to_node l in
-  backtrack_level, !_or l
+  backtrack_level, !_or l, useful
+
+
+module EqCon = struct
+
+  type t = {
+    l: Typedef.Node.t;
+    r: Typedef.Node.t;
+  }
+
+  let pp fmt c = Format.fprintf fmt
+      "%a =@, %a"
+      Typedef.Node.pp c.l Typedef.Node.pp c.r
+
+  let key : t Con.t = Con.create_key "eq"
+
+  let reg_apply_learnt = Ty.H.create 16
+
+  let register_apply_learnt ty (f:(t list -> Typedef.Node.t list)) =
+    Ty.H.add reg_apply_learnt ty f
+
+  let levels t c =
+    let age = Conflict.age_merge t c.l c.r in
+    Levels.add t age Levels.empty
+
+  let useful_nodes c = Bag.list [c.l;c.r]
+
+  let not_found = Invalid_argument "Type not found in apply_learnt EqCon"
+
+  let apply_learnt l =
+    map_by_kind
+      ~create:Ty.H.create
+      ~change:Ty.H.change
+      ~fold:Ty.H.fold
+      ~kind:(fun c -> Typedef.Node.ty c.l)
+      ~map:(fun ty l ->
+          let f = Ty.H.find_exn reg_apply_learnt not_found ty in
+          f l)
+      l
+
+  let split t c a b =
+    let open Typedef in
+    if Node.equal c.l a
+    then [{ l = b; r = c.r }]
+    else if Node.equal c.l b
+    then [{ l = a; r = c.r }]
+    else if Node.equal c.r a
+    then [{ l = c.l; r = b }]
+    else if Node.equal c.r b
+    then [{ l = c.l; r = a }]
+    else
+      let age_a = Conflict.age_merge t c.l a in
+      let age_b = Conflict.age_merge t c.l b in
+      let cmp = Trail.Age.compare age_a age_b in
+      assert (cmp <> 0);
+      if cmp < 0
+      then [{ l = c.l; r = a }; { l = b; r = c.r }]
+      else [{ l = c.l; r = b }; { l = a; r = c.r }]
+end
+
+let () = register_con(module EqCon)
+
+module Specific = struct
+
+
+  let () = register_exp (module struct
+      type t = unit
+      let key = Trail.exp_fact
+
+      let pp fmt () = Pp.string fmt "fact"
+
+      let analyse _ _ _ _ = []
+      let from_contradiction _ _ =
+        raise Std.Impossible
+    end)
+
+  let () = register_exp (module struct
+      type t = Typedef.Node.t * Typedef.Node.t * Trail.Pexp.t
+      let key = Trail.exp_diff_value
+
+      let pp fmt (n1,n2,Trail.Pexp.Pexp(_,exp,e)) = Format.fprintf fmt "diff_value(%a,%a):%a"
+          Typedef.Node.pp n1 Typedef.Node.pp n2 (ExpRegistry.print exp) e
+
+      let analyse _ _ _ _ = raise Std.Impossible (** used only for contradiction *)
+      let from_contradiction t (n1,n2,Trail.Pexp.Pexp(_,exp,e)) =
+        let f (type a) (exp:a Exp.t) e =
+          let module Exp = (val (ExpRegistry.get exp)) in
+          Exp.analyse t e EqCon.key {l=n1;r=n2}
+        in
+        f exp e
+    end)
+
+  let () = register_exp (module struct
+      type t = Trail.exp_same_sem
+      let key = Trail.exp_same_sem
+
+      let pp fmt = function
+        | Trail.ExpSameSem(Trail.Pexp.Pexp(_,exp,e),n,th) ->
+          Format.fprintf fmt "same_sem(%a,%a):%a"
+            Typedef.Node.pp n Typedef.ThTerm.pp th (ExpRegistry.print exp) e
+        | Trail.ExpSameValue(Trail.Pexp.Pexp(_,exp,e),n,value) ->
+          Format.fprintf fmt "same_value(%a,%a):%a"
+            Typedef.Node.pp n Typedef.Values.pp value (ExpRegistry.print exp) e
+
+      let analyse t p con c =
+        let Trail.Pexp.Pexp(_,exp,e) =
+          match p with
+          | Trail.ExpSameSem(pexp,_,_)
+          | Trail.ExpSameValue(pexp,_,_) -> pexp in
+        let f (type a) (exp:a Exp.t) e =
+          let module Exp = (val (ExpRegistry.get exp)) in
+          Exp.analyse t e con c
+        in
+        f exp e
+
+
+      let from_contradiction _ _ =
+        raise Std.Impossible
+    end)
+
+end

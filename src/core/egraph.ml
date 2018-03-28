@@ -602,7 +602,7 @@ module Delayed = struct
           (* already same value. Does that really happen? *)
           ()
         else
-          let pexp = Trail.mk_pexp t.env.trail Trail.exp_diff_value pexp in
+          let pexp = Trail.mk_pexp t.env.trail Trail.exp_diff_value (node0,node0',pexp) in
           raise (Contradiction(pexp))
     in
     VValueTable.iter_initializedi {VValueTable.iteri} t.env.value

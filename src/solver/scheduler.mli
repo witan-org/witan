@@ -21,4 +21,19 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-module Scheduler = Scheduler
+
+val run_exn:
+  ?nodec:unit ->
+  ?limit:int ->
+  theories:(Egraph.Delayed.t -> unit) list ->
+  (Egraph.Delayed.t -> unit) ->
+  Egraph.Delayed.t
+
+val run:
+  ?nodec:unit ->
+  ?limit:int ->
+  theories:(Egraph.Delayed.t -> unit) list ->
+  (Egraph.Delayed.t -> unit) ->
+  [> `Contradiction
+  | `Done of Egraph.Delayed.t
+  ]

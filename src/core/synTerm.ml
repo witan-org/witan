@@ -80,7 +80,7 @@ module DaemonConvertTerm = struct
           | None -> ()
           | Some node ->
             Egraph.Delayed.register d node;
-            Egraph.Delayed.merge d Trail.pexpfact (Sem.node thterm) node
+            Egraph.Delayed.merge d Trail.pexp_fact (Sem.node thterm) node
         in
         List.iter iter (Egraph.Delayed.get_env d converters)
       end with Exit -> () end

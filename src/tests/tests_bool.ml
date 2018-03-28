@@ -106,7 +106,7 @@ let merge_true () =
          (fun () -> merge env a c);
         ];
       merge env a d;
-      Bool.set_true env Trail.pexpfact d;
+      Bool.set_true env Trail.pexp_fact d;
   in
   assert_bool "" (Bool.is_true env _and)
 
@@ -119,9 +119,9 @@ let imply_implies () =
   let tn = SynTerm.node_of_term t in
   let env = run $$ fun env ->
       Egraph.Delayed.register env tn;
-      Bool.set_true env Trail.pexpfact tn;
+      Bool.set_true env Trail.pexp_fact tn;
       Egraph.Delayed.register env an;
-      Bool.set_true env Trail.pexpfact an;
+      Bool.set_true env Trail.pexp_fact an;
   in
   assert_bool "" (Bool.is_true env bn)
 

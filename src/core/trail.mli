@@ -39,6 +39,11 @@ module Age: sig
   val pred: t -> t
   val succ: t -> t
   val to_int: t -> int
+
+  val (<) : t -> t -> bool
+  val (<=): t -> t -> bool
+  val (>) : t -> t -> bool
+  val (>=): t -> t -> bool
 end
 type age = Age.t
 
@@ -57,7 +62,11 @@ module Con: Keys.Key
 
 module Pcon : sig
   type t =
-    | PCon: 'a Con.t * 'a -> t
+    | Pcon: 'a Con.t * 'a -> t
+
+  val pcon: 'a Con.t -> 'a -> t
+
+  val map: 'a Con.t -> 'a list -> t list
 
 end
 
@@ -67,6 +76,7 @@ val create: unit -> t
 val new_handle: t -> t
 
 val current_age: t -> age
+val last_dec: t -> age
 val before_last_dec: t -> age -> bool
 
 val get_pexp: t -> age -> Pexp.t
@@ -103,8 +113,8 @@ val add_merge_finish:
 
 (** {2 Predefined explanation} *)
 
-val expfact: unit Exp.t
-val pexpfact: Pexp.t
+val exp_fact: unit Exp.t
+val pexp_fact: Pexp.t
 (** No need of any explanation it is a fact. Perhaps should be avoided
     for proof generation *)
 
@@ -116,17 +126,17 @@ val exp_same_sem : exp_same_sem Exp.t
 (** Two nodes have been merged because they shared the same semantical
     terms or value *)
 
-val exp_diff_value: Pexp.t Exp.t
+val exp_diff_value: (Node.t * Node.t * Pexp.t) Exp.t
 (** A contradiction have been reached because the given explanation
     makes one equivalence class be associated to two different values *)
 
 (** {2 Generic choices} *)
 
-module Cho: Keys.Key2
+module Cho: Keys.Key
 
 (** Generic decision *)
 type chogen =
-  | GCho: Node.t * ('k,'d) Cho.t * 'k -> chogen
+  | GCho: Node.t * 'k Cho.t * 'k -> chogen
 
 
 (** {2 Trail for domains, currently not used } *)

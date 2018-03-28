@@ -51,7 +51,7 @@ val is_unknown : Egraph.d -> Node.t -> bool
 val th_register: Egraph.d -> unit
 val th_register_alone: Egraph.d -> unit
 
-val chobool: (Node.t,bool) Trail.Cho.t
+val chobool: Node.t Trail.Cho.t
 
 (* val make_dec: Variable.make_dec *)
 
