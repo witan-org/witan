@@ -505,6 +505,9 @@ let () =
 
 let set_false env pexp node = set_bool env pexp node false
 
+let chobool = Trail.Cho.create_key "Bool.cho"
+let make_dec node = Trail.GCho(node,chobool,node)
+
 let converter d f l =
   let of_term t =
     let n = SynTerm.node_of_term t in
@@ -527,6 +530,10 @@ let converter d f l =
     | _ -> None in
   node
 
+let decvars n =
+  if Ty.equal (Node.ty n) ty
+  then Some (make_dec n)
+  else None
 
 let th_register' with_other_theories env =
   with_other := with_other_theories;
@@ -538,16 +545,13 @@ let th_register' with_other_theories env =
   Delayed.register env node_true;
   Delayed.register env node_false;
   SynTerm.register_converter env converter;
+  SynTerm.register_decvars env decvars;
   ()
 
 let th_register_alone = th_register' false
 let th_register = th_register' true
 
 (** {2 Choice on bool} *)
-
-let chobool = Trail.Cho.create_key "Bool.cho"
-
-let make_dec node = Trail.GCho(node,chobool,node)
 
 module ChoBool = struct
   open Conflict

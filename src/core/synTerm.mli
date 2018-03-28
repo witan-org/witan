@@ -36,3 +36,10 @@ val register_converter:
   (Egraph.Delayed.t -> Term.t -> Term.t list -> Node.t option) ->
   unit
 (** register converters between syntactic terms *)
+
+
+val register_decvars:
+  Egraph.Delayed.t ->
+  (Node.t -> Trail.chogen option) ->
+  unit
+(** register decision adder on variables *)

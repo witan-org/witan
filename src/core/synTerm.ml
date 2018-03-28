@@ -32,11 +32,21 @@ module Sem = RegisterSem(struct
 
 let node_of_term x = Sem.node (Sem.index x (x.Term.ty))
 
+
+type env = {
+  converters: (Egraph.Delayed.t -> Term.t -> Term.t list -> Node.t option) list;
+  decvars: (Node.t -> Trail.chogen option) list;
+}
+
 let converters = Env.create_key "Synsem.converters"
 
 let register_converter env r =
-  let l = Egraph.Delayed.get_env env converters in
-  Egraph.Delayed.set_env env converters (r::l)
+  let e = Egraph.Delayed.get_env env converters in
+  Egraph.Delayed.set_env env converters {e with converters = r::e.converters}
+
+let register_decvars env r =
+  let e = Egraph.Delayed.get_env env converters in
+  Egraph.Delayed.set_env env converters {e with decvars = r::e.decvars}
 
 let () = Env.register_env (fun _ _ -> ()) converters
 
@@ -72,9 +82,20 @@ module DaemonConvertTerm = struct
   let wakeup d = function
     | Events.Fired.EventRegSem(thterm,()) ->
       begin try begin
+        let e = Egraph.Delayed.get_env d converters in
         let thterm = Sem.coerce_thterm thterm in
         let v = Sem.sem thterm in
         let f, l = uncurry_app v in
+        begin match l with
+          | [] ->
+            let n = Sem.node thterm in
+            List.iter (fun f ->
+                Opt.iter
+                  (Egraph.Delayed.register_decision d)
+                  (f n)
+              ) e.decvars
+          | _ -> ()
+        end;
         let iter conv =
           match conv d f l with
           | None -> ()
@@ -82,7 +103,7 @@ module DaemonConvertTerm = struct
             Egraph.Delayed.register d node;
             Egraph.Delayed.merge d Trail.pexp_fact (Sem.node thterm) node
         in
-        List.iter iter (Egraph.Delayed.get_env d converters)
+        List.iter iter e.converters
       end with Exit -> () end
     | _ -> raise UnwaitedEvent
 
@@ -91,7 +112,7 @@ end
 module RDaemonConvertTerm = Demon.Fast.Register(DaemonConvertTerm)
 
 let init env =
-  Egraph.Delayed.set_env env converters [];
+  Egraph.Delayed.set_env env converters {converters=[]; decvars = []};
   RDaemonConvertTerm.init env;
   Demon.Fast.attach env
     DaemonConvertTerm.key [Demon.Create.EventRegSem(Sem.key,())];

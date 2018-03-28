@@ -660,6 +660,19 @@ module Delayed = struct
     in
     VDomTable.iter_initializedi {VDomTable.iteri} t.env.dom;
 
+    (** move value events  *)
+    let iteri (type a) (value : a Value.t) (valuetable: a valuetable) =
+      match Node.M.find_opt other_node valuetable.events with
+      | None -> ()
+      | Some other_events ->
+        let new_events =
+          Node.M.add_change (fun x -> x) Bag.concat repr_node other_events
+            valuetable.events in
+        let valuetable = { valuetable with events = new_events } in
+        VValueTable.set t.env.value value valuetable
+    in
+    VValueTable.iter_initializedi {VValueTable.iteri} t.env.value;
+
     (** wakeup the daemons *)
     Wait.wakeup_events_bag
       Events.Wait.translate_change t other_event other_node
