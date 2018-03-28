@@ -7,6 +7,7 @@
    (libraries (containers gen dolmen cmdliner spelll
                witan.open
                witan.core
+               witan.solver
                witan.theories.bool
    ))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 -color always -open "Witan_open.Open"))

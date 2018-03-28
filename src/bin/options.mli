@@ -26,7 +26,7 @@
 
 (** {2 Type definitions} *)
 
-type language = Input.language
+type language = Witan_solver.Input.language
 (** Type of format input (taken from dolmen). *)
 
 type input_options = {

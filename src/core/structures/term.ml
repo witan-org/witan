@@ -408,6 +408,11 @@ let equal_id =
   let a_type = const a_id in
   Id.mk "==" (pi a_id (arrows [a_type; a_type] _Prop))
 
+let distinct_id =
+  let a_id = Id.mk "a" _Type in
+  let a_type = const a_id in
+  Id.mk "distinct" (pi a_id (arrows [a_type; a_type] _Prop))
+
 let true_id = Id.mk "true" _Prop
 let false_id = Id.mk "false" _Prop
 
@@ -432,6 +437,7 @@ let not_term = const not_id
 let true_term = const true_id
 let false_term = const false_id
 let equal_term = const equal_id
+let distinct_term = const distinct_id
 let imply_term = const imply_id
 let equiv_term = const equiv_id
 

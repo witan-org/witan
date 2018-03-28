@@ -31,7 +31,7 @@ let () =
     | `Ok opts -> opts
   in
   (* Parse input *)
-  let statements = Input.read
+  let statements = Witan_solver.Input.read
       ?language:Options.(opts.input.language)
       ~dir:Options.(opts.input.dir)
       Options.(opts.input.file)

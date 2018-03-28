@@ -5,6 +5,7 @@
    (public_name witan.solver)
    (synopsis "witan's solver")
    (libraries (containers zarith ocamlgraph
+               gen dolmen spelll
                witan.open
                witan.stdlib
                witan.popop_lib str

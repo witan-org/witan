@@ -134,26 +134,194 @@ let basic = "Bool.Basic" >::: [ "bool_interp" >:: bool_interp;
                                 "imply_implies" >:: imply_implies;
                                 (* "modus_ponens"         >:: modus_ponens; *)
                               ]
+(* Exception for typing errors *)
+module R = Witan_popop_lib.Exthtbl.Hashtbl.Make(Dolmen.Id)
+type env = Term.Id.t R.t
 
-(* let tests_dimacs expected dir = *)
-(*   let files = Sys.readdir dir in *)
-(*   Array.sort String.compare files; *)
-(*   let files = Array.to_list files in *)
-(*   List.map *)
-(*     (fun s -> *)
-(*       s >: TestCase (fun () -> *)
-(*         let res = Dimacs.check_file (Filename.concat dir s) in *)
-(*         begin match res with *)
-(*         | Dimacs.Sat ->   Debug.dprintf1 Tests_lib.debug "@[%s: Sat@]" s *)
-(*         | Dimacs.Unsat -> Debug.dprintf1 Tests_lib.debug "@[%s: Unsat@]" s *)
-(*         end; *)
-(*         assert_bool s (res = expected); *)
-(*       )) files *)
+let create_env () =
+  R.create 10
 
-(* let dimacssat = *)
-(*   "dimacs-sat" >::: tests_dimacs Dimacs.Sat "tests/dimacs/sat/" *)
+exception Typing_error of string * env * Dolmen.Term.t
 
-(* let dimacsunsat = *)
-(*   "dimacs-unsat" >::: tests_dimacs Dimacs.Unsat "tests/dimacs/unsat/" *)
+let _bad_op_arity env s n t =
+  let msg = Format.asprintf "Bad arity for operator '%s' (expected %d arguments)" s n in
+  raise (Typing_error (msg, env, t))
 
-let tests = TestList [basic(* ;dimacssat;dimacsunsat *)]
+(** no typing *)
+let rec parse_formula (env:env) (t:Dolmen.Term.t) =
+  let module Ast = Dolmen.Term in
+  let open Term in
+  match t with
+
+  (* Ttype & builtin types *)
+  | { Ast.term = Ast.Builtin Ast.Ttype } ->
+    _Type
+  | { Ast.term = Ast.Builtin Ast.Prop } ->
+    _Prop
+
+  (* Basic formulas *)
+  | { Ast.term = Ast.App ({ Ast.term = Ast.Builtin Ast.True }, []) }
+  | { Ast.term = Ast.Builtin Ast.True } ->
+    true_term
+
+  | { Ast.term = Ast.App ({ Ast.term = Ast.Builtin Ast.False }, []) }
+  | { Ast.term = Ast.Builtin Ast.False } ->
+    false_term
+
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.And}, l) } ->
+    apply and_term (List.map (parse_formula env) l)
+
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Or}, l) } ->
+    apply or_term (List.map (parse_formula env) l)
+
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Xor}, l) } as t ->
+    begin match l with
+      | [p; q] ->
+        let f = parse_formula env p in
+        let g = parse_formula env q in
+        apply not_term [apply equal_term [f;g]]
+      | _ -> _bad_op_arity env "xor" 2 t
+    end
+
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Imply}, l) } as t ->
+    begin match l with
+      | [p; q] ->
+        let f = parse_formula env p in
+        let g = parse_formula env q in
+        apply imply_term [f;g]
+      | _ -> _bad_op_arity env "=>" 2 t
+    end
+
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Equiv}, l) } as t ->
+    begin match l with
+      | [p; q] ->
+        let f = parse_formula env p in
+        let g = parse_formula env q in
+        apply equiv_term [f;g]
+      | _ -> _bad_op_arity env "<=>" 2 t
+    end
+
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Not}, l) } as t ->
+    begin match l with
+      | [p] ->
+        apply not_term [parse_formula env p]
+      | _ -> _bad_op_arity env "not" 1 t
+    end
+
+  (* (\* Binders *\)
+   * | { Ast.term = Ast.Binder (Ast.All, vars, f) } ->
+   *   let ttype_vars, ty_vars, env' =
+   *     parse_quant_vars (expect env (Typed Expr.Ty.base)) vars in
+   *   Formula (
+   *     mk_quant_ty env' Expr.Formula.allty ttype_vars
+   *       (mk_quant_term env' Expr.Formula.all ty_vars
+   *          (parse_formula env' f)))
+   * 
+   * | { Ast.term = Ast.Binder (Ast.Ex, vars, f) } ->
+   *   let ttype_vars, ty_vars, env' =
+   *     parse_quant_vars (expect env (Typed Expr.Ty.base)) vars in
+   *   Formula (
+   *     mk_quant_ty env' Expr.Formula.exty ttype_vars
+   *       (mk_quant_term env' Expr.Formula.ex ty_vars
+   *          (parse_formula env' f))) *)
+
+  (* (Dis)Equality *)
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Eq}, l) } as t ->
+    begin match l with
+      | [_; _] ->
+        apply equal_term (List.map (parse_formula env) l)
+      (* begin match promote env t @@ parse_expr env a,
+       *             promote env t @@ parse_expr env b with
+       *   | Term t1, Term t2 ->
+       *     Formula (make_eq env t t1 t2)
+       *   | Formula f1, Formula f2 ->
+       *     Formula (Expr.Formula.equiv f1 f2)
+       *   | _ ->
+       *     _expected env "either two terms or two formulas" t None
+       * end *)
+      | _ -> _bad_op_arity env "=" 2 t
+    end
+
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Distinct}, args) } ->
+    apply distinct_term (List.map (parse_formula env) args)
+
+  (* General case: application *)
+  | { Ast.term = Ast.Symbol s } ->
+    let id = R.memo (fun id ->
+        let s = Format.asprintf "%a" Dolmen.Id.print id in
+        Witan_core.Id.mk s _Prop) env s in
+    const id
+  (* | { Ast.term = Ast.App ({ Ast.term = Ast.Symbol s }, l) } as ast ->
+   *   parse_app env ast s l *)
+
+  (* (\* Local bindings *\)
+   * | { Ast.term = Ast.Binder (Ast.Let, vars, f) } ->
+   *   parse_let env f vars *)
+
+  (* Other cases *)
+  | ast -> raise (Typing_error ("Unexpected construction", env, ast))
+
+let get_loc =
+  let default_loc = Dolmen.ParseLocation.mk "<?>" 0 0 0 0 in
+  (fun t -> CCOpt.get_or ~default:default_loc t.Dolmen.Term.loc)
+
+let check_file filename =
+  let statements = Witan_solver.Input.read
+      ~language:Witan_solver.Input.Dimacs
+      ~dir:(Filename.dirname filename)
+      (Filename.basename filename)
+  in
+  let env = create_env () in
+  let res =
+    Witan_solver.Scheduler.run ~theories
+      (fun d ->
+         Gen.iter (fun stmt ->
+             let open Dolmen.Statement in
+             match stmt.descr with
+             | Clause l ->
+               let map t =
+                 match parse_formula env t with
+                 | exception (Typing_error (msg, _, t)) ->
+                   assert_failure
+                     (Format.asprintf
+                        "%a:@\n%s:@ %a"
+                        Dolmen.ParseLocation.fmt (get_loc t) msg
+                        Dolmen.Term.print t
+                     );
+                 | t ->
+                   SynTerm.node_of_term t
+               in
+               let l = Shuffle.shufflel l in
+               let l = List.map map l in
+               let l = Shuffle.shufflel l in
+               let cl = Bool._or l in
+               Egraph.Delayed.register d cl;
+               Bool.set_true d Trail.pexp_fact cl
+             | _ -> ())
+           statements) in
+  match res with
+  | `Contradiction -> `Unsat
+  | `Done _ -> `Sat
+
+let tests_dimacs expected dir =
+  let files = Sys.readdir dir in
+  Array.sort String.compare files;
+  let files = Array.to_list files in
+  List.map
+    (fun s ->
+      s >: TestCase (fun () ->
+        let res = check_file (Filename.concat dir s) in
+        begin match res with
+        | `Sat ->   Witan_popop_lib.Debug.dprintf1 Tests_lib.debug "@[%s: Sat@]" s
+        | `Unsat -> Witan_popop_lib.Debug.dprintf1 Tests_lib.debug "@[%s: Unsat@]" s
+        end;
+        assert_bool s (res = expected);
+      )) files
+
+let dimacssat =
+  "dimacs-sat" >::: tests_dimacs `Sat "solve/dimacs/sat/"
+
+let dimacsunsat =
+  "dimacs-unsat" >::: tests_dimacs `Unsat "solve/dimacs/unsat/"
+
+let tests = TestList [basic; dimacssat;dimacsunsat]

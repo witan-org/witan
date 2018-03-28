@@ -22,3 +22,4 @@
 (*************************************************************************)
 
 module Scheduler = Scheduler
+module Input = Input

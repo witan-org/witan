@@ -154,6 +154,10 @@ val equal_id : id
 val equal_term : t
 (** equality *)
 
+val distinct_id : id
+val distinct_term : t
+(** distinct *)
+
 val not_id : id
 val not_term : t
 (** Propositional negation *)

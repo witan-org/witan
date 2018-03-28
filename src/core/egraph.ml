@@ -290,6 +290,13 @@ let output_graph filename t =
             Dom.pp dom (escape_for_dot (VDom.print_dom dom) s);
         with Not_found -> ()
       in
+      let iter_value value fmt (valuetable: _ valuetable) =
+        try
+          let s   = Node.M.find node valuetable.table in
+          Format.fprintf fmt "| {%a | %s}"
+            Value.pp value (escape_for_dot (print_value value) s);
+        with Not_found -> ()
+      in
       let print_ty fmt node =
         if is_repr t node
         then Format.fprintf fmt ": %a" Ty.pp (Node.ty node)
@@ -304,7 +311,7 @@ let output_graph filename t =
             Format.fprintf fmt "| {%a | %s}"
               Sem.pp sem (escape_for_dot S.pp v)
       in
-      Format.fprintf fmt "{%a %a %a %a}" (* "{%a | %a | %a}" *)
+      Format.fprintf fmt "{%a %a %a %a %a}" (* "{%a | %a | %a}" *)
         Node.pp node
         print_ty node
         print_sem node
@@ -314,6 +321,12 @@ let output_graph filename t =
              {VDomTable.printd=iter_dom}
          else Pp.nothing)
         t.dom
+        (if is_repr t node
+         then VValueTable.pp Pp.nothing Pp.nothing
+             {VValueTable.printk=Pp.nothing}
+             {VValueTable.printd=iter_value}
+         else Pp.nothing)
+        t.value
 
     let vertex_attributes node =
       let label = Pp.string_of_wnl pp node in

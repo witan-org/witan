@@ -24,7 +24,7 @@
 (* Option types *)
 (* ************************************************************************ *)
 
-type language = Input.language
+type language = Witan_solver.Input.language
 
 type input_options = {
   dir      : string;
@@ -55,7 +55,7 @@ let mk input time_limit size_limit =
 (* Argument converters *)
 (* ************************************************************************ *)
 
-let input = Cmdliner.Arg.enum Input.enum
+let input = Cmdliner.Arg.enum Witan_solver.Input.enum
 
 (* Argument converter for integer with multiplier suffix *)
 (* ************************************************************************ *)
@@ -152,7 +152,7 @@ let input_options =
   let language =
     let doc = Format.asprintf
         "Set the format for the input file to $(docv) (%s)."
-        (Cmdliner.Arg.doc_alts_enum ~quoted:false Input.enum) in
+        (Cmdliner.Arg.doc_alts_enum ~quoted:false Witan_solver.Input.enum) in
     Cmdliner.Arg.(value & opt (some input) None & info ["i"; "input"] ~docs ~docv:"INPUT" ~doc)
   in
   Cmdliner.Term.(const mk_input_options $ fd $ language)
