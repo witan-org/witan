@@ -426,7 +426,12 @@ let _false = node_false
 let set_true env pexp node = set_bool env pexp node true
 
 let () =
-  Conflict._or := _or;
+  let gen_or l =
+    let l = List.map (function
+        | (n,Conflict.Pos) -> (n,false)
+        | (n,Conflict.Neg) -> (n,true)) l in
+    gen false l in
+  Conflict._or := gen_or;
   Conflict._set_true := set_true
 
 let set_false env pexp node = set_bool env pexp node false
@@ -592,20 +597,19 @@ end
 
 let () = Conflict.register_exp(module ExpProp)
 
-let () = Conflict.EqCon.register_apply_learnt ty
-    (fun l ->
-       let l = List.map (fun {Conflict.EqCon.l;r} ->
-           if Node.equal l node_false
-           then (r,not true)
-           else if Node.equal l node_true
-           then (r,not false)
-           else if Node.equal r node_false
-           then (l,not true)
-           else if Node.equal r node_true
-           then (l,not false)
-           else invalid_arg "Not implemented"
-         ) l in
-       [gen false l]
+let () =
+  let parity_of_bool b = if b then Conflict.Neg else Conflict.Pos in
+  Conflict.EqCon.register_apply_learnt ty
+    (fun {Conflict.EqCon.l;r} ->
+       if Node.equal l node_false
+       then (r,parity_of_bool (not true))
+       else if Node.equal l node_true
+       then (r,parity_of_bool (not false))
+       else if Node.equal r node_false
+       then (l,parity_of_bool (not true))
+       else if Node.equal r node_true
+       then (l,parity_of_bool (not false))
+       else invalid_arg "Not implemented"
     )
 
 (** {2 Interpretations} *)

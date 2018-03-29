@@ -103,7 +103,7 @@ end
 
 (** {2 Learning} *)
 
-(* type levels = {levels: 'a. Typedef.Node.t -> 'a Typedef.Value.t -> unit} *)
+type parity = | Neg | Pos
 
 module type Con = sig
 
@@ -113,8 +113,10 @@ module type Con = sig
 
   val key: t Trail.Con.t
 
-  val apply_learnt: t list -> Typedef.Node.t list
-  (** Build the constraint that correspond to the conflict learnt *)
+  val apply_learnt: t -> Typedef.Node.t * parity
+  (** Build the constraint that correspond to the conflict learnt.
+      parity indicates if the constraint must be negated or not.
+  *)
 
   val levels: Conflict.t -> t -> Levels.t
   (** iterate on what depends the conflict (classe and value). *)
@@ -148,11 +150,11 @@ module EqCon : sig
 
   val key : t Con.t
 
-  val register_apply_learnt: Ty.t -> (t list -> Node.t list) -> unit
+  val register_apply_learnt: Ty.t -> (t -> Node.t * parity) -> unit
 
   val split: Conflict.t -> t -> Node.t -> Node.t -> t list
 end
 
 (** {2 From boolean theory } *)
-val _or: (Node.t list -> Node.t) ref
+val _or: ((Node.t * parity) list -> Node.t) ref
 val _set_true: (Egraph.Delayed.t -> Trail.Pexp.t -> Node.t -> unit) ref

@@ -206,7 +206,8 @@ let register_exp (exp:(module Exp)) =
   let exp = (module Exp : Exp with type t = Exp.t) in
   ExpRegistry.register exp
 
-(* type levels = {levels: 'a. Typedef.Node.t -> 'a Typedef.Value.t -> unit} *)
+
+type parity = | Neg | Pos
 
 module type Con = sig
 
@@ -216,7 +217,7 @@ module type Con = sig
 
   val key: t Trail.Con.t
 
-  val apply_learnt: t list -> Typedef.Node.t list
+  val apply_learnt: t -> Typedef.Node.t * parity
 
   val levels: Conflict.t -> t -> Levels.t
 
@@ -252,24 +253,12 @@ let sort_lcon l = List.sort compare_level_con l
 
 let merge_lcon l1 l2 = List.merge compare_level_con l1 l2
 
-let map_by_kind ~create ~change ~fold ~kind ~map l =
-  let h = create 16 in
-  let chg c = function Some l -> Some (c::l) | None -> Some [c] in
-  List.iter (fun c -> change (chg c) h (kind c)) l;
-  fold (fun kind l acc ->
-      List.rev_append (map kind l) acc)
-    h []
-
 let lcon_to_node l =
-  let module H = Con.MkVector(struct type ('a,'b) t = 'a list end) in
-  let h = H.create (Con.hint_size ()) in
-  Con.iter {iter=fun con -> H.set h con []};
-  List.iter (fun (Trail.Pcon.Pcon(con,c)) -> H.set h con (c::(H.get h con))) l;
-  let foldi (type a) acc con (c:a list) =
+  let map (type a) con (c:a) =
     let module Con = (val (ConRegistry.get con) : Con with type t = a) in
-    List.rev_append (Con.apply_learnt c) acc
+    Con.apply_learnt c
   in
-  H.fold_initializedi {foldi} [] h
+  List.map (fun (Trail.Pcon.Pcon(con,c)) -> map con c) l
 
 let _or = ref (fun _ -> assert false)
 let _set_true = ref (fun _ _ _ -> assert false)
@@ -361,7 +350,7 @@ module EqCon = struct
 
   let reg_apply_learnt = Ty.H.create 16
 
-  let register_apply_learnt ty (f:(t list -> Typedef.Node.t list)) =
+  let register_apply_learnt ty (f:(t -> Typedef.Node.t * parity)) =
     Ty.H.add reg_apply_learnt ty f
 
   let levels t c =
@@ -372,17 +361,9 @@ module EqCon = struct
 
   let not_found = Invalid_argument "Type not found in apply_learnt EqCon"
 
-  let apply_learnt l =
-    let l = List.filter (fun {l;r} -> not (Typedef.Node.equal l r)) l in
-    map_by_kind
-      ~create:Ty.H.create
-      ~change:Ty.H.change
-      ~fold:Ty.H.fold
-      ~kind:(fun c -> Typedef.Node.ty c.l)
-      ~map:(fun ty l ->
-          let f = Ty.H.find_exn reg_apply_learnt not_found ty in
-          f l)
-      l
+  let apply_learnt c =
+    let f = Ty.H.find_exn reg_apply_learnt not_found (Typedef.Node.ty c.l) in
+    f c
 
   let split t c a b =
     let open Typedef in
