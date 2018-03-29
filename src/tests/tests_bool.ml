@@ -351,3 +351,15 @@ let dimacsunsat =
   "dimacs-unsat" >::: tests_dimacs `Unsat "solve/dimacs/unsat/"
 
 let tests = TestList [basic; dimacssat;dimacsunsat]
+
+
+let () = Witan_popop_lib.Exn_printer.register (fun fmt exn ->
+    match exn with
+    | Dolmen.ParseLocation.Syntax_error(l,"") ->
+      Format.fprintf fmt "%a: syntax error."
+        Dolmen.ParseLocation.fmt l
+    | Dolmen.ParseLocation.Syntax_error(l,c) ->
+      Format.fprintf fmt "%a: syntax error %s."
+        Dolmen.ParseLocation.fmt l c
+    | exn -> raise exn
+  )
