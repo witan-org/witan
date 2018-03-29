@@ -39,11 +39,11 @@ module BoolValue = Value.Register(struct
     let key = dom
   end)
 
-let value_true = BoolValue.index true ty
+let value_true = BoolValue.index ~basename:"⊤" true ty
 let values_true = BoolValue.nodevalue value_true
 let node_true = BoolValue.node value_true
 
-let value_false = BoolValue.index false ty
+let value_false = BoolValue.index ~basename:"⊥" false ty
 let values_false = BoolValue.nodevalue value_false
 let node_false = BoolValue.node value_false
 
@@ -792,7 +792,7 @@ module ExpProp = struct
           let eqs = if kind = BCPOwnKnown then (eq_of_bool own (mulbool true v.topnot))::eqs else eqs in
           fold (fun eqs (node,sign) ->
               if kind <> BCPLeavesKnown && (Node.equal node propa) then eqs
-              else (eq_of_bool propa (mulbool false sign))::eqs) eqs v
+              else (eq_of_bool node (mulbool false sign))::eqs) eqs v
         | ExpUp (thterm,leaf)    ->
           let v = ThE.sem thterm in
           let own = ThE.node thterm in

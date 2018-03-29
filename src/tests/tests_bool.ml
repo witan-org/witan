@@ -293,7 +293,9 @@ let check_file filename =
   let env = create_env () in
   let clauses = ref [] in
   let res =
-    Witan_solver.Scheduler.run ~theories
+    Witan_solver.Scheduler.run
+      ~theories
+      ~limit:1000
       (fun d ->
          Gen.iter (fun stmt ->
              let open Dolmen.Statement in

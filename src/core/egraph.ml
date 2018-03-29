@@ -353,7 +353,9 @@ let draw_graph =
   let c = ref 0 in
   fun ?(force=false) t ->
     if force || Debug.test_flag show_graph then
-      let filename = Format.sprintf "debug_graph.tmp/debug_graph%i.dot" !c in
+      let dir = "debug_graph.tmp" in
+      if not (Sys.file_exists dir) then Unix.mkdir dir 0o700;
+      let filename = Format.sprintf "%s/debug_graph%i.dot" dir !c in
       incr c;
       Debug.dprintf1 Debug._true "[DotGui] output dot file: %s" filename;
       output_graph filename t
@@ -438,9 +440,9 @@ module Delayed = struct
       if Debug.test_flag debug_few then begin
       match Only_for_solver.thterm node with
       | None ->
-        Debug.dprintf2 debug_few "[Egraph] @[register %a@]" Node.pp node
+        Debug.dprintf2 debug "[Egraph] @[register %a@]" Node.pp node
       | Some thterm ->
-        Debug.dprintf4 debug_few "[Egraph] @[register %a: %a@]"
+        Debug.dprintf4 debug "[Egraph] @[register %a: %a@]"
           Node.pp node ThTerm.pp thterm
       end;
       assert ( check_no_dom t node );
@@ -597,7 +599,7 @@ module Delayed = struct
       let old_s = Node.M.find_opt node valuetable.table in
       let old_s'  = Node.M.find_opt node'  valuetable.table in
       let module Value = (val (Typedef.get_value value)) in
-      Debug.dprintf12 debug_few
+      Debug.dprintf12 debug
         "[Egraph] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
         Node.pp node Node.pp node0
         (Pp.option (print_value value)) old_s
@@ -615,7 +617,10 @@ module Delayed = struct
           (* already same value. Does that really happen? *)
           ()
         else
-          let pexp = Trail.mk_pexp t.env.trail Trail.exp_diff_value (node0,node0',pexp) in
+          let ty = Node.ty node in
+          let v = Values.index value v ty in
+          let v' = Values.index value v' ty in
+          let pexp = Trail.mk_pexp t.env.trail Trail.exp_diff_value (v,node0,node0',v',pexp) in
           raise (Contradiction(pexp))
     in
     VValueTable.iter_initializedi {VValueTable.iteri} t.env.value
@@ -627,15 +632,16 @@ module Delayed = struct
       if inv
       then node2_0,node2, node1_0, node1
       else node1_0, node1, node2_0, node2 in
-    Debug.dprintf8 debug_few "[Egraph.few] merge %a(%a) -> %a(%a)"
-      Node.pp other_node Node.pp other_node0
-      Node.pp repr_node Node.pp repr_node0;
     merge_values t pexp node1_0 node2_0;
     t.env.repr <- Node.M.add other_node repr_node t.env.repr;
     Trail.add_merge_finish t.env.trail pexp
       ~node1:node1_0 ~node2:node2_0
       ~node1_repr:node1 ~node2_repr:node2
       ~new_repr:repr_node;
+    Debug.dprintf10 debug_few "[Egraph.few] [%a] merge %a(%a) -> %a(%a)"
+      Trail.print_current_age t.env.trail
+      Node.pp other_node Node.pp other_node0
+      Node.pp repr_node Node.pp repr_node0;
     let event, other_event = Node.M.find_remove other_node t.env.event in
 
     (** move node events *)

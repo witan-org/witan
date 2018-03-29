@@ -320,7 +320,7 @@ module type RegisteredValue = sig
   (** nodevalue *)
   include Datatype
 
-  val index: s -> Ty.t -> t
+  val index: ?basename:string -> s -> Ty.t -> t
   (** Return a nodevalue from a valueantical value *)
 
   val node: t -> Node.t
@@ -383,7 +383,7 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
   let tag: t -> int = function
     | Node.Value(tag,_,_,_) -> tag
 
-  let index v ty =
+  let index ?(basename="") v ty =
     let node =
       HC.hashcons3
         (fun tag value v ty -> Node.Value(tag,ty,value,v))
@@ -392,8 +392,7 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
     Simple_vector.inc_size (i+1) Node.names;
     begin
       if Simple_vector.is_uninitialized Node.names i then
-        let s = Strings.find_new_name Node.used_names ""
-        (** TODO use Value.pp or Value.print_debug *) in
+        let s = Strings.find_new_name Node.used_names basename in
         Debug.dprintf3 debug_create "[Egraph] @[index %a into @@%s@]"
           D.pp v s;
         Simple_vector.set Node.names i s

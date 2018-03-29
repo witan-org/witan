@@ -38,6 +38,11 @@ module Levels = struct
     | Two of Trail.Age.t * Trail.Age.t
   [@@ deriving eq]
 
+  let pp fmt = function
+    | No -> Pp.string fmt "-"
+    | One age -> Trail.Age.pp fmt age
+    | Two (age1,age2) -> Format.fprintf fmt "%a,%a" Trail.Age.pp age1 Trail.Age.pp age2
+
   let compare l1 l2 =
     match l1, l2 with
     | No, No -> 0
@@ -76,11 +81,17 @@ module Levels = struct
     | One age -> add () age t1
     | Two (age0,age1) -> add () age0 (add () age1 t1)
 
+  let is_last_dec t = function
+    | No -> false
+    | One a | Two (a,_) -> Trail.Age.equal (Trail.last_dec t) a
 
   let before_last_dec t = function
     | No -> true
-    | One a -> Trail.before_last_dec t a
-    | Two (a,_) -> Trail.before_last_dec t a
+    | One a | Two (a,_) -> Trail.before_last_dec t a
+
+  let before_first_dec t = function
+    | No -> true
+    | One a | Two (a,_) -> Trail.before_first_dec t a
 
   let at_most_one_after_last_dec t = function
     | No -> true
@@ -271,34 +282,54 @@ module Learnt = Typedef.Node
 let print_pcon fmt (Trail.Pcon.Pcon(con,c)) =
   (ConRegistry.print con) fmt c
 
+let print_lcon fmt (l,pcon) =
+  Format.fprintf fmt "%a[%a]" print_pcon pcon Levels.pp l
+
 let learn trail (Trail.Pexp.Pexp(_,exp,x)) =
   Debug.dprintf0 debug "[Conflict] @[Learning@]";
   let t = trail in
   let module Exp = (val (ExpRegistry.get exp)) in
   let l = Exp.from_contradiction trail x in
-  Debug.dprintf2 debug "[Conflict] @[Initial conflict:%a@]"
-    (Pp.list Pp.comma print_pcon) l;
   let lcon = sort_lcon (convert_lcon t l) in
+  Debug.dprintf2 debug "[Conflict] @[Initial conflict:%a@]"
+    (Pp.list Pp.comma print_lcon) lcon;
+  let analysis_done lv l =
+    let backtrack_level = Levels.get_second_last lv in
+    Debug.dprintf4 debug "[Conflict] @[End analysis with (bl %a): %a@]"
+      Trail.Age.pp backtrack_level
+      (Pp.list Pp.comma print_lcon) l;
+    (** remove the one before the first decision (level 0)) *)
+    let l = List.fold_left (fun acc (lv,c) ->
+        if Levels.before_first_dec t lv then acc else c::acc
+      ) [] l in
+    (backtrack_level, l)
+  in
   let rec aux = function
     | [] -> assert false (** absurd: understand why *)
     | (Levels.No,_)::_                           -> assert false (** absurd: understand when *)
     | (l1,_)::_ when Levels.before_last_dec t l1 -> assert false (** absurd: understand when *)
+    | (l1,_)::_ as l when Levels.is_last_dec t l1 ->
+      let lv = List.fold_left (fun acc (lv,_) -> Levels.merge lv acc) Levels.No l in
+      analysis_done lv l
     | (l1,_)::[] as l when Levels.at_most_one_after_last_dec t l1 ->
-      (Levels.get_second_last l1, List.map snd l)
+      analysis_done l1 l
     | (l1,_)::(l2,_)::_ as l when Levels.at_most_one_after_last_dec t l1 && Levels.before_last_dec t l2 ->
-      let l1 = Levels.merge l1 l2 in
-      (Levels.get_second_last l1, List.map snd l)
+      analysis_done (Levels.merge l1 l2) l
     | (l1,Trail.Pcon.Pcon(con,c))::lcon ->
       let age = Levels.get_last l1 in
       let f (type a) exp (e:a) =
         let module Exp = (val (ExpRegistry.get exp) : Exp with type t = a) in
         Debug.dprintf6 debug "[Conflict] @[[%a] Analyse using %a: %a@]"
           Trail.Age.pp age Exp.pp e (ConRegistry.print con) c;
-        Exp.analyse t e con c
+        let res = Exp.analyse t e con c in
+        res
       in
       let (Trail.Pexp.Pexp(_,exp,e)) = Trail.get_pexp t age in
       let lcon' = f exp e in
-      let lcon = merge_lcon (sort_lcon (convert_lcon t lcon')) lcon in
+      let lcon' = convert_lcon t lcon' in
+        Debug.dprintf2 debug "[Conflict] @[Analyse resulted in: %a@]"
+          (Pp.list Pp.comma print_lcon) lcon';
+      let lcon = merge_lcon (sort_lcon lcon') lcon in
       aux lcon
   in
   let backtrack_level, l = aux lcon in
@@ -390,20 +421,26 @@ module Specific = struct
     end)
 
   let () = register_exp (module struct
-      type t = Typedef.Node.t * Typedef.Node.t * Trail.Pexp.t
+      type t = Typedef.Values.t * Typedef.Node.t * Typedef.Node.t * Typedef.Values.t * Trail.Pexp.t
       let key = Trail.exp_diff_value
 
-      let pp fmt (n1,n2,Trail.Pexp.Pexp(_,exp,e)) = Format.fprintf fmt "diff_value(%a,%a):%a"
-          Typedef.Node.pp n1 Typedef.Node.pp n2 (ExpRegistry.print exp) e
+      let pp fmt (v1,n1,n2,v2,Trail.Pexp.Pexp(_,exp,e)) =
+        Format.fprintf fmt "diff_value(%a=%a=%a=%a):%a"
+          Typedef.Values.pp v1 Typedef.Node.pp n1
+          Typedef.Node.pp n2 Typedef.Values.pp v2
+          (ExpRegistry.print exp) e
 
       let analyse _ _ _ _ = raise Std.Impossible (** used only for contradiction *)
-      let from_contradiction t (n1,n2,Trail.Pexp.Pexp(_,exp,e)) =
+      let from_contradiction t (v1,n1,n2,v2,Trail.Pexp.Pexp(_,exp,e)) =
         let f (type a) (exp:a Exp.t) e =
           let module Exp = (val (ExpRegistry.get exp)) in
           Debug.dprintf6 debug "[Conflict] @[Intermediary conflict diff value %a and %a: %a@]"
             Typedef.Node.pp n1 Typedef.Node.pp n2 Exp.pp e;
           Exp.analyse t e EqCon.key {l=n1;r=n2}
         in
+        (** splitting of the equality v1 = v2 *)
+        (Trail.Pcon.pcon EqCon.key {l=Typedef.Values.node v1;r=n1})::
+        (Trail.Pcon.pcon EqCon.key {l=n2;r=Typedef.Values.node v2})::
         f exp e
     end)
 

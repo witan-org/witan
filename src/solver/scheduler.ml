@@ -33,6 +33,11 @@ let debug_pushpop = Debug.register_info_flag
   ~desc:"for the scheduler push/pop"
   "sched_pushpop"
 
+let debug_dotgui = Debug.register_flag
+  ~desc:"print graph at interesting time (push/pop)"
+  "sched_dotgui"
+
+
 let var_decay = 1. /. 0.95
 
 let stats_propa = Debug.register_stats_int ~name:"Scheduler.daemon" ~init:0
@@ -92,7 +97,7 @@ let print_level fmt t =
   let nb_dec =
     Prio.fold (fun acc x _ -> match x with Att.Decision _ -> acc + 1 | _ -> acc)
       0 t.wakeup_daemons in
-  Format.fprintf fmt "%a (level:%i, dec:%i)"
+  Format.fprintf fmt "%a (level:%i, dec waiting:%i)"
     Trail.Age.pp (S.current_age t.solver_state)
     (S.current_nbdec t.solver_state) nb_dec
 
@@ -120,6 +125,8 @@ let new_t t =
 let new_solver () = new_t (S.new_t ())
 
 let push t chogen =
+  if Debug.test_flag debug_dotgui then
+    S.draw_graph ~force:true t.solver_state;
   Debug.dprintf0 debug_pushpop "[Scheduler] push";
   let prev =
     { pre_wakeup_daemons    = t.wakeup_daemons;
@@ -184,7 +191,7 @@ let rec apply_learnt learntdec llearnt t d =
     Bag.iter iter_learnt llearnt;
     iter_learnt learntdec;
     run_until_dec t d;
-    Debug.dprintf0 debug "[Scheduler] Apply learntdec";
+    Debug.dprintf0 debug_pushpop "[Scheduler] Learnt applied";
     (** TODO: decision on the last decision if it is multiple theory *)
     d
   with S.Contradiction pexp ->
@@ -276,15 +283,16 @@ and try_run_dec:
       | Conflict.DecTodo todo ->
         Debug.incr stats_dec;
         S.delayed_stop d;
-        Debug.dprintf2 debug_pushpop
-          "[Scheduler] Make decision: level %a"
-          print_level t;
         (** The registered state keep the old prio *)
         push t chogen;
         (** We use the priority list without the decision only in the
             branch where the decision is made *)
         t.wakeup_daemons <- prio;
-        let _declevel = S.new_dec t.solver_state in
+        let declevel = S.new_dec t.solver_state in
+        Debug.dprintf4 debug_pushpop
+          "[Scheduler] Make decision: decision %a level %a"
+          Trail.print_dec declevel
+          print_level t;
         assert (Egraph.current_nbdec t.solver_state > 0);
         let d = new_delayed t in
         todo d;

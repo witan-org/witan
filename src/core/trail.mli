@@ -76,8 +76,10 @@ val create: unit -> t
 val new_handle: t -> t
 
 val current_age: t -> age
+val print_current_age: t Pp.pp
 val last_dec: t -> age
 val before_last_dec: t -> age -> bool
+val before_first_dec: t -> age -> bool
 
 val get_pexp: t -> age -> Pexp.t
 
@@ -126,7 +128,7 @@ val exp_same_sem : exp_same_sem Exp.t
 (** Two nodes have been merged because they shared the same semantical
     terms or value *)
 
-val exp_diff_value: (Node.t * Node.t * Pexp.t) Exp.t
+val exp_diff_value: (Values.t * Node.t * Node.t * Values.t * Pexp.t) Exp.t
 (** A contradiction have been reached because the given explanation
     makes one equivalence class be associated to two different values *)
 

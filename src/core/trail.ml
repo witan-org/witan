@@ -89,6 +89,7 @@ type t = {
 }
 
 let before_last_dec t a = Age.compare a t.last_dec < 0
+let before_first_dec t a = Age.(a < t.first_dec)
 
 let get_pexp t age = Simple_vector.get t.trail age
 
@@ -119,6 +120,7 @@ let new_dec (t:t)  =
   dec
 
 let current_age t = t.age
+let print_current_age fmt t = Age.pp fmt t.age
 let last_dec t = t.last_dec
 let nbdec t = t.nbdec
 
@@ -131,7 +133,8 @@ let mk_pexp:
 
 let add_pexp t pexp =
   t.age <- Age.succ t.age;
-  Simple_vector.push t.trail pexp
+  Simple_vector.inc_size (t.age + 1) t.trail;
+  Simple_vector.set t.trail t.age pexp
 
 let add_merge_start:
   t -> Pexp.t -> node1:Node.t -> node2:Node.t ->
@@ -175,7 +178,7 @@ let exp_same_sem : exp_same_sem Exp.t =
   Exp.create_key "Egraph.exp_same_sem"
 
 (** TODO choose an appropriate data *)
-let exp_diff_value : (Node.t * Node.t * Pexp.t) Exp.t =
+let exp_diff_value : (Values.t * Node.t * Node.t * Values.t * Pexp.t) Exp.t =
   Exp.create_key "Egraph.exp_diff_value"
 
 

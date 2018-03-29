@@ -165,8 +165,10 @@ module type RegisteredValue = sig
   (** nodevalue *)
   include Datatype
 
-  val index: s -> Ty.t -> t
-  (** Return a nodevalue from a valueantical term *)
+  val index: ?basename:string -> s -> Ty.t -> t
+  (** Return a nodevalue from a valueantical term.
+      Basename is used only for debug
+  *)
 
   val node: t -> Node.t
   (** Return a class from a nodevalue *)
