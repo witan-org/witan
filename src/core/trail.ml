@@ -179,14 +179,16 @@ let exp_diff_value : (Node.t * Node.t * Pexp.t) Exp.t =
   Exp.create_key "Egraph.exp_diff_value"
 
 
-let age_merge t n1 n2 =
-  if Node.equal n1 n2 then Age.min
+let age_merge t n1_0 n2_0 =
+  if Node.equal n1_0 n2_0 then Age.min
   else
     let rec aux t n1 n2 =
       assert (not (Node.equal n1 n2));
       let age, n1, n2 =
         match n1, Node.M.find_opt n1 t.nodehist, n2, Node.M.find_opt n2 t.nodehist with
-        | _, None, _, None -> invalid_arg "age_merge: node not merged"
+        | _, None, _, None ->
+          invalid_arg (Format.asprintf "age_merge: node %a and %a not merged"
+                         Node.pp n1_0 Node.pp n2_0)
         | n1, None, _, Some(age,n2) | _, Some(age,n2), n1, None ->
           age, n1, n2
         | n1, Some(age1,n1'), n2, Some(age2,n2') ->
@@ -196,4 +198,4 @@ let age_merge t n1 n2 =
       in
       if Node.equal n1 n2 then age else aux t n1 n2
     in
-    aux t n1 n2
+    aux t n1_0 n2_0

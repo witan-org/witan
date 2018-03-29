@@ -265,6 +265,25 @@ let get_loc =
   let default_loc = Dolmen.ParseLocation.mk "<?>" 0 0 0 0 in
   (fun t -> CCOpt.get_or ~default:default_loc t.Dolmen.Term.loc)
 
+(** used to complete partial model *)
+let default_value = true
+
+let get_model env d =
+  let model : Values.t Term.H.t = Term.H.create 16 in
+  R.iter (fun _ id ->
+      let t = Term.const id in
+      let n = SynTerm.node_of_term t in
+      let v = Egraph.Delayed.get_value d Bool.dom n in
+      let v = Witan_popop_lib.Opt.get_def default_value v in
+      let v = if v then Bool.values_true else Bool.values_false in
+      Term.H.add_new Std.Impossible model t v)
+    env;
+  model
+
+let check_model model expected n =
+  let leaf t = Term.H.find_opt model t in
+  assert_bool "check_model" (Values.equal (Interp.node ~leaf n) expected)
+
 let check_file filename =
   let statements = Witan_solver.Input.read
       ~language:Witan_solver.Input.Dimacs
@@ -272,6 +291,7 @@ let check_file filename =
       (Filename.basename filename)
   in
   let env = create_env () in
+  let clauses = ref [] in
   let res =
     Witan_solver.Scheduler.run ~theories
       (fun d ->
@@ -295,13 +315,17 @@ let check_file filename =
                let l = List.map map l in
                let l = Shuffle.shufflel l in
                let cl = Bool._or l in
+               clauses := cl::!clauses;
                Egraph.Delayed.register d cl;
                Bool.set_true d Trail.pexp_fact cl
              | _ -> ())
            statements) in
   match res with
   | `Contradiction -> `Unsat
-  | `Done _ -> `Sat
+  | `Done d ->
+    let model = get_model env d in
+    List.iter (check_model model Bool.values_true) !clauses;
+    `Sat
 
 let tests_dimacs expected dir =
   let files = Sys.readdir dir in

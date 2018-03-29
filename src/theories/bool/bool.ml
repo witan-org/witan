@@ -40,9 +40,11 @@ module BoolValue = Value.Register(struct
   end)
 
 let value_true = BoolValue.index true ty
+let values_true = BoolValue.nodevalue value_true
 let node_true = BoolValue.node value_true
 
 let value_false = BoolValue.index false ty
+let values_false = BoolValue.nodevalue value_false
 let node_false = BoolValue.node value_false
 
 let union_disjoint m1 m2 =
@@ -126,20 +128,6 @@ type t =
   }
 
 let sem : t Sem.t = Sem.create_key "Prop"
-
-let () =
-  let interp ~interp t =
-    let v =
-      IArray.fold (fun acc (n,b) ->
-          acc ||
-          let v = BoolValue.value (BoolValue.coerce_nodevalue (interp n)) in
-          if b then not v else v
-        ) false t.lits
-    in
-    let v = if t.topnot then not v else v in
-    BoolValue.nodevalue (if v then value_true else value_false)
-  in
-  Interp.Register.thterm sem interp
 
 (* let iter f x = IArray.iter f x.lits *)
 
@@ -801,10 +789,10 @@ module ExpProp = struct
               let sign = mulbool false v.topnot in
               Conflict.EqCon.split t c propa (node_of_bool sign)
           in
-          let eqs = if kind == BCPOwnKnown then (eq_of_bool own (mulbool true v.topnot))::eqs else eqs in
+          let eqs = if kind = BCPOwnKnown then (eq_of_bool own (mulbool true v.topnot))::eqs else eqs in
           fold (fun eqs (node,sign) ->
-              if kind != BCPLeavesKnown && (Node.equal node propa) then eqs
-              else (eq_of_bool own (mulbool false sign))::eqs) eqs v
+              if kind <> BCPLeavesKnown && (Node.equal node propa) then eqs
+              else (eq_of_bool propa (mulbool false sign))::eqs) eqs v
         | ExpUp (thterm,leaf)    ->
           let v = ThE.sem thterm in
           let own = ThE.node thterm in
@@ -941,3 +929,33 @@ end
 
 module EC = Conflict.RegisterCon(ConClause)
 *)
+
+(** {2 Interpretations} *)
+let () =
+  let interp ~interp t =
+    let v =
+      IArray.fold (fun acc (n,b) ->
+          acc ||
+          let v = BoolValue.value (BoolValue.coerce_nodevalue (interp n)) in
+          if b then not v else v
+        ) false t.lits
+    in
+    let v = if t.topnot then not v else v in
+    BoolValue.nodevalue (if v then value_true else value_false)
+  in
+  Interp.Register.thterm sem interp
+
+let () =
+  Interp.Register.id (fun id args ->
+      let open Term in
+      let is builtin = Term.Id.equal id builtin in
+      let (!>) n = BoolValue.value (BoolValue.coerce_nodevalue n) in
+      let (!<) b = Some (if b then values_true else values_false) in
+      match args with
+      | [] when is true_id -> Some values_true
+      | [] when is false_id -> Some values_false
+      | [a] when is not_id -> !< (not (!> a))
+      | l   when is or_id -> !< (List.fold_left (||) false (List.map (!>) l))
+      | l   when is and_id -> !< (List.fold_left (&&) true (List.map (!>) l))
+      | _ -> None
+    )

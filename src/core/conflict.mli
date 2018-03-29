@@ -144,6 +144,8 @@ module EqCon : sig
     r: Node.t;
   }
 
+  val pp: t Witan_popop_lib.Pp.pp
+
   val key : t Con.t
 
   val register_apply_learnt: Ty.t -> (t list -> Node.t list) -> unit

@@ -27,6 +27,10 @@ let print_decision = Debug.register_info_flag
   ~desc:"for@ the@ printing@ of@ the@ decisions@ done."
   "decisions"
 
+let debug = Debug.register_info_flag
+  ~desc:"for@ the@ main@ part@ of@ conflicts."
+  "Conflict.core"
+
 module Levels = struct
   type t =
     | No
@@ -258,14 +262,22 @@ let lcon_to_node l =
 
 let _or = ref (fun _ -> assert false)
 let _set_true = ref (fun _ _ _ -> assert false)
-let apply_learnt d n = !_set_true d Trail.pexp_fact n
+let apply_learnt d n =
+  Egraph.Delayed.register d n;
+  !_set_true d Trail.pexp_fact n
 
 module Learnt = Typedef.Node
 
+let print_pcon fmt (Trail.Pcon.Pcon(con,c)) =
+  (ConRegistry.print con) fmt c
+
 let learn trail (Trail.Pexp.Pexp(_,exp,x)) =
+  Debug.dprintf0 debug "[Conflict] @[Learning@]";
   let t = trail in
   let module Exp = (val (ExpRegistry.get exp)) in
   let l = Exp.from_contradiction trail x in
+  Debug.dprintf2 debug "[Conflict] @[Initial conflict:%a@]"
+    (Pp.list Pp.comma print_pcon) l;
   let lcon = sort_lcon (convert_lcon t l) in
   let rec aux = function
     | [] -> assert false (** absurd: understand why *)
@@ -277,11 +289,13 @@ let learn trail (Trail.Pexp.Pexp(_,exp,x)) =
       let l1 = Levels.merge l1 l2 in
       (Levels.get_second_last l1, List.map snd l)
     | (l1,Trail.Pcon.Pcon(con,c))::lcon ->
+      let age = Levels.get_last l1 in
       let f (type a) exp (e:a) =
         let module Exp = (val (ExpRegistry.get exp) : Exp with type t = a) in
+        Debug.dprintf6 debug "[Conflict] @[[%a] Analyse using %a: %a@]"
+          Trail.Age.pp age Exp.pp e (ConRegistry.print con) c;
         Exp.analyse t e con c
       in
-      let age = Levels.get_last l1 in
       let (Trail.Pexp.Pexp(_,exp,e)) = Trail.get_pexp t age in
       let lcon' = f exp e in
       let lcon = merge_lcon (sort_lcon (convert_lcon t lcon')) lcon in
@@ -328,6 +342,7 @@ module EqCon = struct
   let not_found = Invalid_argument "Type not found in apply_learnt EqCon"
 
   let apply_learnt l =
+    let l = List.filter (fun {l;r} -> not (Typedef.Node.equal l r)) l in
     map_by_kind
       ~create:Ty.H.create
       ~change:Ty.H.change
@@ -385,6 +400,8 @@ module Specific = struct
       let from_contradiction t (n1,n2,Trail.Pexp.Pexp(_,exp,e)) =
         let f (type a) (exp:a Exp.t) e =
           let module Exp = (val (ExpRegistry.get exp)) in
+          Debug.dprintf6 debug "[Conflict] @[Intermediary conflict diff value %a and %a: %a@]"
+            Typedef.Node.pp n1 Typedef.Node.pp n2 Exp.pp e;
           Exp.analyse t e EqCon.key {l=n1;r=n2}
         in
         f exp e

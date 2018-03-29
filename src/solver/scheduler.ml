@@ -231,7 +231,10 @@ and pop_to t prev =
 
 and conflict_analysis t pexp =
   Debug.incr stats_con;
-  if Egraph.current_nbdec t.solver_state = 0 then raise Contradiction
+  if Egraph.current_nbdec t.solver_state = 0 then begin
+    Debug.dprintf0 debug "[Scheduler] contradiction at level 0";
+    raise Contradiction
+  end
   else
     let backlevel, learnt, useful =
       Conflict.learn
@@ -282,6 +285,7 @@ and try_run_dec:
             branch where the decision is made *)
         t.wakeup_daemons <- prio;
         let _declevel = S.new_dec t.solver_state in
+        assert (Egraph.current_nbdec t.solver_state > 0);
         let d = new_delayed t in
         todo d;
         d

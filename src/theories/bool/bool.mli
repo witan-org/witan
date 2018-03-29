@@ -56,3 +56,10 @@ val chobool: Node.t Trail.Cho.t
 (* val make_dec: Variable.make_dec *)
 
 val ty: Ty.t
+
+module BoolValue : Typedef.RegisteredValue with type s = bool
+
+val value_true : BoolValue.t
+val value_false: BoolValue.t
+val values_true : Values.t
+val values_false: Values.t

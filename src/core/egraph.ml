@@ -994,15 +994,14 @@ let find_def t node =
   find_def t node
 
 let get_trail t =
-  assert (t.current_delayed == dumb_delayed ||
-          t.current_delayed == unsat_delayed);
+  (* assert (t.current_delayed == dumb_delayed ||
+   *         t.current_delayed == unsat_delayed); *)
   t.trail
 
 
 let new_dec t =
   assert (t.current_delayed == dumb_delayed);
-  let t' = new_handle t in
-  Trail.new_dec t'.trail
+  Trail.new_dec t.trail
 
 let current_age (t:t) = Trail.current_age t.trail
 let current_nbdec (t:t) = Trail.nbdec t.trail

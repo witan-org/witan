@@ -90,3 +90,18 @@ and thterm  ?(leaf=(fun _ -> None)) t =
       if Register.ThInterp.is_uninitialized Register.thterms sem
       then raise (CantInterpretThTerm t);
       (Register.ThInterp.get Register.thterms sem) ~interp:(node ~leaf) v
+
+
+let () = Exn_printer.register (fun fmt exn ->
+    match exn with
+    | NoInterpretation id ->
+      Format.fprintf fmt "Can't interpret the id %a."
+        Term.Id.pp id
+    | CantInterpretTerm t ->
+      Format.fprintf fmt "Can't interpret the term %a."
+        Term.pp t
+    | CantInterpretThTerm th ->
+      Format.fprintf fmt "Can't interpret the thterm %a."
+        Typedef.ThTerm.pp th
+    | exn -> raise exn
+  )
