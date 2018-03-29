@@ -52,74 +52,12 @@ let union_disjoint m1 m2 =
 
 let index sem v = Node.index_sem sem v ty
 
-let with_other = ref false
-(** TODO not a global variable...
-    merge the element that are true instead of using only the dom.
-    false by default
-*)
-
-
 let is env node = Egraph.Delayed.get_value env dom node
 let is_true  env node = Node.equal node node_true || is env node = Some true
 let is_false env node = Node.equal node node_false || is env node = Some false
 let is_unknown env node = is env node = None
 
-(*
-module D = struct
-  type t = bool
-  let merged b1 b2 = Opt.equal (==) b1 b2
-
-  type expmerge =
-  | Merge of Trail.pexp * Node.t * Node.t
-  | DomMerge of Trail.pexp * Node.t
-
-  let expmerge : expmerge Trail.exp =
-    Trail.Exp.create_key "Bool.merge"
-
-  let true_is_false d node pexp =
-    let pexp = Delayed.mk_pexp d expmerge (DomMerge(pexp,node)) in
-    Delayed.contradiction d pexp
-
-  let set_bool env pexp node b =
-    if !with_other then
-      Delayed.merge env pexp node
-        (if b then node_true else node_false)
-    else
-      match Delayed.get_value env dom node with
-      | Some b' when DBool.equal b b' -> ()
-      | Some _ ->
-        true_is_false env node pexp
-      | None ->
-        Delayed.set_value env pexp dom node b
-
-  let merge d pexp ((b1: t option),cl1) ((b2: t option),cl2) _ =
-      match b1,b2 with
-      | Some b1, Some b2 when b1 == b2 -> ()
-      | Some _, Some _  ->
-        let pexp = Delayed.mk_pexp d expmerge (Merge(pexp,cl1,cl2)) in
-        Delayed.contradiction d pexp
-      | None, Some b ->
-        Delayed.set_dom_premerge d dom cl1 b
-      | Some b, None ->
-        Delayed.set_dom_premerge d dom cl2 b
-      | None, None -> assert false
-
-  let pp = Pp.bool
-  let key = dom
-end
-
-
-let true_is_false = D.true_is_false
-let set_bool = D.set_bool
-module DE = RegisterDom(D)
-*)
-
-
 let set_bool env pexp node b =
-  if !with_other then
-    Delayed.merge env pexp node
-      (if b then node_true else node_false)
-  else
     Delayed.set_value env pexp dom node b
 
 type t =
@@ -523,8 +461,7 @@ let decvars n =
   then Some (make_dec n)
   else None
 
-let th_register' with_other_theories env =
-  with_other := with_other_theories;
+let th_register env =
   RDaemonPropaNot.init env;
   RDaemonPropa.init env;
   RDaemonInit.init env;
@@ -535,9 +472,6 @@ let th_register' with_other_theories env =
   SynTerm.register_converter env converter;
   SynTerm.register_decvars env decvars;
   ()
-
-let th_register_alone = th_register' false
-let th_register = th_register' true
 
 (** {2 Choice on bool} *)
 
@@ -563,145 +497,6 @@ end
 
 let () = Conflict.register_cho (module ChoBool)
 
-(*
-let choclause = Trail.Cho.create_key "Bool.choclause"
-
-module ChoClause = struct
-  module Key = Th
-  module Data = struct
-    type t = Node.t * bool
-    let pp fmt (node,b) =
-      Format.fprintf fmt "%a=%b" Node.pp  node b
-  end
-
-  let choose_decision env c =
-    try
-      Th.find_not_known env c.lits;
-      Conflict.DecNo
-    with Th.Found (node,sign) ->
-      Conflict.DecTodo (node,not sign)
-
-  let make_decision env dec _ (node,b) =
-    ChoBool.make_decision env dec node b
-
-  let analyse _ _ _ _ = assert false
-
-  let key = choclause
-
-end
-
-module EChoClause = Conflict.RegisterCho(ChoClause)
-*)
-
-
-(*
-open Conflict
-type clause_conflict = bool Types.Node.M.t
-
-let mk_conequal:
-  (ComputeConflict.t -> Node.t -> Node.t -> clause_conflict rescon) ref =
-  ref (fun _ _ -> assert false)
-
-let concat s1 s2 =
-  Node.M.union (fun _ b1 b2 -> assert (DBool.equal b1 b2); Some b1) s1 s2
-
-let get_con acc t rescon =
-  Conflict.fold_requested (fun acc _ s -> concat acc s)
-    acc t rescon
-
-let get_dom t age node s =
-  if Node.equal node node_true || Node.equal node node_false then s
-  else
-    let l = ComputeConflict.get_dom t age node dom in
-    (* Format.fprintf (Debug.get_debug_formatter ()) *)
-    (*   "[get_dom] @[%a@]" *)
-    (*   (Pp.list Pp.semi Trail.print_mod_dom) l; *)
-    List.fold_left (fun s mod_dom ->
-        (* Format.fprintf (Debug.get_debug_formatter ()) *)
-        (*   "[rlist] @[%a@]" *)
-        (*   Conflict.print_rlist rlist; *)
-        let pexp = mod_dom.Trail.modpexp in
-        let s = get_con s t (ComputeConflict.get_pexp t pexp conclause) in
-        let s,deps =
-          ComputeConflict.Equal.one_equal t
-            ~from:node
-            ~to_:mod_dom.Trail.modcl
-            conclause
-            s Trail.Deps.empty
-        in
-        ComputeConflict.add_deps t deps;
-        s) s l
-
-let get_pexp t s pexp =
-  get_con s t (ComputeConflict.get_pexp t pexp conclause)
-
-
-let check_sem v node =
-  let own = ThE.node (ThE.index v ty) in
-  Node.equal node own
-
-(** **)
-module ExpMerge = struct
-  open D
-
-  type t = expmerge
-
-  let pp fmt = function
-    | Merge  (pexp,cl1,cl2)   ->
-      Format.fprintf fmt "Merge!(%a,%a,%a)"
-        Trail.pp_pexp pexp Node.pp cl1 Node.pp cl2
-    | DomMerge (pexp,node) ->
-      Format.fprintf fmt "DomMerge!(%a,%a)"
-        Trail.pp_pexp pexp Node.pp node
-
-(*
-  let need_dom t age node =
-    if not (Node.equal node node_true || Node.equal node node_false) then
-      IterExp.need_dom t age node dom
-
-  let iterexp t age = function
-    | Merge    (pexp,cl1,cl2,_)    ->
-      IterExp.need_pexp t pexp;
-      need_dom t age cl1;
-      need_dom t age cl2
-    | DomMerge (pexp,node,_)    ->
-      IterExp.need_pexp t pexp;
-      need_dom t age node
-  *)
-
-  let analyse :
-      type a. Conflict.ComputeConflict.t ->
-    Trail.age -> a Trail.con -> t -> a Conflict.rescon =
-    fun t age con exp ->
-    let return (s:bool Types.Node.M.t) : a Conflict.rescon =
-      match Trail.Con.Eq.eq_type conclause con with
-      | None -> GOther (conclause,s)
-      | Some Types.Eq -> GRequested s in
-    match exp with
-    | Merge (pexp,cl1,cl2)    ->
-      let s = Node.M.empty in
-      let s = get_con s t (ComputeConflict.get_pexp t pexp conclause) in
-      let s = get_dom t age cl1 s in
-      let s = get_dom t age cl2 s in
-      return s
-    | DomMerge (pexp,node) ->
-      let s = Node.M.empty in
-      let s = get_con s t (ComputeConflict.get_pexp t pexp conclause) in
-      let s = get_dom t age node s in
-      return s
-
-  let expdomlimit _ _ _ _ _ _ _ = raise Impossible (* used only for unsat *)
-
-  let key = expmerge
-
-  let same_sem t age _sem _v con exp _cl1 _cl2 =
-    analyse  t age con exp
-
-end
-
-module EM = Conflict.RegisterExp(ExpMerge)
-*)
-
 module ExpProp = struct
 
   type t = expprop
@@ -726,31 +521,6 @@ module ExpProp = struct
     | ExpDec (n,b) ->
       Format.fprintf fmt "Dec(%a,%b)"
         Node.pp n b
-
-
-(*
-  let iterexp t age = function
-    | ExpBCP  (v,_,_) when IArray.length v.lits = 1 ->
-      raise Impossible
-    | ExpBCP  (v,_,propa) ->
-      IterExp.need_sem t age sem v;
-      iter (fun (node,_) ->
-          if not (Node.equal node propa) then
-          IterExp.need_dom t age node dom) v
-    | ExpUp  (v,_,leaf,_)    ->
-      IterExp.need_sem t age sem v;
-      IterExp.need_dom t age leaf dom
-    | ExpDown (v,own)    ->
-      IterExp.need_sem t age sem v;
-      IterExp.need_dom t age own dom
-    | ExpNot  (v,node,_)->
-      IterExp.need_sem t age sem v;
-      IterExp.need_dom t age node dom;
-      (** For Top propagation (otherwise need_sem do already the job *)
-      let cln,_ = IArray.get v.lits 0 in
-      IterExp.need_cl_repr t age cln
-
-*)
 
   let eq_of_bool n b =
     let nb = node_of_bool b in
@@ -837,98 +607,6 @@ let () = Conflict.EqCon.register_apply_learnt ty
          ) l in
        [gen false l]
     )
-
-(*
-module ConClause = struct
-  open Conflict
-
-  type t = bool Node.M.t
-
-  let pp fmt t =
-    Format.fprintf fmt "@[%a@]"
-      (Pp.iter2 Node.M.iter (Pp.constant_formatted "⋀@,")
-         (Pp.constant_formatted "=") Node.pp
-         Format.pp_print_bool)
-      t
-
-  let key = conclause
-
-  class finalized v : Conflict.finalized = object
-    method pp fmt =
-      Pp.iter2 Node.M.iter Pp.semi Pp.comma Node.pp DBool.pp fmt v
-    method test d =
-      try
-        Node.M.fold_left (fun acc node sign ->
-            match is d node with
-            | None -> ToDecide
-            | Some b ->
-              if mulbool b sign
-              then raise Exit
-              else acc) False v
-      with Exit -> True
-    method decide :
-      'a. 'a Conflict.fold_decisions -> Egraph.Delayed.t -> 'a -> 'a =
-      fun f d acc ->
-        Node.M.fold_left (fun acc node b ->
-            match is d node with
-            | None ->
-              f.fold_decisions acc chobool node (not b)
-            | Some _ -> acc) acc v
-    method conflict_add _ = v
-  end
-
-  let finalize _ sl =
-    let s = Bag.fold_left union_disjoint Node.M.empty sl in
-    Debug.dprintf2 Conflict.print_conflicts "[Bool] @[conflict: %a@]"
-      pp s;
-    match Node.M.cardinal s with
-    | 0 -> None
-    | _ ->
-      Some (new finalized s)
-
-  let eq_sym s = s
-  let eq_transitivity s1 s2 = concat s1 s2
-  let eq_check ~from:_ ~to_:_ _ = true
-  let eq_other ~from:_ ~to_:_ = Node.M.empty
-  let finish _ x = x
-
-  let clatlimit t age clo rcl =
-    if ComputeConflict.before_first_dec t age
-    then GRequested Node.M.empty
-    else
-      match clo, rcl with
-      | (_true, node) when Node.equal _true node_true ->
-        ComputeConflict.set_dec_cho t chobool node;
-        GRequested (Node.M.singleton node true)
-      | (node, _true) when Node.equal _true node_true ->
-        ComputeConflict.set_dec_cho t chobool node;
-        GRequested (Node.M.singleton node true)
-      | (_false, node) when Node.equal _false node_false ->
-        ComputeConflict.set_dec_cho t chobool node;
-        GRequested (Node.M.singleton node false)
-      | (node, _false) when Node.equal _false node_false ->
-        ComputeConflict.set_dec_cho t chobool node;
-        GRequested (Node.M.singleton node false)
-      | _ ->
-        !mk_conequal t clo rcl
-
-  (* let propadom: *)
-  (*   type a. ComputeConflict.t -> *)
-  (*     Trail.Age.t -> a dom -> Node.t -> a option -> t rescon = *)
-  (*     fun t age dom' node bval -> *)
-  (*       if ComputeConflict.before_first_dec t age *)
-  (*       then GRequested Node.M.empty *)
-  (*       else *)
-  (*         match Dom.Eq.coerce_type dom dom' with *)
-  (*         | Types.Eq -> *)
-  (*           if Node.equal node node_true || Node.equal node node_false then *)
-  (*             GRequested Node.M.empty *)
-  (*           else *)
-  (*             GRequested (Node.M.singleton node (Opt.get bval)) *)
-end
-
-module EC = Conflict.RegisterCon(ConClause)
-*)
 
 (** {2 Interpretations} *)
 let () =
