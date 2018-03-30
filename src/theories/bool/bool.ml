@@ -58,7 +58,8 @@ let is_false env node = Node.equal node node_false || is env node = Some false
 let is_unknown env node = is env node = None
 
 let set_bool env pexp node b =
-    Delayed.set_value env pexp dom node b
+  Delayed.merge env pexp node
+    (if b then node_true else node_false)
 
 type t =
   { topnot: bool;
@@ -502,6 +503,47 @@ end
 
 let () = Conflict.register_cho (module ChoBool)
 
+(** {2 Conflict} *)
+
+(** We could use instead directly EqCon, but it gives an example of a
+   simple conflict other than EqCon *)
+module ConProp = struct
+  type t = (Node.t * bool)
+
+  let pp fmt (n,b) =
+    if b
+    then Format.fprintf fmt "¬%a" Node.pp n
+    else Node.pp fmt n
+
+  let key : t Trail.Con.t = Trail.Con.create_key "conprop"
+
+  let apply_learnt (n,b) = (n,if b then Conflict.Neg else Conflict.Pos)
+
+  let node_of_sign b = (node_of_bool (mulbool true b))
+
+  let levels t (n,b) =
+    let levels = Conflict.Levels.empty in
+    let age = Conflict.Conflict.age_merge t n (node_of_sign b) in
+    Conflict.Levels.add t age levels
+
+  let useful_nodes (n,_) = Bag.elt n
+
+  let split t (n,b) a' b' =
+    let l', r' = Conflict.EqCon.split t {l=n;r=node_of_sign b} a' b' in
+    (match l' with
+     | None -> []
+     | Some r -> [Trail.Pcon.pcon Conflict.EqCon.key {l=n; r}])
+    @
+    (match r' with
+     | None -> []
+     | Some l -> [Trail.Pcon.pcon key (l,b)])
+
+end
+
+let () = Conflict.register_con (module ConProp)
+
+(** {2 Explanation} *)
+
 module ExpProp = struct
 
   type t = expprop
@@ -528,66 +570,61 @@ module ExpProp = struct
         Node.pp n b
 
   let eq_of_bool n b =
-    let nb = node_of_bool b in
-    { Conflict.EqCon.l = n; r = nb }
+    Trail.Pcon.pcon ConProp.key (n,not b)
 
-
-  let analyse_one_to_one t c to_ to_b from_ from_b =
+  let analyse_one_to_one t pcon to_ to_b from_ from_b =
     (** we have
         c: a = b
         we propagated: to_ = to_b
         because      : from_   = not from_b
     *)
     let to_not = node_of_bool to_b in
-    let eqs = Conflict.EqCon.split t c to_ to_not in
+    let eqs = Conflict.split t pcon to_ to_not in
     let eq = eq_of_bool from_ from_b in
     (eq::eqs)
 
   let analyse :
-    type a. Conflict.Conflict.t ->
-    t -> a Trail.Con.t -> a -> Trail.Pcon.t list =
-    fun t exp con c ->
-      let c = Conflict.Con.Eq.coerce con Conflict.EqCon.key c in
-      let eqs = match exp with
-        | ExpBCP  (thterm,_,_) when IArray.length (ThE.sem thterm).lits = 1 ->
-          raise Impossible
-        | ExpBCP  (thterm,propa,kind) ->
-          let v = ThE.sem thterm in
-          let own = ThE.node thterm in
-          let eqs =
-            match kind with
-            | BCP -> Conflict.EqCon.split t c own propa
-            | BCPOwnKnown ->
-              let propa_sign = mulbool true (Opt.get (find v propa)) in
-              Conflict.EqCon.split t c propa (node_of_bool propa_sign)
-            | BCPLeavesKnown ->
-              let sign = mulbool false v.topnot in
-              Conflict.EqCon.split t c propa (node_of_bool sign)
-          in
-          let eqs = if kind = BCPOwnKnown then (eq_of_bool own (mulbool true v.topnot))::eqs else eqs in
-          fold (fun eqs (node,sign) ->
-              if kind <> BCPLeavesKnown && (Node.equal node propa) then eqs
-              else (eq_of_bool node (mulbool false sign))::eqs) eqs v
-        | ExpUp (thterm,leaf)    ->
-          let v = ThE.sem thterm in
-          let own = ThE.node thterm in
-          analyse_one_to_one t c
-            own (mulbool true v.topnot)
-            leaf (mulbool true (Opt.get (find v leaf)))
-        | ExpDown  (thterm,leaf)    ->
-          let v = ThE.sem thterm in
-          let own = ThE.node thterm in
-          analyse_one_to_one t c
-            leaf (mulbool false (Opt.get (find v leaf)))
-            own (mulbool false v.topnot)
-        | ExpNot  ((_,clfrom,clto),b)->
-          analyse_one_to_one t c
-            clto b
-            clfrom (not b)
-        | ExpDec _ ->
-          assert false (** absurd: a decision should be the last *)
-      in
-      Trail.Pcon.map Conflict.EqCon.key eqs
+    Conflict.Conflict.t ->
+    t -> Trail.Pcon.t -> Trail.Pcon.t list =
+    fun t exp pcon ->
+      match exp with
+      | ExpBCP  (thterm,_,_) when IArray.length (ThE.sem thterm).lits = 1 ->
+        raise Impossible
+      | ExpBCP  (thterm,propa,kind) ->
+        let v = ThE.sem thterm in
+        let own = ThE.node thterm in
+        let eqs =
+          match kind with
+          | BCP -> Conflict.split t pcon own propa
+          | BCPOwnKnown ->
+            let propa_sign = mulbool true (Opt.get (find v propa)) in
+            Conflict.split t pcon propa (node_of_bool propa_sign)
+          | BCPLeavesKnown ->
+            let sign = mulbool false v.topnot in
+            Conflict.split t pcon propa (node_of_bool sign)
+        in
+        let eqs = if kind = BCPOwnKnown then (eq_of_bool own (mulbool true v.topnot))::eqs else eqs in
+        fold (fun eqs (node,sign) ->
+            if kind <> BCPLeavesKnown && (Node.equal node propa) then eqs
+            else (eq_of_bool node (mulbool false sign))::eqs) eqs v
+      | ExpUp (thterm,leaf)    ->
+        let v = ThE.sem thterm in
+        let own = ThE.node thterm in
+        analyse_one_to_one t pcon
+          own (mulbool true v.topnot)
+          leaf (mulbool true (Opt.get (find v leaf)))
+      | ExpDown  (thterm,leaf)    ->
+        let v = ThE.sem thterm in
+        let own = ThE.node thterm in
+        analyse_one_to_one t pcon
+          leaf (mulbool false (Opt.get (find v leaf)))
+          own (mulbool false v.topnot)
+      | ExpNot  ((_,clfrom,clto),b)->
+        analyse_one_to_one t pcon
+          clto b
+          clfrom (not b)
+      | ExpDec _ ->
+        assert false (** absurd: a decision should be the last *)
 
   let key = expprop
 
@@ -602,13 +639,13 @@ let () =
   Conflict.EqCon.register_apply_learnt ty
     (fun {Conflict.EqCon.l;r} ->
        if Node.equal l node_false
-       then (r,parity_of_bool (not true))
+       then (r,parity_of_bool true)
        else if Node.equal l node_true
-       then (r,parity_of_bool (not false))
+       then (r,parity_of_bool false)
        else if Node.equal r node_false
-       then (l,parity_of_bool (not true))
+       then (l,parity_of_bool true)
        else if Node.equal r node_true
-       then (l,parity_of_bool (not false))
+       then (l,parity_of_bool false)
        else invalid_arg "Not implemented"
     )
 

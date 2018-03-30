@@ -80,7 +80,7 @@ module type Exp = sig
     (** First step of the analysis done on the trail. *)
 
   val analyse  :
-    Conflict.t (* -> Trail.Age.t *) -> t -> 'a Con.t -> 'a -> Trail.Pcon.t list
+    Conflict.t (* -> Trail.Age.t *) -> t -> Trail.Pcon.t -> Trail.Pcon.t list
     (** One step of the analysis done on the trail. This function is
        called on the explanation that correspond to last_level of the
         conflict *)
@@ -123,9 +123,14 @@ module type Con = sig
 
   val useful_nodes: t -> Node.t Bag.t
   (** used at the end to know which node are useful for decision heuristics *)
+
+  val split: Conflict.t -> t -> Node.t -> Node.t -> Trail.Pcon.t list
+  (** split the conflict with the given equality *)
 end
 
 val register_con: (module Con) -> unit
+
+val split: Conflict.t -> Trail.Pcon.t -> Node.t -> Node.t -> Trail.Pcon.t list
 
 (** {2 Conflict analysis} *)
 
@@ -152,7 +157,7 @@ module EqCon : sig
 
   val register_apply_learnt: Ty.t -> (t -> Node.t * parity) -> unit
 
-  val split: Conflict.t -> t -> Node.t -> Node.t -> t list
+  val split: Conflict.t -> t -> Node.t -> Node.t -> Node.t option * Node.t option
 end
 
 (** {2 From boolean theory } *)

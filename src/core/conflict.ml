@@ -166,15 +166,15 @@ module ChoGenH = Stdlib.XHashtbl.Make(struct
       | None -> false
   end)
 
+module Exp = Trail.Exp
+module Con = Trail.Con
+
 module Conflict = struct
   type t = Trail.t
 
   let age_merge t n1 n2 = Trail.age_merge t n1 n2
 
 end
-
-module Exp = Trail.Exp
-module Con = Trail.Con
 
 module type Exp = sig
 
@@ -190,7 +190,7 @@ module type Exp = sig
     (** First step of the analysis done on the trail. *)
 
   val analyse  :
-    Conflict.t (* -> Age.t *) -> t -> 'a Con.t -> 'a -> Trail.Pcon.t list
+    Conflict.t (* -> Age.t *) -> t -> Trail.Pcon.t -> Trail.Pcon.t list
 
 end
 
@@ -226,6 +226,8 @@ module type Con = sig
 
   val useful_nodes: t -> Node.t Bag.t
 
+  val split: Conflict.t -> t -> Node.t -> Node.t -> Trail.Pcon.t list
+
 end
 
 module ConRegistry = Con.Make_Registry(struct
@@ -242,6 +244,14 @@ let register_con (con:(module Con)) =
   let module Con = (val con) in
   let con = (module Con : Con with type t = Con.t) in
   ConRegistry.register con
+
+
+let split t (Trail.Pcon.Pcon(con,c)) a b =
+  let f (type a) (con: a Con.t) (c:a) =
+    let module Con = (val (ConRegistry.get con)) in
+    Con.split t c a b
+  in
+  f con c
 
 let convert_lcon t l =
   let map (type a) con (c:a) pc =
@@ -307,13 +317,13 @@ let learn trail (Trail.Pexp.Pexp(_,exp,x)) =
       analysis_done l1 l
     | (l1,_)::(l2,_)::_ as l when Levels.at_most_one_after_last_dec t l1 && Levels.before_last_dec t l2 ->
       analysis_done (Levels.merge l1 l2) l
-    | (l1,Trail.Pcon.Pcon(con,c))::lcon ->
+    | (l1,pcon)::lcon ->
       let age = Levels.get_last l1 in
       let f (type a) exp (e:a) =
         let module Exp = (val (ExpRegistry.get exp) : Exp with type t = a) in
         Debug.dprintf6 debug "[Conflict] @[[%a] Analyse using %a: %a@]"
-          Age.pp age Exp.pp e (ConRegistry.print con) c;
-        let res = Exp.analyse t e con c in
+          Age.pp age Exp.pp e print_pcon pcon;
+        let res = Exp.analyse t e pcon in
         res
       in
       let (Trail.Pexp.Pexp(_,exp,e)) = Trail.get_pexp t age in
@@ -335,6 +345,8 @@ let learn trail (Trail.Pexp.Pexp(_,exp,x)) =
       Bag.empty l
   in
   let l = lcon_to_node l in
+  (** The clause is the negation of the conjunction of the hypothesis *)
+  let l = List.map (fun (c,p) -> (c,match p with | Neg -> Pos | Pos -> Neg)) l in
   backtrack_level, !_or l, useful
 
 
@@ -365,30 +377,50 @@ module EqCon = struct
   let not_found = Invalid_argument "Type not found in apply_learnt EqCon"
 
   let apply_learnt c =
-    let f = Ty.H.find_exn reg_apply_learnt not_found (Node.ty c.l) in
-    f c
+    match Ty.H.find_opt reg_apply_learnt (Node.ty c.l) with
+    | None ->
+      invalid_arg
+        (Format.asprintf
+           "Not implemented (%a), wait for equality constraint"
+           pp c)
+    | Some f -> f c
 
   let split t c a b =
     let open Typedef in
     if Node.equal c.l a
-    then [{ l = b; r = c.r }]
+    then None, Some b
     else if Node.equal c.l b
-    then [{ l = a; r = c.r }]
+    then None, Some a
     else if Node.equal c.r a
-    then [{ l = c.l; r = b }]
+    then Some b, None
     else if Node.equal c.r b
-    then [{ l = c.l; r = a }]
+    then Some a, None
     else
       let age_a = Conflict.age_merge t c.l a in
       let age_b = Conflict.age_merge t c.l b in
       let cmp = Age.compare age_a age_b in
       assert (cmp <> 0);
       if cmp < 0
-      then [{ l = c.l; r = a }; { l = b; r = c.r }]
-      else [{ l = c.l; r = b }; { l = a; r = c.r }]
+      then Some a, Some b
+      else Some b, Some a
+
 end
 
-let () = register_con(module EqCon)
+let () = register_con(module struct
+    include EqCon
+
+    let split t c a b =
+      let l', r' = split t c a b in
+      Trail.Pcon.map key begin
+      (match l' with
+       | None -> []
+       | Some r -> [{l=c.l; r}])
+      @
+      (match r' with
+       | None -> []
+       | Some l -> [{l; r=c.r}])
+    end
+  end)
 
 module Specific = struct
 
@@ -399,7 +431,7 @@ module Specific = struct
 
       let pp fmt () = Pp.string fmt "fact"
 
-      let analyse _ _ _ _ = []
+      let analyse _ _ _ = []
       let from_contradiction _ _ =
         raise Std.Impossible
     end)
@@ -414,13 +446,13 @@ module Specific = struct
           Node.pp n2 Values.pp v2
           (ExpRegistry.print exp) e
 
-      let analyse _ _ _ _ = raise Std.Impossible (** used only for contradiction *)
+      let analyse _ _ _ = raise Std.Impossible (** used only for contradiction *)
       let from_contradiction t (v1,n1,n2,v2,Trail.Pexp.Pexp(_,exp,e)) =
         let f (type a) (exp:a Exp.t) e =
           let module Exp = (val (ExpRegistry.get exp)) in
-          Debug.dprintf6 debug "[Conflict] @[Intermediary conflict diff value %a and %a: %a@]"
-            Node.pp n1 Node.pp n2 Exp.pp e;
-          Exp.analyse t e EqCon.key {l=n1;r=n2}
+          Debug.dprintf10 debug "[Conflict] @[Intermediary conflict diff value %a=%a=%a=%a: %a@]"
+            Values.pp v1 Node.pp n1 Node.pp n2 Values.pp v2 Exp.pp e;
+          Exp.analyse t e (Trail.Pcon.pcon EqCon.key {l=n1;r=n2})
         in
         (** splitting of the equality v1 = v2 *)
         (Trail.Pcon.pcon EqCon.key {l=Values.node v1;r=n1})::
@@ -440,14 +472,14 @@ module Specific = struct
           Format.fprintf fmt "same_value(%a,%a):%a"
             Node.pp n Values.pp value (ExpRegistry.print exp) e
 
-      let analyse t p con c =
+      let analyse t p pcon =
         let Trail.Pexp.Pexp(_,exp,e) =
           match p with
           | Trail.ExpSameSem(pexp,_,_)
           | Trail.ExpSameValue(pexp,_,_) -> pexp in
         let f (type a) (exp:a Exp.t) e =
           let module Exp = (val (ExpRegistry.get exp)) in
-          Exp.analyse t e con c
+          Exp.analyse t e pcon
         in
         f exp e
 

@@ -4,6 +4,7 @@
   ((name witan_theories_bool)
    (public_name witan.theories.bool)
    (synopsis "theories for witan")
+   (modules (Bool))
    (libraries (containers
                ocamlgraph
                witan.stdlib
