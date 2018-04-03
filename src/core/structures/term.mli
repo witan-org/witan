@@ -166,12 +166,16 @@ val equiv_id : id
 val equiv_term : t
 (** Propositional equivalence *)
 
-val or_id : id
-val or_term : t
+val or_id : int -> id
+val or_term : int -> t
+val is_or_id : id -> bool
+val is_or_term : t -> bool
 (** Propositional disjunction *)
 
-val and_id : id
-val and_term : t
+val and_id : int -> id
+val and_term : int -> t
+val is_and_id : id -> bool
+val is_and_term : t -> bool
 (** Propositional conjunction *)
 
 

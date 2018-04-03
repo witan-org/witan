@@ -12,7 +12,7 @@ let _bad_op_arity env s n t =
   raise (Typing_error (msg, env, t))
 
 (** no typing *)
-let rec parse_formula (env:env) (t:Dolmen.Term.t) =
+let rec parse_formula' (env:env) (t:Dolmen.Term.t) =
   let module Ast = Dolmen.Term in
   let open Term in
   match t with
@@ -33,10 +33,12 @@ let rec parse_formula (env:env) (t:Dolmen.Term.t) =
     false_term
 
   | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.And}, l) } ->
-    apply and_term (List.map (parse_formula env) l)
+    let f = (and_term (List.length l)) in
+    let l = (List.map (parse_formula env) l) in
+    apply f l
 
   | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Or}, l) } ->
-    apply or_term (List.map (parse_formula env) l)
+    apply (or_term (List.length l)) (List.map (parse_formula env) l)
 
   | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Xor}, l) } as t ->
     begin match l with
@@ -108,8 +110,9 @@ let rec parse_formula (env:env) (t:Dolmen.Term.t) =
       | _ -> _bad_op_arity env "=" 2 t
     end
 
-  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Distinct}, args) } ->
-    apply (distinct_term (List.length args)) (List.map (parse_formula env) args)
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Distinct}, a::args) } ->
+    let a = parse_formula env a in
+    apply (distinct_term (List.length args + 1)) (a.Term.ty::a::(List.map (parse_formula env) args))
 
   | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Ite}, l) }
   | { Ast.term = Ast.App ({Ast.term = Ast.Symbol {Dolmen.Id.name = "ite"}}, l) } ->
@@ -171,6 +174,15 @@ let rec parse_formula (env:env) (t:Dolmen.Term.t) =
     raise (Typing_error ("Unexpected binder", env, t))
   | { term = Ast.Match (_,_); _; } ->
     raise (Typing_error ("Unexpected construction", env, t))
+
+and parse_formula (env:env) (t:Dolmen.Term.t) =
+  try
+    parse_formula' env t
+  with
+  | (Typing_error _) as exn -> raise exn
+  | exn ->
+    raise (Typing_error (Printexc.to_string exn,env,t))
+
 
 let get_loc =
   let default_loc = Dolmen.ParseLocation.mk "<?>" 0 0 0 0 in

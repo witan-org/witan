@@ -419,7 +419,8 @@ let distinct_id =
   Stdlib.DInt.H.memo (fun i ->
       let a_id = Id.mk "a" _Type in
       let a_type = const a_id in
-      let id = Id.mk "distinct" (pi a_id (arrows [a_type; a_type] _Prop)) in
+      let args = CCList.replicate i (a_type) in
+      let id = Id.mk "distinct" (pi a_id (arrows args _Prop)) in
       Id.H.add_new Std.Impossible int_of_distinct_id id i;
       id
     )
@@ -438,11 +439,35 @@ let imply_id =
 let equiv_id =
   Id.mk "<->" (arrows [_Prop; _Prop] _Prop)
 
+let or_id_of_int = Stdlib.DInt.H.create 16
+let int_of_or_id = Id.H.create 16
+
 let or_id =
-  Id.mk "||" (arrows [_Prop; _Prop] _Prop)
+  Stdlib.DInt.H.memo (fun i ->
+      let args = CCList.replicate i _Prop in
+      let id = Id.mk "||" (arrows args _Prop) in
+      Id.H.add_new Std.Impossible int_of_or_id id i;
+      id
+    )
+    or_id_of_int
+
+let is_or_id id = Id.H.mem int_of_or_id id
+
+
+let and_id_of_int = Stdlib.DInt.H.create 16
+let int_of_and_id = Id.H.create 16
 
 let and_id =
-  Id.mk "&&" (arrows [_Prop; _Prop] _Prop)
+  Stdlib.DInt.H.memo (fun i ->
+      let args = CCList.replicate i _Prop in
+      let id = Id.mk "&&" (arrows args _Prop) in
+      Id.H.add_new Std.Impossible int_of_and_id id i;
+      id
+    )
+    and_id_of_int
+
+let is_and_id id = Id.H.mem int_of_and_id id
+
 
 let ite_id =
   let a_id = Id.mk "a" _Type in
@@ -450,8 +475,14 @@ let ite_id =
   Id.mk "ite" (pi a_id (arrows [_Prop; a_type; a_type] a_type))
 
 
-let or_term = const or_id
-let and_term = const and_id
+let or_term i = const (or_id i)
+let is_or_term = function
+  | {term = Id id} -> is_or_id id
+  | _ -> false
+let and_term i = const (and_id i)
+let is_and_term = function
+  | {term = Id id} -> is_and_id id
+  | _ -> false
 let not_term = const not_id
 let true_term = const true_id
 let false_term = const false_id

@@ -303,6 +303,7 @@ let check_file filename =
              | Prove -> ()
              | Dolmen.Statement.Exit -> ()
              | Decl (id,t) ->
+               let t = Dolmen.Normalize.smtlib t in
                let ty =
                  match Witan_solver.Notypecheck.parse_formula env t with
                  | exception (Witan_solver.Notypecheck.Typing_error (msg, _, t)) ->

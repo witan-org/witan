@@ -447,9 +447,9 @@ let converter d f l =
     n
   in
   let node = match f, l with
-    | f,([_;_] as args) when Term.equal f Term.or_term ->
+    | f,args when Term.is_or_term f ->
       Some (_or (List.map of_term args))
-    | f,([_;_] as args) when Term.equal f Term.and_term ->
+    | f,args when Term.is_and_term f ->
       Some (_and (List.map of_term args))
     | f,[arg1;arg2] when Term.equal f Term.imply_term ->
       Some (gen false [of_term arg1,true;of_term arg2,false])
@@ -686,7 +686,7 @@ let () =
       | [] when is true_id -> Some values_true
       | [] when is false_id -> Some values_false
       | [a] when is not_id -> !< (not (!> a))
-      | l   when is or_id -> !< (List.fold_left (||) false (List.map (!>) l))
-      | l   when is and_id -> !< (List.fold_left (&&) true (List.map (!>) l))
+      | l   when is_or_id id -> !< (List.fold_left (||) false (List.map (!>) l))
+      | l   when is_and_id id -> !< (List.fold_left (&&) true (List.map (!>) l))
       | _ -> None
     )
