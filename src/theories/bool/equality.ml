@@ -550,7 +550,7 @@ let ite cond then_ else_ =
   assert (Ty.equal ty1 ty2);
   Node.index_sem ITE.key { cond; then_; else_} ty1
 
-let expite : (ITE.t * bool) Trail.Exp.t =
+let expite : (EITE.t * bool) Trail.Exp.t =
   Trail.Exp.create_key "Ite.exp"
 
 module DaemonPropaITE = struct
@@ -558,9 +558,11 @@ module DaemonPropaITE = struct
 
   module Data = EITE
 
-  let simplify d own b v =
+  let simplify d the b =
+    let v = EITE.sem the in
+    let own = EITE.node the in
     let branch = if b then v.then_ else v.else_ in
-    let pexp = Delayed.mk_pexp d expite (v,b) in
+    let pexp = Delayed.mk_pexp d expite (the,b) in
     Delayed.register d branch;
     Delayed.merge d pexp own branch
 
@@ -571,10 +573,9 @@ module DaemonPropaITE = struct
       assert (Value.equal dom Bool.dom);
       let v = EITE.sem clsem in
       assert (Delayed.is_equal d cond v.cond);
-      let own = EITE.node clsem in
       begin match Bool.is d v.cond with
         | None -> assert false
-        | Some b -> simplify d own b v
+        | Some b -> simplify d clsem b
       end
     | _ -> raise UnwaitedEvent
 
@@ -598,7 +599,7 @@ module DaemonInitITE = struct
         let own = EITE.node clsem in
         match Bool.is d v.cond with
         | Some b ->
-          DaemonPropaITE.simplify d own b v
+          DaemonPropaITE.simplify d clsem b
         | None ->
           let clsem = EITE.index v (Node.ty own) in
           assert (Node.equal (EITE.node clsem) own);
@@ -618,20 +619,21 @@ module RDaemonInitITE = Demon.Fast.Register(DaemonInitITE)
 module ExpITE = struct
   open Conflict
 
-  type t = ITE.t * bool
+  type t = EITE.t * bool
   let key = expite
 
   let pp fmt (ite,b) =
-    Format.fprintf fmt "(%a,%b)" ITE.pp ite b
+    Format.fprintf fmt "(%a,%b)" EITE.pp ite b
 
   let analyse :
       Conflict.t ->
     (* Trail.age -> *) t -> Trail.Pcon.t -> Trail.Pcon.t list =
-    fun _t _exp _con ->
-      assert false (** TODO *)
-    (* let s = Node.M.empty in
-     * let s = Bool.get_dom t age ite.cond s in
-     * return con conclause s *)
+    fun t (the,b) con ->
+      let v = EITE.sem the in
+      let own = EITE.node the in
+      let lcon = Conflict.split t con own (if b then v.then_ else v.else_) in
+      let pcon = EqCon.create_eq v.cond (if b then Bool._true else Bool._false) in
+      pcon@lcon
 
   let from_contradiction _ _ = raise Impossible
 

@@ -111,6 +111,16 @@ let rec parse_formula (env:env) (t:Dolmen.Term.t) =
   | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Distinct}, args) } ->
     apply (distinct_term (List.length args)) (List.map (parse_formula env) args)
 
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Ite}, l) } as t ->
+    begin match l with
+      | [cond;then_; else_] ->
+        let cond  = parse_formula env cond in
+        let then_ = parse_formula env then_ in
+        let else_ = parse_formula env else_ in
+        apply ite_term [then_.Term.ty;cond;then_;else_]
+      | _ -> _bad_op_arity env "ite" 3 t
+    end
+
   (* General case: application *)
   | { Ast.term = Ast.Symbol s }
   | { Ast.term = Ast.App ({ Ast.term = Ast.Symbol s }, []) } ->
@@ -120,8 +130,12 @@ let rec parse_formula (env:env) (t:Dolmen.Term.t) =
         Witan_core.Id.mk s _Prop) env s in
     const id
 
-  (* | { Ast.term = Ast.App ({ Ast.term = Ast.Symbol s }, l) } as ast ->
-   *   parse_app env ast s l *)
+  | { Ast.term = Ast.App ({ Ast.term = Ast.Symbol s }, l) } as ast ->
+    begin match R.find_opt env s with
+    | None -> raise (Typing_error("unbound variable",env,ast))
+    | Some id ->
+      apply (const id) (List.map (parse_formula env) l)
+    end
 
   (* (\* Local bindings *\)
    * | { Ast.term = Ast.Binder (Ast.Let, vars, f) } ->
