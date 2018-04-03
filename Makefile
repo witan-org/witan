@@ -108,7 +108,7 @@ JC_FILES = $(addprefix src/popop_lib/, leftistheap.ml leftistheap.mli)
 
 WITAN_FILES = Makefile  \
 	$(filter-out $(WHY3_FILES) $(OCAML_FILES) $(FRAMAC_FILES) $(JC_FILES) \
-	, $(wildcard src/*/*.ml* src/*.ml*))
+	, $(wildcard src/*/*/*.ml* src/*/*.ml* src/*.ml*))
 
 headers:
 	headache -c misc/headache_config.txt -h misc/header.txt	\

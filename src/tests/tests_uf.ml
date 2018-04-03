@@ -305,7 +305,7 @@ let check_file filename =
              | Decl (id,t) ->
                let t = Dolmen.Normalize.smtlib t in
                let ty =
-                 match Witan_solver.Notypecheck.parse_formula env t with
+                 match Witan_solver.Notypecheck.parse_formula env Witan_solver.Notypecheck.MId.empty t with
                  | exception (Witan_solver.Notypecheck.Typing_error (msg, _, t)) ->
                    assert_failure
                      (Format.asprintf
@@ -323,7 +323,7 @@ let check_file filename =
                Witan_solver.Notypecheck.R.add_new Witan_stdlib.Std.Impossible env id t';
              | Antecedent t ->
                let map t =
-                 match Witan_solver.Notypecheck.parse_formula env t with
+                 match Witan_solver.Notypecheck.parse_formula env Witan_solver.Notypecheck.MId.empty t with
                  | exception (Witan_solver.Notypecheck.Typing_error (msg, _, t)) ->
                    assert_failure
                      (Format.asprintf

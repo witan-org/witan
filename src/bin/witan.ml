@@ -52,7 +52,7 @@ let () =
              match stmt.descr with
              | Clause l ->
                let map t =
-                 match Witan_solver.Notypecheck.parse_formula env t with
+                 match Witan_solver.Notypecheck.parse_formula env Witan_solver.Notypecheck.MId.empty t with
                  | exception (Witan_solver.Notypecheck.Typing_error (msg, _, t)) ->
                    Format.eprintf
                      "%a:@\n%s:@ %a"

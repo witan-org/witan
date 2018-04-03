@@ -21,12 +21,31 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-val equality    : Node.t list -> Node.t
-val disequality : Node.t list -> Node.t
+open Witan_core
 
-val is_equal    : Egraph.d -> Node.t -> Node.t -> bool
-val is_disequal : Egraph.d -> Node.t -> Node.t -> bool
+type t = App of Node.t * Node.t
+val pp: t Pp.pp
 
-val ite : Node.t -> Node.t -> Node.t -> Node.t
+val sem: t Sem.t
 
-val th_register : Egraph.d -> unit
+val fun1 :
+  Ty.t -> string ->
+  (Node.t -> Node.t)
+val fun2 :
+  Ty.t -> string ->
+  (Node.t -> Node.t -> Node.t)
+val fun3 :
+  Ty.t -> string ->
+  (Node.t -> Node.t -> Node.t -> Node.t)
+val fun4 :
+  Ty.t -> string ->
+  (Node.t -> Node.t -> Node.t -> Node.t -> Node.t)
+val fun5 :
+  Ty.t -> string ->
+  (Node.t -> Node.t -> Node.t -> Node.t -> Node.t -> Node.t)
+
+val fresh_fun: result:Ty.t -> arity:int -> string -> Node.t
+
+val app_fun: Node.t -> Node.t list -> Node.t
+
+val th_register : Egraph.Delayed.t -> unit
