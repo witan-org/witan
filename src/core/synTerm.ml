@@ -50,9 +50,14 @@ let register_decvars env r =
 
 let () = Env.register (fun _ _ -> ()) converters
 
+let letin v e t =
+  match t.Term.term with
+  | Term.Id id when Term.Id.equal id v -> e
+  | Term.Id _ -> t
+  | _ -> Term.letin v e t
 
 let uncurry_app t =
-  let lets t l = List.fold_left (fun t (v,e) -> Term.letin v e t) t l in
+  let lets t l = List.fold_left (fun t (v,e) -> letin v e t) t l in
   let rec aux binders args = function
     | { Term.term = App (f, arg); _ } ->
       aux binders ((lets arg binders) :: args) f

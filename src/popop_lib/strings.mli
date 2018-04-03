@@ -39,6 +39,7 @@ module type Fresh = sig
   include Stdlib.Datatype with type t := t
   val create: string -> t
   val iter: (t -> unit) -> unit
+  val fold: (t -> 'a -> 'a) -> 'a -> 'a
   val hint_size: unit -> int
   val rename: t -> string -> unit
     (** to use with care *)

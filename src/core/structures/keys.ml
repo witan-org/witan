@@ -57,6 +57,8 @@ module type Key = sig
 
   type iter = {iter : 'a. 'a t -> unit}
   val iter : iter -> unit
+  type 'b fold = {fold : 'a. 'a t -> 'b -> 'b}
+  val fold : 'b fold -> 'b -> 'b
   val hint_size : unit -> int
 
   module Eq: sig
@@ -107,6 +109,8 @@ module Make_key(X:sig end): Key = struct
 
   type iter = {iter : 'a. 'a t -> unit}
   let iter f = K.iter f.iter
+  type 'b fold = {fold : 'a. 'a t -> 'b -> 'b}
+  let fold f acc = K.fold f.fold acc
   let hint_size = K.hint_size
 
   let create_key s = K.create s

@@ -81,6 +81,7 @@ module type Fresh = sig
   include Stdlib.Datatype with type t := t
   val create: string -> t
   val iter: (t -> unit) -> unit
+  val fold: (t -> 'a -> 'a) -> 'a -> 'a
   val hint_size: unit -> int
   val rename: t -> string -> unit
 end
@@ -127,6 +128,13 @@ module Fresh (X : sig end) = struct
     for i = 0 to !c do
       f i
     done
+
+  let fold f acc =
+    let acc = ref acc in
+    for i = 0 to !c do
+      acc := f i !acc
+    done;
+    !acc
 
   let hint_size () = !c + 1
 

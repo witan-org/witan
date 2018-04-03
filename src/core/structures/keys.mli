@@ -70,6 +70,8 @@ module type Key = sig
 
   type iter = {iter : 'a. 'a t -> unit}
   val iter : iter -> unit
+  type 'b fold = {fold : 'a. 'a t -> 'b -> 'b}
+  val fold : 'b fold -> 'b -> 'b
   val hint_size : unit -> int
 
   module Eq: sig

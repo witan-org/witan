@@ -43,7 +43,7 @@ let rec parse_formula (env:env) (t:Dolmen.Term.t) =
       | [p; q] ->
         let f = parse_formula env p in
         let g = parse_formula env q in
-        apply not_term [apply equal_term [f;g]]
+        apply not_term [apply equal_term [f.Term.ty;f;g]]
       | _ -> _bad_op_arity env "xor" 2 t
     end
 
@@ -111,7 +111,8 @@ let rec parse_formula (env:env) (t:Dolmen.Term.t) =
   | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Distinct}, args) } ->
     apply (distinct_term (List.length args)) (List.map (parse_formula env) args)
 
-  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Ite}, l) } as t ->
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Ite}, l) }
+  | { Ast.term = Ast.App ({Ast.term = Ast.Symbol {Dolmen.Id.name = "ite"}}, l) } ->
     begin match l with
       | [cond;then_; else_] ->
         let cond  = parse_formula env cond in
@@ -137,12 +138,25 @@ let rec parse_formula (env:env) (t:Dolmen.Term.t) =
       apply (const id) (List.map (parse_formula env) l)
     end
 
-  (* (\* Local bindings *\)
-   * | { Ast.term = Ast.Binder (Ast.Let, vars, f) } ->
-   *   parse_let env f vars *)
-
   | { term = Ast.Binder (_,[],t); _; } ->
     parse_formula env t
+
+  (* Local bindings *)
+  | { Ast.term = Ast.Binder (Ast.Let, vars, f) } ->
+    let rec aux = function
+      | [] -> parse_formula env f
+      | {Ast.term = Ast.Colon({Ast.term = Ast.Symbol s},t)}::l ->
+        let t = parse_formula env t in
+        let s' = Format.asprintf "%a" Dolmen.Id.print s in
+        let id = Witan_core.Id.mk s' t.Term.ty in
+        R.add env s id;
+        let l = aux l in
+        R.remove env s;
+        Term.letin id t l
+      | t::_ ->
+        raise (Typing_error ("Unexpected let binding", env, t))
+    in
+    aux vars
 
   (* Other cases *)
   | { Ast.term = Ast.App ({Ast.term = Ast.Builtin _}, _) } ->

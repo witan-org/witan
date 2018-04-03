@@ -56,6 +56,10 @@ module type S1 = sig
     { union: 'a. 'a key -> ('a,'b) data -> ('a,'b) data -> ('a,'b) data option }
   val union : 'b union -> 'b t -> 'b t -> 'b t
 
+  type ('b,'c) fold2_inter =
+    { fold2_inter: 'a. 'a key -> ('a,'b) data -> ('a,'b) data -> 'c -> 'c }
+  val fold2_inter: ('b,'c) fold2_inter -> 'b t -> 'b t -> 'c -> 'c
+
   type 'b iter = { iter: 'a. 'a key -> ('a,'b) data -> unit }
   val iter : 'b iter -> 'b t -> unit
 

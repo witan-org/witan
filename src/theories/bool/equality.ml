@@ -171,16 +171,40 @@ let new_tag n =
 
 exception Found of Node.t * Node.t
 
+(** For each value key give the value *)
+module MValues = Value.MkMap(struct type ('a, _) t = 'a end)
+
 let find_not_disequal d s =
+  let is_disequal (dis1,values1) (dis2,values2) =
+    (match dis1, dis2 with
+     | Some dis1, Some dis2 when not (Dis.disjoint dis1 dis2) -> true
+     | _ -> false) ||
+    (try
+       let fold2_inter (type a) (k:a Value.t) v1 v2 () =
+         let module V = (val Value.get k) in
+            if not (V.equal v1 v2) then raise Exit
+        in
+        MValues.fold2_inter {fold2_inter} values1 values2 ();
+        false
+     with Exit -> true)
+  in
+  let get_dis_and_values cl =
+    Delayed.get_dom d dom cl,
+    Value.fold {fold=(fun k acc ->
+        match Delayed.get_value d k cl with
+        | None -> acc
+        | Some v -> MValues.add k v acc)}
+      MValues.empty
+  in
   assert (Th.inv s);
   let rec inner_loop cl1 s1 enum2 =
     match enum2, s1 with
     | [],_ -> ()
-    | (cl2,None)::_,_ | (cl2,_)::_, None ->
+    | (_,d1)::enum2,d2 when is_disequal d1 d2 ->
+      inner_loop cl1 s1 enum2
+    | (cl2,_)::_,_ ->
       raise (Found (cl1,cl2))
-    | (cl2,Some s2)::_, Some s1 when Dis.disjoint s1 s2 ->
-      raise (Found (cl1,cl2))
-    | _::enum2, _ -> inner_loop cl1 s1 enum2 in
+  in
   let rec outer_loop enum1 =
     match enum1 with
     | [] -> ()
@@ -189,7 +213,7 @@ let find_not_disequal d s =
       outer_loop enum1 in
   try
     let s = Node.M.fold_left (fun acc cl () ->
-        (cl,Delayed.get_dom d dom cl)::acc) [] s in
+        (cl,get_dis_and_values cl)::acc) [] s in
     outer_loop s;
     (** Here we are keeping data because currently
         we are not keeping data for domains globally *)
@@ -199,7 +223,7 @@ let find_not_disequal d s =
 
 type expsubst =
 | SubstUpTrue of ThE.t * Node.t (* e1 *) * Node.t (* e2 *) * Node.t
-| SubstUpFalse of ThE.t * (Node.t * Dis.t option) list
+| SubstUpFalse of ThE.t * (Node.t * (Dis.t option * unit MValues.t)) list
 | SubstDownTrue of ThE.t
 | SubstDownFalse of ThE.t * Dis.elt
 
@@ -400,6 +424,23 @@ module ConDis = struct
   let apply_learnt c =
     equality [c.l1;c.r1], Neg
 
+  let create_diff t cl1 cl2 i =
+    let find_origin v cl =
+      Node.S.fold_left (fun acc cl0 ->
+          match acc with
+          | Some _ -> acc
+          | None ->
+            match Conflict.age_merge_opt t cl cl0 with
+            | Some _ -> Some cl0
+            | None -> None) None v
+    in
+    let the = Dis.to_node i in
+    let v = ThE.sem the in
+    let cl1_0 = Opt.get (find_origin v cl1) in
+    let cl2_0 = Opt.get (find_origin v cl2) in
+    let diff = Trail.Pcon.pcon key {l1=cl1;l0=cl1_0;r0=cl2_0;r1=cl2;disequality=ThE.node the} in
+    diff
+
 end
 
 let () = Conflict.register_con(module ConDis)
@@ -417,26 +458,9 @@ module ExpMerge = struct
 
   let analyse _ _ _ = raise Impossible
 
-  let create_diff t cl1 cl2 i =
-    let find_origin v cl =
-      Node.S.fold_left (fun acc cl0 ->
-          match acc with
-          | Some _ -> acc
-          | None ->
-            match Conflict.age_merge_opt t cl cl0 with
-            | Some _ -> Some cl0
-            | None -> None) None v
-    in
-    let the = Dis.to_node i in
-    let v = ThE.sem the in
-    let cl1_0 = Opt.get (find_origin v cl1) in
-    let cl2_0 = Opt.get (find_origin v cl2) in
-    let diff = Trail.Pcon.pcon ConDis.key {l1=cl1;l0=cl1_0;r0=cl2_0;r1=cl2;disequality=ThE.node the} in
-    diff
-
   let from_contradiction t (Merge(pexp,cl1,cl2,i)) =
     let lcon = Conflict.analyse t pexp (Trail.Pcon.pcon EqCon.key {l=cl1;r=cl2}) in
-    let diff = create_diff t cl1 cl2 i in
+    let diff = ConDis.create_diff t cl1 cl2 i in
     diff::lcon
 
   let key = expmerge
@@ -473,13 +497,25 @@ module ExpSubst = struct
       let own = ThE.node v in
       let lcon = Conflict.split t pcon own Bool._false in
       let al = CCList.diagonal al in
-      let fold lcon ((e1,dis1),(e2,dis2)) =
+      let fold lcon ((e1,(dis1,val1)),(e2,(dis2,val2))) =
         match dis1, dis2 with
         | Some dis1, Some dis2 ->
           let dis = Dis.inter dis1 dis2 in
+          if Dis.is_empty dis then
+            (** different values *)
+            let fold2_inter (type a) (k:a Value.t) v1 v2 acc =
+              let module V = (val Value.get k) in
+              if not (V.equal v1 v2) then
+                (EqCon.create_eq e1 (Node.index_value k v1 (Node.ty e1))) @
+                (EqCon.create_eq e2 (Node.index_value k v2 (Node.ty e2))) @
+                acc
+              else acc
+            in
+            MValues.fold2_inter {fold2_inter} val1 val2 lcon
+          else
           (** choose the oldest? *)
           let d = Dis.choose dis in
-          let diff = ExpMerge.create_diff t e1 e2 d in
+          let diff = ConDis.create_diff t e1 e2 d in
           diff::lcon
         | _ -> raise Impossible
       in
@@ -698,6 +734,8 @@ let converter d f l =
       Some (ite (of_term c) (of_term a) (of_term b))
     | _, _ -> None in
   node
+
+let () = Conflict._equality := (fun a b -> equality [a;b])
 
 
 let th_register env =

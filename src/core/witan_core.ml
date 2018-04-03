@@ -54,6 +54,8 @@ module Value = struct
   module type Value = Typedef.Value
 
   module Register = Typedef.RegisterValue
+
+  let get = Typedef.get_value
 end
 
 module Values = Typedef.Values

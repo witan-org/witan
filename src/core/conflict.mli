@@ -176,4 +176,5 @@ end
 
 (** {2 From boolean theory } *)
 val _or: ((Node.t * parity) list -> Node.t) ref
+val _equality: (Node.t -> Node.t -> Node.t) ref
 val _set_true: (Egraph.Delayed.t -> Trail.Pexp.t -> Node.t -> unit) ref

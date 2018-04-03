@@ -57,6 +57,10 @@ module type S1 = sig
     { union: 'a. 'a key -> ('a,'b) data -> ('a,'b) data -> ('a,'b) data option }
   val union : 'b union -> 'b t -> 'b t -> 'b t
 
+  type ('b,'c) fold2_inter =
+    { fold2_inter: 'a. 'a key -> ('a,'b) data -> ('a,'b) data -> 'c -> 'c }
+  val fold2_inter: ('b,'c) fold2_inter -> 'b t -> 'b t -> 'c -> 'c
+
   type 'b iter = { iter: 'a. 'a key -> ('a,'b) data -> unit }
   val iter : 'b iter -> 'b t -> unit
 
@@ -132,6 +136,16 @@ module Make1
         (Obj.magic (i : int) :> exi K.t) (* at some time this key have been
                                             given *)
         d1 d2) t1 t2
+
+  type ('b,'c) fold2_inter =
+    { fold2_inter: 'a. 'a key -> ('a,'b) data -> ('a,'b) data -> 'c -> 'c }
+  let fold2_inter f t1 t2 acc =
+    DInt.M.fold2_inter (fun i d1 d2 acc ->
+      f.fold2_inter
+        (Obj.magic (i : int) :> exi K.t) (* at some time this key have been
+                                            given *)
+        d1 d2 acc) t1 t2 acc
+
 
   type 'b iter = { iter: 'a. 'a key -> ('a,'b) data -> unit }
   let iter f t =

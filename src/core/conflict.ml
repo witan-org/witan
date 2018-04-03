@@ -293,6 +293,8 @@ let lcon_to_node l =
 
 let _or = ref (fun _ -> assert false)
 let _set_true = ref (fun _ _ _ -> assert false)
+let _equality = ref (fun _ _ -> assert false)
+
 let apply_learnt d n =
   Egraph.Delayed.register d n;
   !_set_true d Trail.pexp_fact n
@@ -386,10 +388,7 @@ module EqCon = struct
   let apply_learnt c =
     match Ty.H.find_opt reg_apply_learnt (Node.ty c.l) with
     | None ->
-      invalid_arg
-        (Format.asprintf
-           "Not implemented (%a), wait for equality constraint"
-           pp c)
+      !_equality c.l c.r, Pos
     | Some f -> f c
 
   let split t c a b =
@@ -476,9 +475,14 @@ module Specific = struct
           Exp.analyse t e (Trail.Pcon.pcon EqCon.key {l=n1;r=n2})
         in
         (** splitting of the equality v1 = v2 *)
-        (Trail.Pcon.pcon EqCon.key {l=Values.node v1;r=n1})::
-        (Trail.Pcon.pcon EqCon.key {l=n2;r=Values.node v2})::
-        f exp e
+        let pcon1 = (Trail.Pcon.pcon EqCon.key {l=Values.node v1;r=n1}) in
+        let pcon2 = (Trail.Pcon.pcon EqCon.key {l=n2;r=Values.node v2}) in
+        (* if Trail.before_last_dec t (Trail.age_merge t (Values.node v1) n1) &&
+         *    Trail.before_last_dec t (Trail.age_merge t (Values.node v2) n2)
+         * then (\** An inverse propagation not powerful enough *\)
+         *   pcon1::pcon2::(EqCon.create_eq n1 n2)
+         * else *)
+          pcon1::pcon2::(f exp e)
     end)
 
   let () = register_exp (module struct
