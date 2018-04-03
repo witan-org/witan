@@ -30,13 +30,6 @@ open Stdlib
 
 (** {2 Exceptions} *)
 
-(** the key shouldn't be used before its registration and shouldn't be
-    registered again *)
-
-exception UnregisteredKey
-exception AlreadyRegisteredKey
-
-
 (** {2 Type comparison and coercion } *)
 
 exception BadCoercion
@@ -54,6 +47,12 @@ module type Registry = sig
   val is_well_initialized : unit -> bool
   val get : 'a key -> 'a data
   val print : 'a key -> 'a Pp.pp
+
+
+  (** the key shouldn't be used before its registration and shouldn't be
+      registered again *)
+  exception UnregisteredKey : 'a key -> exn
+  exception AlreadyRegisteredKey : 'a key -> exn
 
 end
 
@@ -120,6 +119,9 @@ module type Registry2 = sig
   val get : ('k,'d) key -> ('k,'d) data
   val printk : ('k,'d) key -> 'k Pp.pp
   val printd : ('k,'d) key -> 'd Pp.pp
+
+  exception UnregisteredKey : ('a,'b) key -> exn
+  exception AlreadyRegisteredKey : ('a,'b) key -> exn
 
 end
 

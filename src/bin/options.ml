@@ -36,6 +36,9 @@ type t = {
 
   input : input_options;
 
+  (* typing *)
+  type_only   : bool;
+
   (* Time/Memory options *)
   time_limit  : float;
   size_limit  : float;
@@ -49,8 +52,8 @@ let mk_input_options f language =
   let file = Filename.basename f in
   { dir; file; language; }
 
-let mk input time_limit size_limit =
-  { input; time_limit; size_limit; }
+let mk input time_limit size_limit type_only =
+  { input; time_limit; size_limit; type_only }
 
 (* Argument converters *)
 (* ************************************************************************ *)
@@ -171,7 +174,8 @@ let all =
                 Without suffix, default to a size in octet.|} in
     Cmdliner.Arg.(value & opt c_size 1_000_000_000. & info ["s"; "size"] ~docs ~docv:"SIZE" ~doc)
   in
-  Cmdliner.Term.(const mk $ input_options $ time $ size)
-
-
-
+  let type_only =
+    let doc = {|Stop the program after parsing and typing.|} in
+    Cmdliner.Arg.(value & flag & info ["type-only"] ~doc)
+  in
+  Cmdliner.Term.(const mk $ input_options $ time $ size $ type_only)

@@ -155,7 +155,7 @@ let add_merge_finish:
 let add_pexp_dom:
   t -> Pexp.t -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit =
   fun _t _pexp _dom ~node:_ ~node0:_ ->
-    assert false (** TODO when domain will be needed *)
+    ()
 
 let add_pexp_dom_premerge:
   t -> 'b Dom.t ->
@@ -164,7 +164,7 @@ let add_pexp_dom_premerge:
   nodefrom0:Node.t ->
   unit =
   fun _t _dom ~nodeto:_ ~nodefrom:_ ~nodefrom0:_ ->
-    assert false (** TODO when domain will be needed *)
+    ()
 
 
 let exp_fact : unit Exp.t = Exp.create_key "Trail.fact"
@@ -182,23 +182,26 @@ let exp_diff_value : (Values.t * Node.t * Node.t * Values.t * Pexp.t) Exp.t =
   Exp.create_key "Egraph.exp_diff_value"
 
 
-let age_merge t n1_0 n2_0 =
-  if Node.equal n1_0 n2_0 then Age.min
+let age_merge_opt t n1 n2 =
+  if Node.equal n1 n2 then Some Age.min
   else
     let rec aux t n1 n2 =
       assert (not (Node.equal n1 n2));
-      let age, n1, n2 =
-        match n1, Node.M.find_opt n1 t.nodehist, n2, Node.M.find_opt n2 t.nodehist with
-        | _, None, _, None ->
-          invalid_arg (Format.asprintf "age_merge: node %a and %a not merged"
-                         Node.pp n1_0 Node.pp n2_0)
-        | n1, None, _, Some(age,n2) | _, Some(age,n2), n1, None ->
-          age, n1, n2
-        | n1, Some(age1,n1'), n2, Some(age2,n2') ->
-          let c = Age.compare age1 age2 in
-          assert ( c <> 0);
-          if c < 0 then age1, n1', n2 else age2, n1, n2'
-      in
-      if Node.equal n1 n2 then age else aux t n1 n2
+      let ret age n1 n2 = if Node.equal n1 n2 then Some age else aux t n1 n2 in
+      match n1, Node.M.find_opt n1 t.nodehist, n2, Node.M.find_opt n2 t.nodehist with
+      | _, None, _, None -> None
+      | n1, None, _, Some(age,n2) | _, Some(age,n2), n1, None ->
+        ret age n1 n2
+      | n1, Some(age1,n1'), n2, Some(age2,n2') ->
+        let c = Age.compare age1 age2 in
+        assert ( c <> 0);
+        if c < 0 then ret age1 n1' n2 else ret age2 n1 n2'
     in
-    aux t n1_0 n2_0
+    aux t n1 n2
+
+let age_merge t n1 n2 =
+  match age_merge_opt t n1 n2 with
+  | None ->
+    invalid_arg (Format.asprintf "age_merge: node %a and %a not merged"
+                   Node.pp n1 Node.pp n2)
+  | Some c -> c

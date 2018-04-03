@@ -25,20 +25,14 @@ module Env = Keys.Make_key(struct end)
 
 include Env
 
+type 'a data = {key: 'a Env.t; pp: 'a Pp.pp}
 
-module VEnv = Env.MkVector(struct type ('a,'b) t = 'a Pp.pp end)
-let defined_env = VEnv.create 8
-let print_env k =
-  assert (if VEnv.is_uninitialized defined_env k
-    then raise Keys.UnregisteredKey else true);
-  VEnv.get defined_env k
+module VEnv = Env.Make_Registry(struct
+    type nonrec 'a data = 'a data
+    let pp d = d.pp
+    let key d = d.key
+  end)
 
-let register_env pp env =
-  VEnv.inc_size env defined_env;
-  assert (if not (VEnv.is_uninitialized defined_env env)
-          then raise Keys.AlreadyRegisteredKey else true);
-  VEnv.set defined_env env pp
-
-let check_is_registered k =
-  assert (if VEnv.is_uninitialized defined_env k
-          then raise Keys.UnregisteredKey else true);
+let register pp key = VEnv.register {key;pp}
+let print = VEnv.print
+let check_is_registered = VEnv.check_is_registered

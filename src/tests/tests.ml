@@ -35,9 +35,8 @@ let print_seed fmt = function
   | _ -> assert false
 
 let make_tests acc seed =
-  let module Bool = Tests_bool in
   let test = ((Witan_popop_lib.Pp.sprintf "seed %a" print_seed seed) >:::
-                 [ Bool.tests; ])
+                 [ Tests_bool.tests; Tests_uf.tests ])
   in
   let test = test_decorate
     (fun f -> (fun () -> Shuffle.set_shuffle seed; f ())) test in

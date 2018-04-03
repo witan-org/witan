@@ -48,7 +48,7 @@ let register_decvars env r =
   let e = Egraph.Delayed.get_env env converters in
   Egraph.Delayed.set_env env converters {e with decvars = r::e.decvars}
 
-let () = Env.register_env (fun _ _ -> ()) converters
+let () = Env.register (fun _ _ -> ()) converters
 
 
 let uncurry_app t =

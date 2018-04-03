@@ -62,6 +62,13 @@ module Conflict : sig
   val age_merge: t -> Node.t -> Node.t -> Trail.Age.t
   (** Give the age at which the given node merged *)
 
+  val age_merge_opt: t -> Node.t -> Node.t -> Trail.Age.t option
+  (** Give the age at which the given node merged *)
+
+  val analyse  : t -> Trail.Pexp.t -> Trail.Pcon.t -> Trail.Pcon.t list
+
+  val split: t -> Trail.Pcon.t -> Node.t -> Node.t -> Trail.Pcon.t list
+
 end
 
 module Exp = Trail.Exp
@@ -88,6 +95,8 @@ module type Exp = sig
 end
 
 val register_exp: (module Exp) -> unit
+
+val pp_pexp: Trail.Pexp.t Pp.pp
 
 (** {2 Levels} *)
 
@@ -130,8 +139,6 @@ end
 
 val register_con: (module Con) -> unit
 
-val split: Conflict.t -> Trail.Pcon.t -> Node.t -> Node.t -> Trail.Pcon.t list
-
 (** {2 Conflict analysis} *)
 
 module Learnt: Stdlib.Datatype
@@ -158,6 +165,13 @@ module EqCon : sig
   val register_apply_learnt: Ty.t -> (t -> Node.t * parity) -> unit
 
   val split: Conflict.t -> t -> Node.t -> Node.t -> Node.t option * Node.t option
+  (** split the equality {l;r} with the given equality, l=a=b=r or l=b=a=r, and indicates which
+      equality non trivial remains with l (first node) or r (second node). *)
+
+  val orient_split: Conflict.t -> t -> Node.t -> Node.t -> Node.t * Node.t
+  (** orient the given node (a,b), l=a=b=r or l=b=a=r, in order to have l=fst=snd=r *)
+
+  val create_eq: Node.t -> Node.t -> Trail.Pcon.t list
 end
 
 (** {2 From boolean theory } *)

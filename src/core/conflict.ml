@@ -169,12 +169,7 @@ module ChoGenH = Stdlib.XHashtbl.Make(struct
 module Exp = Trail.Exp
 module Con = Trail.Con
 
-module Conflict = struct
-  type t = Trail.t
-
-  let age_merge t n1 n2 = Trail.age_merge t n1 n2
-
-end
+type conflict = Trail.t
 
 module type Exp = sig
 
@@ -186,11 +181,11 @@ module type Exp = sig
 
 
   val from_contradiction:
-    Conflict.t (* -> Age.t *) -> t -> Trail.Pcon.t list
+    conflict (* -> Age.t *) -> t -> Trail.Pcon.t list
     (** First step of the analysis done on the trail. *)
 
   val analyse  :
-    Conflict.t (* -> Age.t *) -> t -> Trail.Pcon.t -> Trail.Pcon.t list
+    conflict (* -> Age.t *) -> t -> Trail.Pcon.t -> Trail.Pcon.t list
 
 end
 
@@ -209,6 +204,7 @@ let register_exp (exp:(module Exp)) =
   let exp = (module Exp : Exp with type t = Exp.t) in
   ExpRegistry.register exp
 
+let pp_pexp fmt (Trail.Pexp.Pexp(_,exp,e)) = ExpRegistry.print exp fmt e
 
 type parity = | Neg | Pos
 
@@ -222,11 +218,11 @@ module type Con = sig
 
   val apply_learnt: t -> Node.t * parity
 
-  val levels: Conflict.t -> t -> Levels.t
+  val levels: conflict -> t -> Levels.t
 
   val useful_nodes: t -> Node.t Bag.t
 
-  val split: Conflict.t -> t -> Node.t -> Node.t -> Trail.Pcon.t list
+  val split: conflict -> t -> Node.t -> Node.t -> Trail.Pcon.t list
 
 end
 
@@ -245,13 +241,35 @@ let register_con (con:(module Con)) =
   let con = (module Con : Con with type t = Con.t) in
   ConRegistry.register con
 
+let print_pcon fmt (Trail.Pcon.Pcon(con,c)) =
+  (ConRegistry.print con) fmt c
 
-let split t (Trail.Pcon.Pcon(con,c)) a b =
-  let f (type a) (con: a Con.t) (c:a) =
-    let module Con = (val (ConRegistry.get con)) in
-    Con.split t c a b
-  in
-  f con c
+let print_lcon fmt (l,pcon) =
+  Format.fprintf fmt "%a[%a]" print_pcon pcon Levels.pp l
+
+module Conflict = struct
+
+  type t = conflict
+
+  let age_merge t n1 n2 = Trail.age_merge t n1 n2
+  let age_merge_opt t n1 n2 = Trail.age_merge_opt t n1 n2
+
+  let analyse' (type a) t exp e pcon =
+    let module Exp = (val (ExpRegistry.get exp) : Exp with type t = a) in
+    Debug.dprintf4 debug "[Conflict] @[Analyse using %a: %a@]"
+      (* Age.pp age *) Exp.pp e print_pcon pcon;
+    let res = Exp.analyse t e pcon in
+    res
+
+  let analyse t (Trail.Pexp.Pexp(_,exp,e)) pcon = analyse' t exp e pcon
+
+  let split t (Trail.Pcon.Pcon(con,c)) a b =
+    let f (type a) (con: a Con.t) (c:a) =
+      let module Con = (val (ConRegistry.get con)) in
+      Con.split t c a b
+    in
+    f con c
+end
 
 let convert_lcon t l =
   let map (type a) con (c:a) pc =
@@ -281,16 +299,12 @@ let apply_learnt d n =
 
 module Learnt = Node
 
-let print_pcon fmt (Trail.Pcon.Pcon(con,c)) =
-  (ConRegistry.print con) fmt c
-
-let print_lcon fmt (l,pcon) =
-  Format.fprintf fmt "%a[%a]" print_pcon pcon Levels.pp l
-
-let learn trail (Trail.Pexp.Pexp(_,exp,x)) =
+let learn trail (Trail.Pexp.Pexp(_,exp,x) as pexp) =
   Debug.dprintf0 debug "[Conflict] @[Learning@]";
   let t = trail in
   let module Exp = (val (ExpRegistry.get exp)) in
+  Debug.dprintf2 debug "[Conflict] @[The contradiction: %a@]"
+    pp_pexp pexp;
   let l = Exp.from_contradiction trail x in
   let lcon = sort_lcon (convert_lcon t l) in
   Debug.dprintf2 debug "[Conflict] @[Initial conflict:%a@]"
@@ -319,18 +333,11 @@ let learn trail (Trail.Pexp.Pexp(_,exp,x)) =
       analysis_done (Levels.merge l1 l2) l
     | (l1,pcon)::lcon ->
       let age = Levels.get_last l1 in
-      let f (type a) exp (e:a) =
-        let module Exp = (val (ExpRegistry.get exp) : Exp with type t = a) in
-        Debug.dprintf6 debug "[Conflict] @[[%a] Analyse using %a: %a@]"
-          Age.pp age Exp.pp e print_pcon pcon;
-        let res = Exp.analyse t e pcon in
-        res
-      in
-      let (Trail.Pexp.Pexp(_,exp,e)) = Trail.get_pexp t age in
-      let lcon' = f exp e in
+      let pexp = Trail.get_pexp t age in
+      let lcon' = Conflict.analyse t pexp pcon in
       let lcon' = convert_lcon t lcon' in
-        Debug.dprintf2 debug "[Conflict] @[Analyse resulted in: %a@]"
-          (Pp.list Pp.comma print_lcon) lcon';
+      Debug.dprintf4 debug "[Conflict] @[[%a] Analyse resulted in: %a@]"
+        Age.pp age (Pp.list Pp.comma print_lcon) lcon';
       let lcon = merge_lcon (sort_lcon lcon') lcon in
       aux lcon
   in
@@ -403,6 +410,20 @@ module EqCon = struct
       if cmp < 0
       then Some a, Some b
       else Some b, Some a
+
+  let orient_split t c a b =
+    let age_a = Conflict.age_merge t c.l a in
+    let age_b = Conflict.age_merge t c.l b in
+    let cmp = Age.compare age_a age_b in
+    assert (cmp <> 0);
+    if cmp < 0
+    then a, b
+    else b, a
+
+  let create_eq l r =
+    if Node.equal l r
+    then []
+    else [Trail.Pcon.pcon key {l;r}]
 
 end
 

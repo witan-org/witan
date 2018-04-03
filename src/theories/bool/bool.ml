@@ -545,7 +545,7 @@ let () = Conflict.register_con (module ConProp)
 (** {2 Explanation} *)
 
 module ExpProp = struct
-
+  open Conflict
   type t = expprop
 
   let pp fmt = function
@@ -584,7 +584,7 @@ module ExpProp = struct
     (eq::eqs)
 
   let analyse :
-    Conflict.Conflict.t ->
+    Conflict.t ->
     t -> Trail.Pcon.t -> Trail.Pcon.t list =
     fun t exp pcon ->
       match exp with
@@ -663,6 +663,18 @@ let () =
     BoolValue.nodevalue (if v then value_true else value_false)
   in
   Interp.Register.thterm sem interp
+
+let default_value = true
+
+let () =
+  Interp.Register.model ty (fun d n ->
+      let v = Egraph.Delayed.get_value d dom n in
+      let v = Witan_popop_lib.Opt.get_def default_value v in
+      let v = if v then values_true else values_false in
+      v)
+
+
+
 
 let () =
   Interp.Register.id (fun id args ->

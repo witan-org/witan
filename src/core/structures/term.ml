@@ -63,6 +63,12 @@ module Tmp = struct
   let pp = Id.pp
 end
 
+module Id = struct
+  include Tmp
+  include Stdlib.MkDatatype(Tmp)
+  include (Id : (module type of Id) with type 'a t := 'a Id.t)
+end
+
 (** Memoised hash function *)
 let rec hash_aux t =
   match t.term with
@@ -118,18 +124,16 @@ let equal t t' = compare t t' = 0
 (* Bound variables *)
 (* ************************************************************************ *)
 
-module SId = Set.Make(Tmp)
-
 let rec free_vars acc t =
   match t.term with
   | Type -> acc
-  | Id v -> SId.add v acc
+  | Id v -> Id.S.add v acc
   | App (f, arg) ->
     free_vars (free_vars acc f) arg
   | Let (v, e, body) ->
-    SId.remove v (free_vars (free_vars acc e) body)
+    Id.S.remove v (free_vars (free_vars acc e) body)
   | Binder (_, v, body) ->
-    SId.remove v (free_vars acc body)
+    Id.S.remove v (free_vars acc body)
 
 
 (** Creating terms *)
@@ -156,8 +160,8 @@ let letin v e body =
 let rec bind b v body =
   match b with
   | Lambda ->
-    let fv = free_vars SId.empty body.ty in
-    let ty_b = if SId.mem v fv then Pi else Arrow in
+    let fv = free_vars Id.S.empty body.ty in
+    let ty_b = if Id.S.mem v fv then Pi else Arrow in
     let res_ty = bind ty_b v body.ty in
     mk res_ty (Binder (b, v, body))
   | Pi | Arrow ->
@@ -408,10 +412,20 @@ let equal_id =
   let a_type = const a_id in
   Id.mk "==" (pi a_id (arrows [a_type; a_type] _Prop))
 
+let distinct_id_of_int = Stdlib.DInt.H.create 16
+let int_of_distinct_id = Id.H.create 16
+
 let distinct_id =
-  let a_id = Id.mk "a" _Type in
-  let a_type = const a_id in
-  Id.mk "distinct" (pi a_id (arrows [a_type; a_type] _Prop))
+  Stdlib.DInt.H.memo (fun i ->
+      let a_id = Id.mk "a" _Type in
+      let a_type = const a_id in
+      let id = Id.mk "distinct" (pi a_id (arrows [a_type; a_type] _Prop)) in
+      Id.H.add_new Std.Impossible int_of_distinct_id id i;
+      id
+    )
+    distinct_id_of_int
+
+let is_distinct_id id = Id.H.mem int_of_distinct_id id
 
 let true_id = Id.mk "true" _Prop
 let false_id = Id.mk "false" _Prop
@@ -430,6 +444,11 @@ let or_id =
 let and_id =
   Id.mk "&&" (arrows [_Prop; _Prop] _Prop)
 
+let ite_id =
+  let a_id = Id.mk "a" _Type in
+  let a_type = const a_id in
+  Id.mk "ite" (pi a_id (arrows [_Prop; a_type; a_type] a_type))
+
 
 let or_term = const or_id
 let and_term = const and_id
@@ -437,9 +456,13 @@ let not_term = const not_id
 let true_term = const true_id
 let false_term = const false_id
 let equal_term = const equal_id
-let distinct_term = const distinct_id
+let distinct_term i = const (distinct_id i)
+let is_distinct_term = function
+  | {term = Id id} -> is_distinct_id id
+  | _ -> false
 let imply_term = const imply_id
 let equiv_term = const equiv_id
+let ite_term = const ite_id
 
 include Stdlib.MkDatatype(struct
     type nonrec t = t
@@ -451,9 +474,6 @@ include Stdlib.MkDatatype(struct
 
 (* Module alias *)
 (* ************************************************************************ *)
-
-module Id = Tmp
-
 
 let () = Exn_printer.register (fun fmt exn ->
     match exn with

@@ -38,8 +38,10 @@ type input_options = {
 
 type t = {
 
-  (* Input options *)
   input : input_options;
+
+  (* typing *)
+  type_only   : bool;
 
   (* Time/Memory options *)
   time_limit  : float;

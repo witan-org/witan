@@ -5,7 +5,7 @@ TESTS=$(patsubst %.p,%.res,$(wildcard *.p))
 all: $(TESTS)
 
 %.res: %.p $(BIN)
-	@if ! $(BIN) $< > /dev/null; then 							\
+	@if ! $(BIN) --type-only $< > /dev/null; then 							\
 			/bin/echo -e "\e[31m[KO]\e[0m [parsing] $<";			\
 			exit 1;																			\
 		else																					\

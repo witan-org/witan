@@ -73,14 +73,8 @@ exception Type_mismatch of t * t
 
 (** {2 Term ids} *)
 
-module Id : sig
-  type t = id
-  val hash : t -> int
-  val equal : t -> t -> bool
-  val compare : t -> t -> int
-  val pp: t Pp.pp
-end
-(** Adequate module defining term dientifiers for functor instanciation such
+module Id : Stdlib.Datatype with type t = id
+(** Adequate module defining term identifiers for functor instanciation such
     as Set/Map/etc... *)
 
 
@@ -154,9 +148,11 @@ val equal_id : id
 val equal_term : t
 (** equality *)
 
-val distinct_id : id
-val distinct_term : t
-(** distinct *)
+val distinct_id : int -> id
+val distinct_term : int -> t
+val is_distinct_id : id -> bool
+val is_distinct_term : t -> bool
+(** one distinct by size arity *)
 
 val not_id : id
 val not_term : t
@@ -177,6 +173,11 @@ val or_term : t
 val and_id : id
 val and_term : t
 (** Propositional conjunction *)
+
+
+val ite_id : id
+val ite_term : t
+(** If-then-else *)
 
 
 (** {2 Term substitution} *)

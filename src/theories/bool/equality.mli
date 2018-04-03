@@ -29,8 +29,3 @@ val is_disequal : Egraph.d -> Node.t -> Node.t -> bool
 val ite : Node.t -> Node.t -> Node.t -> Node.t
 
 val th_register : Egraph.d -> unit
-
-type eqconflict =
-  | Eq : Node.t * Node.t * bool -> eqconflict
-
-val choequal : (eqconflict, unit) Explanation.cho

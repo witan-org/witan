@@ -23,9 +23,6 @@
 
 open Stdlib
 
-exception UnregisteredKey
-exception AlreadyRegisteredKey
-
 exception BadCoercion
 
 type (_,_) eq = Eq : ('a,'a) eq
@@ -40,6 +37,9 @@ module type Registry = sig
   val is_well_initialized : unit -> bool
   val get : 'a key -> 'a data
   val print : 'a key -> 'a Pp.pp
+
+  exception UnregisteredKey : 'a key -> exn
+  exception AlreadyRegisteredKey : 'a key -> exn
 
 end
 
@@ -152,18 +152,30 @@ module Make_key(X:sig end): Key = struct
 
     module V = MkVector(struct type ('a,'unedeed) t = 'a S.data end)
 
-    let registry : unit V.t = V.create 8
+    exception UnregisteredKey : 'a t -> exn
+    exception AlreadyRegisteredKey : 'a t -> exn
+
+    let () = Exn_printer.register (fun fmt exn ->
+        match exn with
+        | UnregisteredKey(key) ->
+          Format.fprintf fmt "The key %a have not been registered" K.pp key
+        | AlreadyRegisteredKey(key) ->
+          Format.fprintf fmt "The key %a have already been registered" K.pp key
+        | exn -> raise exn
+      )
+
+  let registry : unit V.t = V.create 8
 
     let register data =
       let key = S.key data in
         V.inc_size key registry;
         assert (if not (V.is_uninitialized registry key)
-                then raise AlreadyRegisteredKey else true);
+                then raise (AlreadyRegisteredKey(key)) else true);
         V.set registry key data
 
-    let check_is_registered data =
-      assert (if V.is_uninitialized registry data
-              then raise UnregisteredKey else true)
+    let check_is_registered key =
+      assert (if V.is_uninitialized registry key
+              then raise (UnregisteredKey(key)) else true)
 
     let is_well_initialized () =
       let well_initialized = ref true in
@@ -185,6 +197,7 @@ module Make_key(X:sig end): Key = struct
       let data = get k in
       (S.pp data) fmt s
   end
+
 end
 
 module type Registry2 = sig
@@ -198,6 +211,9 @@ module type Registry2 = sig
   val printk : ('k,'d) key -> 'k Pp.pp
   val printd : ('k,'d) key -> 'd Pp.pp
 
+
+  exception UnregisteredKey : ('a,'b) key -> exn
+  exception AlreadyRegisteredKey : ('a,'b) key -> exn
 end
 
 module type Key2 = sig
@@ -292,16 +308,19 @@ module Make_key2(X:sig end) : Key2 = struct
 
     let registry : unit V.t = V.create 8
 
+    exception UnregisteredKey : ('a,'b) t -> exn
+    exception AlreadyRegisteredKey : ('a,'b) t -> exn
+
     let register data =
       let key = S.key data in
         V.inc_size key registry;
         assert (if not (V.is_uninitialized registry key)
-                then raise AlreadyRegisteredKey else true);
+                then raise (AlreadyRegisteredKey key) else true);
         V.set registry key data
 
-    let check_is_registered data =
-      assert (if V.is_uninitialized registry data
-              then raise UnregisteredKey else true)
+    let check_is_registered key =
+      assert (if V.is_uninitialized registry key
+              then raise (UnregisteredKey key) else true)
 
     let is_well_initialized () =
       let well_initialized = ref true in

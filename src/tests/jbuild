@@ -10,5 +10,8 @@
 
 (alias
  ((name    runtest)
-  (deps    (tests.exe (files_recursively_in solve/dimacs/sat) (files_recursively_in solve/dimacs/unsat)))
+  (deps    (tests.exe
+            (files_recursively_in solve/dimacs/sat)
+            (files_recursively_in solve/dimacs/unsat)
+            (files_recursively_in solve/smt_uf/unsat)))
   (action  (run ${<}))))

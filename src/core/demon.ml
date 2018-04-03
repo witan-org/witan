@@ -229,7 +229,7 @@ module Key = struct
         Pp.iter2 DT.Key.M.iter Pp.newline Pp.colon
           D.Key.pp print_daemon_state fmt DT.state
       in
-      Env.register_env print_demtable D.key.dk_data;
+      Env.register print_demtable D.key.dk_data;
     (** Interface for generic daemon *)
     let module Dem = struct
       type runable = D.Key.t
@@ -430,7 +430,7 @@ module Fast = struct
       let print_demtable fmt d =
         Pp.list Pp.comma Events.Fired.pp fmt d
       in
-      Env.register_env print_demtable D.key.dk_data;
+      Env.register print_demtable D.key.dk_data;
     (** Interface for generic daemon *)
     let module Dem = struct
       type runable = unit

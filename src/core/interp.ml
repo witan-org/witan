@@ -35,6 +35,10 @@ module Register = struct
     ThInterp.inc_size sem thterms;
     ThInterp.set thterms sem f
 
+  let models = Ty.H.create 16
+  let model ty (f:Egraph.Delayed.t -> Typedef.Node.t -> Typedef.Values.t) =
+    Ty.H.add models ty f
+
 end
 
 exception NoInterpretation of Term.id
@@ -91,6 +95,10 @@ and thterm  ?(leaf=(fun _ -> None)) t =
       then raise (CantInterpretThTerm t);
       (Register.ThInterp.get Register.thterms sem) ~interp:(node ~leaf) v
 
+let model d n =
+  match Ty.H.find_opt Register.models (Typedef.Node.ty n) with
+  | None -> invalid_arg "Uninterpreted type"
+  | Some f -> f d n
 
 let () = Exn_printer.register (fun fmt exn ->
     match exn with

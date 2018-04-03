@@ -157,5 +157,8 @@ val add_pexp_dom_premerge:
 
 (** {2 Get information from trail for conflict} *)
 
+val age_merge_opt: t -> Node.t -> Node.t -> Age.t option
+(** Give the age at which the given node merged *)
+
 val age_merge: t -> Node.t -> Node.t -> Age.t
 (** Give the age at which the given node merged *)
