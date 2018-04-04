@@ -13,5 +13,7 @@
   (deps    (tests.exe
             (files_recursively_in solve/dimacs/sat)
             (files_recursively_in solve/dimacs/unsat)
-            (files_recursively_in solve/smt_uf/unsat)))
+            (files_recursively_in solve/smt_uf/unsat)
+            (files_recursively_in solve/smt_uf/sat)
+  ))
   (action  (run ${<}))))

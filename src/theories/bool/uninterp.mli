@@ -28,24 +28,24 @@ val pp: t Pp.pp
 
 val sem: t Sem.t
 
-val fun1 :
-  Ty.t -> string ->
-  (Node.t -> Node.t)
-val fun2 :
-  Ty.t -> string ->
-  (Node.t -> Node.t -> Node.t)
-val fun3 :
-  Ty.t -> string ->
-  (Node.t -> Node.t -> Node.t -> Node.t)
-val fun4 :
-  Ty.t -> string ->
-  (Node.t -> Node.t -> Node.t -> Node.t -> Node.t)
-val fun5 :
-  Ty.t -> string ->
-  (Node.t -> Node.t -> Node.t -> Node.t -> Node.t -> Node.t)
+(* val fun1 :
+ *   Ty.t -> string ->
+ *   (Node.t -> Node.t)
+ * val fun2 :
+ *   Ty.t -> string ->
+ *   (Node.t -> Node.t -> Node.t)
+ * val fun3 :
+ *   Ty.t -> string ->
+ *   (Node.t -> Node.t -> Node.t -> Node.t)
+ * val fun4 :
+ *   Ty.t -> string ->
+ *   (Node.t -> Node.t -> Node.t -> Node.t -> Node.t)
+ * val fun5 :
+ *   Ty.t -> string ->
+ *   (Node.t -> Node.t -> Node.t -> Node.t -> Node.t -> Node.t)
+ * 
+ * val fresh_fun: result:Ty.t -> arity:int -> string -> Node.t *)
 
-val fresh_fun: result:Ty.t -> arity:int -> string -> Node.t
-
-val app_fun: Node.t -> Node.t list -> Node.t
+(* val app_fun: Node.t -> Node.t list -> Node.t *)
 
 val th_register : Egraph.Delayed.t -> unit

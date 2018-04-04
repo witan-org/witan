@@ -197,6 +197,10 @@ let rec parse_formula' (env:env) (lets:Term.t MId.t) (t:Dolmen.Term.t) =
     in
     aux lets vars
 
+  (* Functionnal arrows *)
+  | { Ast.term = Ast.Binder (Ast.Arrow, vars, f) } ->
+    Term.arrows (List.map (parse_formula env lets) vars) (parse_formula env lets f)
+
   (* Other cases *)
   | { Ast.term = Ast.App ({Ast.term = Ast.Builtin _}, _) } ->
     raise (Typing_error ("Unexpected builtin", env, t))

@@ -858,6 +858,7 @@ module Delayed = struct
 
   let mk_pexp t ?age kexp exp = Trail.mk_pexp ?age t.env.trail kexp exp
   let current_age t = Trail.current_age t.env.trail
+  let add_pexp t pexp = Trail.add_pexp t.env.trail pexp
 
   let contradiction d pexp =
     d.env.current_delayed <- unsat_delayed;

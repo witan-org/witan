@@ -118,6 +118,7 @@ module Delayed : sig
   (** {3 Trails} *)
   val mk_pexp: t -> ?age:age -> 'a Exp.t -> 'a -> Trail.Pexp.t
   val current_age: t -> age
+  val add_pexp: t -> Trail.Pexp.t -> unit
   val contradiction: t -> Trail.Pexp.t -> 'b
 
   (** {3 Low level} *)

@@ -27,7 +27,7 @@ open Witan_core
 open Tests_lib
 open Witan_theories_bool
 
-let theories = [Bool.th_register; Equality.th_register;(* Uninterp.th_register *)]
+let theories = [Bool.th_register; Equality.th_register; Uninterp.th_register ]
 let run = Tests_lib.run_exn ~theories ~nodec:()
 let ($$) f x = f x
 
@@ -275,10 +275,6 @@ let altergo = "Uf.altergo tests" &: [altergo0; altergo1; altergo2]
 let files = []
 
 let altergo2 = TestList (List.map Tests_lib.test_split files)
-
-let smtlib2sat =
-  "smtlib2-uf-sat" >:::
-    tests_smt2 Popop_of_smtlib2.Sat "tests/smtlib2/uf/sat/"
 *)
 
 
@@ -365,10 +361,14 @@ let tests_smt2 expected dir =
       )) files
 
 
+let smtlib2sat =
+  "smtlib2-uf-sat" >:::
+    tests_smt2 `Sat "solve/smt_uf/sat/"
+
 let smtlib2unsat =
   "smtlib2-uf-unsat" >:::
     tests_smt2 `Unsat "solve/smt_uf/unsat/"
 
 
-let tests = TestList [basic;(* congru1;congru2;altergo;altergo2;
-                             * smtlib2sat;*)smtlib2unsat]
+let tests = TestList [basic;(* congru1;congru2;altergo;altergo2;*)
+                             smtlib2sat; smtlib2unsat]

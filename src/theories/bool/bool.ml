@@ -570,18 +570,25 @@ module ExpProp = struct
       Format.fprintf fmt "Dec(%a,%b)"
         Node.pp n b
 
-  let eq_of_bool n b =
-    Trail.Pcon.pcon ConProp.key (n,not b)
+  let eq_of_bool ?dec n b =
+    Trail.Pcon.pcon ?dec ConProp.key (n,not b)
 
-  let analyse_one_to_one t pcon to_ to_b from_ from_b =
+  let analyse_one_to_one ?dec t pcon to_ to_b from_ from_b =
     (** we have
         c: a = b
         we propagated: to_ = to_b
-        because      : from_   = not from_b
+        because      : from_   = from_b
     *)
     let to_not = node_of_bool to_b in
     let eqs = Conflict.split t pcon to_ to_not in
-    let eq = eq_of_bool from_ from_b in
+    let eq = eq_of_bool ?dec from_ from_b in
+    Debug.dprintf10 debug "clfrom:%a from_b:%b clto:%a to_b:%b eqs:%a eq:%a"
+      Node.pp from_
+      from_b
+      Node.pp to_
+      to_b
+      (Pp.list Pp.comma pp_pcon) eqs
+      pp_pcon eq;
     (eq::eqs)
 
   let analyse :
@@ -622,10 +629,12 @@ module ExpProp = struct
           own (mulbool false v.topnot)
       | ExpNot  ((_,clfrom,clto),b)->
         analyse_one_to_one t pcon
-          clto b
-          clfrom (not b)
-      | ExpDec _ ->
-        assert false (** absurd: a decision should be the last *)
+            clto b
+            clfrom (not b)
+      | ExpDec (cl,b) ->
+        analyse_one_to_one ~dec:() t pcon
+          cl b
+          cl b
 
   let key = expprop
 
@@ -647,7 +656,7 @@ let () =
        then (l,parity_of_bool true)
        else if Node.equal r node_true
        then (l,parity_of_bool false)
-       else invalid_arg "Not implemented"
+       else !Conflict._equality l r, Pos
     )
 
 (** {2 Interpretations} *)

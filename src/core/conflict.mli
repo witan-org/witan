@@ -113,6 +113,7 @@ end
 (** {2 Learning} *)
 
 type parity = | Neg | Pos
+val neg_parity : parity -> parity
 
 module type Con = sig
 
@@ -138,6 +139,8 @@ module type Con = sig
 end
 
 val register_con: (module Con) -> unit
+
+val pp_pcon: Trail.Pcon.t Pp.pp
 
 (** {2 Conflict analysis} *)
 
@@ -172,6 +175,8 @@ module EqCon : sig
   (** orient the given node (a,b), l=a=b=r or l=b=a=r, in order to have l=fst=snd=r *)
 
   val create_eq: Node.t -> Node.t -> Trail.Pcon.t list
+
+  val apply_learnt: t -> Typedef.Node.t * parity
 end
 
 (** {2 From boolean theory } *)

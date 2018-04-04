@@ -183,6 +183,7 @@ val ite_id : id
 val ite_term : t
 (** If-then-else *)
 
+val is_defined: id -> bool
 
 (** {2 Term substitution} *)
 
@@ -211,3 +212,5 @@ val flatten_binder : binder -> t -> id list * t
 
 val concat_vars : id list -> (t * id list) list
 (** Groups variables by types. *)
+
+val extract_fun_ty : t -> Id.t * t

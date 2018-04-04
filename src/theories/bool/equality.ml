@@ -82,17 +82,32 @@ module ThE = Sem.Register(Th)
 (** {2 disequality domains} *)
 
 module Dis : sig
-  include Witan_popop_lib.Extset.S
+  type t
+  type elt
   val pp: t Pp.pp
   val of_node: ThE.t -> elt
   val to_node: elt -> ThE.t
+  val test_disjoint: (elt -> Trail.Age.t -> unit) -> t -> t -> t
+  val disjoint : t -> t -> bool
+  val singleton : elt -> Trail.Age.t -> t
+  val inter : t -> t -> t
+  val is_empty : t -> bool
+  val choose : t -> elt * Trail.Age.t
 end = struct
-  include ThE.S
+  type t = Trail.Age.t ThE.M.t
+  type elt = ThE.t
   let pp fmt s =
     Format.fprintf fmt "{%a}"
-      (Pp.iter1 ThE.S.iter Pp.semi ThE.pp) s
+      (Pp.iter2 ThE.M.iter Pp.nothing Pp.nothing ThE.pp Pp.nothing) s
   let of_node x = x
   let to_node x = x
+  let test_disjoint f m1 m2 =
+    ThE.M.union (fun k v1 v2 -> assert (Trail.Age.equal v1 v2); f k v1; Some v1) m1 m2
+  let disjoint = ThE.M.set_disjoint
+  let singleton = ThE.M.singleton
+  let is_empty = ThE.M.is_empty
+  let inter m1 m2 = ThE.M.inter (fun _ v1 v2 -> assert (Trail.Age.equal v1 v2); Some v2) m1 m2
+  let choose m1 = ThE.M.choose m1
 end
 
 let dom : Dis.t Dom.t = Dom.create_key "dis"
@@ -107,7 +122,7 @@ module D = struct
     | _ -> false
 
   type expmerge =
-  | Merge of Trail.Pexp.t * Node.t * Node.t * Dis.elt
+  | Merge of Trail.Pexp.t * Node.t * Node.t * Dis.elt * Trail.Age.t
 
   let expmerge : expmerge Trail.Exp.t =
     Trail.Exp.create_key "Equality.merge"
@@ -120,8 +135,8 @@ module D = struct
     | None, Some s ->
       Delayed.set_dom_premerge d dom cl1 s
     | Some s1, Some s2 ->
-      let s = Dis.M.union (fun i () ->
-          let pexp = Delayed.mk_pexp d expmerge (Merge(pexp,cl1,cl2,i)) in
+      let s = Dis.test_disjoint (fun i age ->
+          let pexp = Delayed.mk_pexp d expmerge (Merge(pexp,cl1,cl2,i,age)) in
           Delayed.contradiction d pexp) s1 s2 in
       Delayed.set_dom_premerge d dom cl1 s;
       Delayed.set_dom_premerge d dom cl2 s
@@ -136,7 +151,7 @@ let () = Dom.register(module D)
 let set_dom d pexp cl s =
   let s = match Delayed.get_dom d dom cl with
     | Some s' ->
-      Dis.M.union (fun _i () -> assert false) s' s
+      Dis.test_disjoint (fun _ -> assert false) s' s
     | None -> s in
   Delayed.set_dom d pexp dom cl s
 
@@ -165,9 +180,9 @@ let is_disequal t cl1 cl2 =
   | Some s1, Some s2 -> not (Dis.disjoint s1 s2)
   | _ -> false
 
-let new_tag n =
+let new_tag n age =
   let n = Dis.of_node n in
-  n, fun () -> Dis.singleton n (** each instance of this tag must not be == *)
+  n, fun () -> Dis.singleton n age (** each instance of this tag must not be == *)
 
 exception Found of Node.t * Node.t
 
@@ -293,9 +308,11 @@ let norm_dom d the =
       Node.pp own Th.pp v;
     match Bool.is d own with
     | Some false ->
-      let dis, stag = new_tag the in
+      let age = Trail.Age.succ (Egraph.Delayed.current_age d) in
+      let dis, stag = new_tag the age in
       let pexp =
         Delayed.mk_pexp d expsubst (SubstDownFalse(the,dis)) in
+      Egraph.Delayed.add_pexp d pexp;
       Node.S.iter (fun cl -> set_dom d pexp cl (stag ())) v;
       Demon.AliveStopped
     | Some true ->
@@ -391,6 +408,7 @@ module ConDis = struct
     r0 : Node.t;
     r1 : Node.t;
     disequality : Node.t;
+    age : Trail.Age.t;
     }
 
   let key : t Trail.Con.t = Trail.Con.create_key "Diff"
@@ -418,13 +436,14 @@ module ConDis = struct
     let l = Levels.empty in
     let l = Levels.add t (Conflict.age_merge t c.l1 c.l0) l in
     let l = Levels.add t (Conflict.age_merge t c.r1 c.r0) l in
-    let l = Levels.add t (Conflict.age_merge t c.disequality Bool._false) l in
+    let l = Levels.add t c.age l in
     l
 
   let apply_learnt c =
-    equality [c.l1;c.r1], Neg
+    let n, par = EqCon.apply_learnt {l=c.l1;r=c.r1} in
+    n, neg_parity par
 
-  let create_diff t cl1 cl2 i =
+  let create_diff t cl1 cl2 i age =
     let find_origin v cl =
       Node.S.fold_left (fun acc cl0 ->
           match acc with
@@ -438,7 +457,7 @@ module ConDis = struct
     let v = ThE.sem the in
     let cl1_0 = Opt.get (find_origin v cl1) in
     let cl2_0 = Opt.get (find_origin v cl2) in
-    let diff = Trail.Pcon.pcon key {l1=cl1;l0=cl1_0;r0=cl2_0;r1=cl2;disequality=ThE.node the} in
+    let diff = Trail.Pcon.pcon key {l1=cl1;l0=cl1_0;r0=cl2_0;r1=cl2;disequality=ThE.node the; age} in
     diff
 
 end
@@ -451,16 +470,16 @@ module ExpMerge = struct
   type t = expmerge
 
   let pp fmt = function
-    | Merge  (pexp,cl1,cl2,i)   ->
+    | Merge  (pexp,cl1,cl2,i,_)   ->
       Format.fprintf fmt "Merge!(%a,%a,%a,%a)"
         pp_pexp pexp Node.pp cl1 Node.pp cl2 ThE.pp (Dis.to_node i)
 
 
   let analyse _ _ _ = raise Impossible
 
-  let from_contradiction t (Merge(pexp,cl1,cl2,i)) =
+  let from_contradiction t (Merge(pexp,cl1,cl2,i,age)) =
     let lcon = Conflict.analyse t pexp (Trail.Pcon.pcon EqCon.key {l=cl1;r=cl2}) in
-    let diff = ConDis.create_diff t cl1 cl2 i in
+    let diff = ConDis.create_diff t cl1 cl2 i age in
     diff::lcon
 
   let key = expmerge
@@ -514,8 +533,8 @@ module ExpSubst = struct
             MValues.fold2_inter {fold2_inter} val1 val2 lcon
           else
           (** choose the oldest? *)
-          let d = Dis.choose dis in
-          let diff = ConDis.create_diff t e1 e2 d in
+          let d,age = Dis.choose dis in
+          let diff = ConDis.create_diff t e1 e2 d age in
           diff::lcon
         | _ -> raise Impossible
       in
@@ -529,7 +548,7 @@ module ExpSubst = struct
       | _ -> raise Impossible
     end
     | SubstDownFalse (the,_)   ->
-      let Trail.Pcon.Pcon(con,c) = pcon in
+      let Trail.Pcon.Pcon(con,c,_) = pcon in
       let c = Con.Eq.coerce con ConDis.key c in
       let lcon = [] in
       let lcon = (EqCon.create_eq c.l1 c.l0)@lcon in

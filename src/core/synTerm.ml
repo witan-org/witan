@@ -91,8 +91,8 @@ module DaemonConvertTerm = struct
         let thterm = Sem.coerce_thterm thterm in
         let v = Sem.sem thterm in
         let f, l = uncurry_app v in
-        begin match l with
-          | [] ->
+        begin match f with
+          | {Term.term = Id id} when not (Term.is_defined id) ->
             let n = Sem.node thterm in
             List.iter (fun f ->
                 Opt.iter

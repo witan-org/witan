@@ -42,6 +42,9 @@ type t = {
   (* Time/Memory options *)
   time_limit  : float;
   size_limit  : float;
+
+  (* Step options *)
+  step_limit  : int;
 }
 
 (* Creating option records *)
@@ -52,8 +55,8 @@ let mk_input_options f language =
   let file = Filename.basename f in
   { dir; file; language; }
 
-let mk input time_limit size_limit type_only =
-  { input; time_limit; size_limit; type_only }
+let mk input time_limit size_limit step_limit type_only =
+  { input; time_limit; size_limit; step_limit; type_only }
 
 (* Argument converters *)
 (* ************************************************************************ *)
@@ -174,8 +177,12 @@ let all =
                 Without suffix, default to a size in octet.|} in
     Cmdliner.Arg.(value & opt c_size 1_000_000_000. & info ["s"; "size"] ~docs ~docv:"SIZE" ~doc)
   in
+  let step =
+    let doc = {|Stop the program if it tries and use more the $(docv) steps.|} in
+    Cmdliner.Arg.(value & opt int (-1) & info ["steps"] ~docs ~docv:"STEPS" ~doc)
+  in
   let type_only =
     let doc = {|Stop the program after parsing and typing.|} in
     Cmdliner.Arg.(value & flag & info ["type-only"] ~doc)
   in
-  Cmdliner.Term.(const mk $ input_options $ time $ size $ type_only)
+  Cmdliner.Term.(const mk $ input_options $ time $ size $ step $ type_only)

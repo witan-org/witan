@@ -179,13 +179,13 @@ let rec bind b v body =
 module Subst = Map.Make(Tmp)
 
 let extract_fun_ty t =
-  match t.ty with
+  match t with
   | { term = Binder (Pi, v, ty); _ }
   | { term = Binder (Arrow, v, ty); _ } -> v, ty
   | _ -> raise (Function_expected t)
 
 let rec app t arg =
-  let v, ty = extract_fun_ty t in
+  let v, ty = extract_fun_ty t.ty in
   let expected_arg_ty = Id.ty v in
   let actual_arg_ty = arg.ty in
   if equal expected_arg_ty actual_arg_ty then
@@ -407,10 +407,16 @@ let pp = print
 (* Proof term constants *)
 (* ************************************************************************ *)
 
+let defined_fun = Id.H.create 16
+let add_defined id = Id.H.add_new Std.Impossible defined_fun id ()
+let is_defined id = Id.H.mem defined_fun id
+
 let equal_id =
   let a_id = Id.mk "a" _Type in
   let a_type = const a_id in
   Id.mk "==" (pi a_id (arrows [a_type; a_type] _Prop))
+
+let () = add_defined equal_id
 
 let distinct_id_of_int = Stdlib.DInt.H.create 16
 let int_of_distinct_id = Id.H.create 16
@@ -421,6 +427,7 @@ let distinct_id =
       let a_type = const a_id in
       let args = CCList.replicate i (a_type) in
       let id = Id.mk "distinct" (pi a_id (arrows args _Prop)) in
+      add_defined id;
       Id.H.add_new Std.Impossible int_of_distinct_id id i;
       id
     )
@@ -430,6 +437,7 @@ let is_distinct_id id = Id.H.mem int_of_distinct_id id
 
 let true_id = Id.mk "true" _Prop
 let false_id = Id.mk "false" _Prop
+let () = add_defined true_id; add_defined false_id
 
 let not_id = Id.mk "not" (arrow _Prop _Prop)
 
@@ -439,6 +447,8 @@ let imply_id =
 let equiv_id =
   Id.mk "<->" (arrows [_Prop; _Prop] _Prop)
 
+let () = add_defined not_id; add_defined imply_id; add_defined equiv_id
+
 let or_id_of_int = Stdlib.DInt.H.create 16
 let int_of_or_id = Id.H.create 16
 
@@ -446,6 +456,7 @@ let or_id =
   Stdlib.DInt.H.memo (fun i ->
       let args = CCList.replicate i _Prop in
       let id = Id.mk "||" (arrows args _Prop) in
+      add_defined id;
       Id.H.add_new Std.Impossible int_of_or_id id i;
       id
     )
@@ -461,6 +472,7 @@ let and_id =
   Stdlib.DInt.H.memo (fun i ->
       let args = CCList.replicate i _Prop in
       let id = Id.mk "&&" (arrows args _Prop) in
+      add_defined id;
       Id.H.add_new Std.Impossible int_of_and_id id i;
       id
     )
@@ -468,12 +480,12 @@ let and_id =
 
 let is_and_id id = Id.H.mem int_of_and_id id
 
-
 let ite_id =
   let a_id = Id.mk "a" _Type in
   let a_type = const a_id in
   Id.mk "ite" (pi a_id (arrows [_Prop; a_type; a_type] a_type))
 
+let () = add_defined ite_id
 
 let or_term i = const (or_id i)
 let is_or_term = function

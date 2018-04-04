@@ -237,6 +237,8 @@ and pop_to t prev =
 *)
 
 and conflict_analysis t pexp =
+  if Debug.test_flag debug_dotgui then
+    S.draw_graph ~force:true t.solver_state;
   Debug.incr stats_con;
   if Egraph.current_nbdec t.solver_state = 0 then begin
     Debug.dprintf0 debug "[Scheduler] contradiction at level 0";

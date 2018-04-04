@@ -68,9 +68,11 @@ module Con = Keys.Make_key(struct end)
 
 module Pcon = struct
   type t =
-    | Pcon: 'a Con.t * 'a -> t
+    | Pcon: 'a Con.t * 'a * [`Dec | `NoDec]-> t
 
-  let pcon c v = Pcon(c,v)
+  (** `Dec indiquate the conflict come from the explanation of a
+     decision and then should not be explained further *)
+  let pcon ?(dec:unit option) c v = Pcon(c,v,if dec=None then `NoDec else `Dec)
   let map c l = List.map (pcon c) l
 end
 

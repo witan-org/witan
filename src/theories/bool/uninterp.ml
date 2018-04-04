@@ -65,13 +65,6 @@ module Th = struct
 
   let key = sem
 
-    (* let norm d s = *)
-    (*   Delayed.propagate d (Delayed.index d sem s) *)
-
-    (* let propagate ~propagate s = *)
-    (*   match s with *)
-    (*   | App(f,g) -> propagate f; propagate g *)
-
 end
 
 let pp = Th.pp
@@ -80,60 +73,55 @@ module ThE = Sem.Register(Th)
 
 let app f g ty = Node.index_sem sem (App(f,g)) ty
 
-let appl f l ty =
-  let rec aux = function
-    | [] -> assert false
-    | [a] -> a
-    | a::l -> app a (aux l) partty in
-  let l = aux l in
-  app f l ty
+let appl f l =
+  let rec aux acc ty = function
+    | [] -> acc
+    | a::l ->
+      let _,ty = Term.extract_fun_ty ty in
+      aux (app acc a ty) ty l
+  in
+  aux f (Node.ty f) l
 
-let result_of_sort = Ty.H.create 20
+(* let result_of_sort = Ty.H.create 20
+ * 
+ * let register_sort ?dec ty =
+ *   Ty.H.add result_of_sort ty dec
+ * 
+ * (\** Bool can't register itself it is linked before uninterp *\)
+ * let () = register_sort Bool.ty ~dec:Bool.make_dec *)
 
-let register_sort ?dec ty =
-  Ty.H.add result_of_sort ty dec
-
-(** Bool can't register itself it is linked before uninterp *)
-let () = register_sort Bool.ty ~dec:Bool.make_dec
-
-let result_to_dec = Node.H.create 20
-
-let fresh_fun ~result ~arity name =
-  assert (arity > 0);
-  let node = Node.fresh name funty in
-  Node.H.add result_to_dec node (result,arity);
-  node
-
-let app_fun node args =
-  let (sort,arity) = Node.H.find_exn result_to_dec Impossible node in
-  assert (List.length args = arity);
-  let appnode = appl node args sort in
-  appnode
-
-let fun1 ty s =
-  let f = fresh_fun ~result:ty ~arity:1 s in
-  (fun x -> app_fun f [x])
-
-let fun2 ty s =
-  let f = fresh_fun ~result:ty ~arity:2 s in
-  (fun x1 x2 -> app_fun f [x1;x2])
-
-let fun3 ty s =
-  let f = fresh_fun ~result:ty ~arity:3 s in
-  (fun x1 x2 x3 -> app_fun f [x1;x2;x3])
-
-let fun4 ty s =
-  let f = fresh_fun ~result:ty ~arity:4 s in
-  (fun x1 x2 x3 x4 -> app_fun f [x1;x2;x3;x4])
-
-let fun5 ty s =
-  let f = fresh_fun ~result:ty ~arity:5 s in
-  (fun x1 x2 x3 x4 x5 -> app_fun f [x1;x2;x3;x4;x5])
+(* let result_to_dec = Node.H.create 20
+ * 
+ * let app_fun node args =
+ *   let (sort,arity) = Node.H.find_exn result_to_dec Impossible node in
+ *   assert (List.length args = arity);
+ *   let appnode = appl node args sort in
+ *   appnode
+ * 
+ * let fun1 ty s =
+ *   let f = fresh_fun ~result:ty ~arity:1 s in
+ *   (fun x -> app_fun f [x])
+ * 
+ * let fun2 ty s =
+ *   let f = fresh_fun ~result:ty ~arity:2 s in
+ *   (fun x1 x2 -> app_fun f [x1;x2])
+ * 
+ * let fun3 ty s =
+ *   let f = fresh_fun ~result:ty ~arity:3 s in
+ *   (fun x1 x2 x3 -> app_fun f [x1;x2;x3])
+ * 
+ * let fun4 ty s =
+ *   let f = fresh_fun ~result:ty ~arity:4 s in
+ *   (fun x1 x2 x3 x4 -> app_fun f [x1;x2;x3;x4])
+ * 
+ * let fun5 ty s =
+ *   let f = fresh_fun ~result:ty ~arity:5 s in
+ *   (fun x1 x2 x3 x4 x5 -> app_fun f [x1;x2;x3;x4;x5]) *)
 
 
-type expsubst = ThE.t
-let expsubst : expsubst Explanation.exp =
-  Explanation.Exp.create_key "Uninterp"
+type expsubst = {from:ThE.t; to_:ThE.t}
+let expsubst : expsubst Trail.Exp.t =
+  Trail.Exp.create_key "Uninterp"
 
 module DaemonPropa = struct
   type k = ThE.t
@@ -163,9 +151,9 @@ module DaemonPropa = struct
         Node.pp (ThE.node nodesem) Th.pp v;
       let v' = App(Delayed.find d f, Delayed.find d g) in
       assert (not (Th.equal v v'));
-      let pexp = Delayed.mk_pexp d expsubst nodesem in
       let nodesem' = ThE.index v' (ThE.ty nodesem) in
-      Delayed.set_sem d pexp (ThE.node nodesem) (ThE.nodesem nodesem');
+      let pexp = Delayed.mk_pexp d expsubst {from=nodesem;to_=nodesem'} in
+      Delayed.set_sem d pexp (ThE.node nodesem) (ThE.thterm nodesem');
       Demon.AliveRedirected nodesem'
 end
 
@@ -184,12 +172,10 @@ module DaemonInit = struct
     List.iter
       (function Events.Fired.EventRegSem(nodesem,()) ->
         begin
-          let nodesem = ThE.coerce_nodesem nodesem in
+          let nodesem = ThE.coerce_thterm nodesem in
           let v = ThE.sem nodesem in
           let own = ThE.node nodesem in
           Debug.dprintf2 debug "[Uninterp] @[init %a@]" Th.pp v;
-          let dec = Ty.H.find_def result_of_sort None (Node.ty own) in
-          Opt.iter (fun dec -> Variable.add_dec ~dec d own) dec;
           if DaemonPropa.is_unborn d nodesem then
           match v with
           | App(f,g) ->
@@ -200,9 +186,9 @@ module DaemonInit = struct
               DaemonPropa.attach d f g nodesem
             else
               let v' = App(f',g') in
-              let pexp = Delayed.mk_pexp d expsubst nodesem in
-              let nodesem = ThE.nodesem (ThE.index v' (Node.ty own)) in
-              Delayed.set_sem d pexp own nodesem
+              let nodesem' = ThE.index v' (Node.ty own) in
+              let pexp = Delayed.mk_pexp d expsubst {from=nodesem;to_=nodesem'} in
+              Delayed.set_sem d pexp own (ThE.thterm nodesem')
         end
       | _ -> raise UnwaitedEvent
       ) ev;
@@ -213,50 +199,52 @@ end
 
 module RDaemonInit = Demon.Key.Register(DaemonInit)
 
+module ExpSubst = struct
+  open Conflict
+
+  type t = expsubst
+  let key = expsubst
+
+  let pp fmt c =
+    match ThE.sem c.from, ThE.sem c.to_ with
+    | App(f,g), App(f',g') ->
+      Format.fprintf fmt "Subst(%a,%a -> %a,%a)"
+        Node.pp f Node.pp g Node.pp f' Node.pp g'
+
+  let analyse t {from;to_} pcon =
+    match ThE.sem from, ThE.sem to_ with
+    | App(f,g), App(f',g') ->
+      let lcon = Conflict.split t pcon (ThE.node from) (ThE.node to_) in
+      let lcon' = if Node.equal f f' then [] else EqCon.create_eq f f' in
+      let lcon'' = if Node.equal g g' then [] else EqCon.create_eq g g' in
+      lcon'@lcon''@lcon
+
+  let from_contradiction _ _ = raise Impossible
+
+end
+
+let () = Conflict.register_exp(module ExpSubst)
+
+
+let converter d f l =
+  let of_term t =
+    let n = SynTerm.node_of_term t in
+    Egraph.Delayed.register d n;
+    n
+  in
+  let node = match f with
+    | {Term.term=Id id} when not (Term.is_defined id) ->
+      let f = of_term f in
+      let l = List.map of_term l in
+      Some (appl f l)
+    | _ -> None
+  in
+      node
+
 let th_register env =
   RDaemonPropa.init env;
   RDaemonInit.init env;
   Demon.Key.attach env
     DaemonInit.key () [Demon.Create.EventRegSem(sem,())];
-
-module ExpSubst = struct
-  open Conflict
-  (* open IterExp *)
-  open ComputeConflict
-
-  type t = expsubst
-
-  let pp fmt nodesem =
-    match ThE.sem nodesem with
-    | App(f,g) ->
-      Format.fprintf fmt "Subst(%a,%a)" Node.pp f Node.pp g
-
-(*
-  let iterexp t age = function
-    | App(f,g) ->
-      need_sem t age sem (App(f,g));
-      need_node_repr t age f;
-      need_node_repr t age g
-*)
-  let analyse :
-    type a. Conflict.ComputeConflict.t ->
-    Explanation.age -> a Explanation.con -> t -> a Conflict.rescon =
-    fun t age con nodesem ->
-      match ThE.sem nodesem with
-      | App(f,g) ->
-        let f' = get_repr_at t age f in
-        let g' = get_repr_at t age g in
-        let v' = App(f',g') in
-        let to_ = ThE.index v' (ThE.ty nodesem) in
-        Conflict.return con consubst { from=nodesem; to_ }
-
-  let expdomlimit _ _ _ _ _ _ _ = raise Impossible (** don't propa dom *)
-
-  let key = expsubst
-
-  let same_sem t age _sem _v con exp _node1 _node2 =
-    analyse  t age con exp
-
-end
-
-let () = Conflict.register_exp(module ExpSubst)
+  SynTerm.register_converter env converter;
+  ()

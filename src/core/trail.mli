@@ -62,9 +62,9 @@ module Con: Keys.Key
 
 module Pcon : sig
   type t =
-    | Pcon: 'a Con.t * 'a -> t
+    | Pcon: 'a Con.t * 'a * [`Dec | `NoDec]-> t
 
-  val pcon: 'a Con.t -> 'a -> t
+  val pcon: ?dec:unit -> 'a Con.t -> 'a -> t
 
   val map: 'a Con.t -> 'a list -> t list
 
@@ -154,6 +154,9 @@ val add_pexp_dom_premerge:
   nodefrom0:Node.t ->
   unit
 (** A domain has been modified during the merge of classes *)
+
+val add_pexp: t -> Pexp.t -> unit
+(** generic *)
 
 (** {2 Get information from trail for conflict} *)
 

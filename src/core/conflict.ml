@@ -207,6 +207,7 @@ let register_exp (exp:(module Exp)) =
 let pp_pexp fmt (Trail.Pexp.Pexp(_,exp,e)) = ExpRegistry.print exp fmt e
 
 type parity = | Neg | Pos
+let neg_parity = function | Neg -> Pos | Pos -> Neg
 
 module type Con = sig
 
@@ -241,11 +242,11 @@ let register_con (con:(module Con)) =
   let con = (module Con : Con with type t = Con.t) in
   ConRegistry.register con
 
-let print_pcon fmt (Trail.Pcon.Pcon(con,c)) =
+let pp_pcon fmt (Trail.Pcon.Pcon(con,c,_)) =
   (ConRegistry.print con) fmt c
 
-let print_lcon fmt (l,pcon) =
-  Format.fprintf fmt "%a[%a]" print_pcon pcon Levels.pp l
+let pp_lcon fmt (l,pcon) =
+  Format.fprintf fmt "%a[%a]" pp_pcon pcon Levels.pp l
 
 module Conflict = struct
 
@@ -257,13 +258,14 @@ module Conflict = struct
   let analyse' (type a) t exp e pcon =
     let module Exp = (val (ExpRegistry.get exp) : Exp with type t = a) in
     Debug.dprintf4 debug "[Conflict] @[Analyse using %a: %a@]"
-      (* Age.pp age *) Exp.pp e print_pcon pcon;
+      (* Age.pp age *) Exp.pp e pp_pcon pcon;
     let res = Exp.analyse t e pcon in
     res
 
   let analyse t (Trail.Pexp.Pexp(_,exp,e)) pcon = analyse' t exp e pcon
 
-  let split t (Trail.Pcon.Pcon(con,c)) a b =
+  let split t (Trail.Pcon.Pcon(con,c,dec)) a b =
+    assert (dec = `NoDec);
     let f (type a) (con: a Con.t) (c:a) =
       let module Con = (val (ConRegistry.get con)) in
       Con.split t c a b
@@ -272,11 +274,13 @@ module Conflict = struct
 end
 
 let convert_lcon t l =
-  let map (type a) con (c:a) pc =
-    let module Con = (val (ConRegistry.get con) : Con with type t = a) in
-    (Con.levels t c, pc)
+  let map (type a) con (c:a) dec pc =
+    if dec = `Dec then (Levels.No,pc)
+    else
+      let module Con = (val (ConRegistry.get con) : Con with type t = a) in
+      (Con.levels t c, pc)
   in
-  List.map (fun (Trail.Pcon.Pcon(con,c) as pc) -> map con c pc) l
+  List.map (fun (Trail.Pcon.Pcon(con,c,dec) as pc) -> map con c dec pc) l
 
 let compare_level_con (l1,_) (l2,_) = - (Levels.compare l1 l2)
 
@@ -289,7 +293,7 @@ let lcon_to_node l =
     let module Con = (val (ConRegistry.get con) : Con with type t = a) in
     Con.apply_learnt c
   in
-  List.map (fun (Trail.Pcon.Pcon(con,c)) -> map con c) l
+  List.map (fun (Trail.Pcon.Pcon(con,c,_)) -> map con c) l
 
 let _or = ref (fun _ -> assert false)
 let _set_true = ref (fun _ _ _ -> assert false)
@@ -310,25 +314,25 @@ let learn trail (Trail.Pexp.Pexp(_,exp,x) as pexp) =
   let l = Exp.from_contradiction trail x in
   let lcon = sort_lcon (convert_lcon t l) in
   Debug.dprintf2 debug "[Conflict] @[Initial conflict:%a@]"
-    (Pp.list Pp.comma print_lcon) lcon;
+    (Pp.list Pp.comma pp_lcon) lcon;
   let analysis_done lv l =
     let backtrack_level = Levels.get_second_last lv in
     Debug.dprintf4 debug "[Conflict] @[End analysis with (bl %a): %a@]"
       Age.pp backtrack_level
-      (Pp.list Pp.comma print_lcon) l;
+      (Pp.list Pp.comma pp_lcon) l;
     (** remove the one before the first decision (level 0)) *)
-    let l = List.fold_left (fun acc (lv,c) ->
-        if Levels.before_first_dec t lv then acc else c::acc
+    let l = List.fold_left (fun acc (lv,(Trail.Pcon.Pcon(_,_,dec) as c)) ->
+        if dec = `NoDec && Levels.before_first_dec t lv then acc else c::acc
       ) [] l in
     (backtrack_level, l)
   in
+  (** last_dec_done keep separate the conflict obtained from the
+      explanation of the last decision (could return its input) *)
   let rec aux = function
     | [] -> assert false (** absurd: understand why *)
     | (Levels.No,_)::_                           -> assert false (** absurd: understand when *)
-    | (l1,_)::_ when Levels.before_last_dec t l1 -> assert false (** absurd: understand when *)
-    | (l1,_)::_ as l when Levels.is_last_dec t l1 ->
-      let lv = List.fold_left (fun acc (lv,_) -> Levels.merge lv acc) Levels.No l in
-      analysis_done lv l
+    | (l1,_)::_ as l when Levels.before_last_dec t l1 ->
+      analysis_done l1 l
     | (l1,_)::[] as l when Levels.at_most_one_after_last_dec t l1 ->
       analysis_done l1 l
     | (l1,_)::(l2,_)::_ as l when Levels.at_most_one_after_last_dec t l1 && Levels.before_last_dec t l2 ->
@@ -339,7 +343,7 @@ let learn trail (Trail.Pexp.Pexp(_,exp,x) as pexp) =
       let lcon' = Conflict.analyse t pexp pcon in
       let lcon' = convert_lcon t lcon' in
       Debug.dprintf4 debug "[Conflict] @[[%a] Analyse resulted in: %a@]"
-        Age.pp age (Pp.list Pp.comma print_lcon) lcon';
+        Age.pp age (Pp.list Pp.comma pp_lcon) lcon';
       let lcon = merge_lcon (sort_lcon lcon') lcon in
       aux lcon
   in
@@ -350,7 +354,7 @@ let learn trail (Trail.Pexp.Pexp(_,exp,x) as pexp) =
   in
   let useful =
     List.fold_left
-      (fun acc (Trail.Pcon.Pcon(con,c)) -> fold acc con c)
+      (fun acc (Trail.Pcon.Pcon(con,c,_)) -> fold acc con c)
       Bag.empty l
   in
   let l = lcon_to_node l in

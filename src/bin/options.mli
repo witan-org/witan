@@ -46,6 +46,9 @@ type t = {
   (* Time/Memory options *)
   time_limit  : float;
   size_limit  : float;
+
+  (* Step options *)
+  step_limit  : int;
 }
 (** The aggregate type for all command line options *)
 
