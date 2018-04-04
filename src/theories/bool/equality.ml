@@ -241,6 +241,7 @@ type expsubst =
 | SubstUpFalse of ThE.t * (Node.t * (Dis.t option * unit MValues.t)) list
 | SubstDownTrue of ThE.t
 | SubstDownFalse of ThE.t * Dis.elt
+| Dec of Node.t * Node.t
 
 let expsubst : expsubst Trail.Exp.t =
   Trail.Exp.create_key "Equality.subst"
@@ -273,7 +274,7 @@ module ChoEquals = struct
     Debug.dprintf6 print_decision
       "[Equality] @[decide on merge of %a and %a in %a@]"
       Node.pp cl1 Node.pp cl2 ThE.pp the;
-    let pexp = Trail.pexp_fact in
+    let pexp = Delayed.mk_pexp d expsubst (Dec(cl1,cl2)) in
     Delayed.register d cl1;
     Delayed.register d cl2;
     Delayed.merge d pexp cl1 cl2
@@ -504,6 +505,9 @@ module ExpSubst = struct
     | SubstDownFalse (v,i)   ->
       Format.fprintf fmt "SubstDownFalse(%a,%a)"
         ThE.pp v ThE.pp (Dis.to_node i)
+    | Dec (n1,n2) ->
+      Format.fprintf fmt "Dec(%a,%a)"
+        Node.pp n1 Node.pp n2
 
   let analyse t e pcon =
     match e with
@@ -555,6 +559,10 @@ module ExpSubst = struct
       let lcon = (EqCon.create_eq c.r1 c.r0)@lcon in
       let lcon = (EqCon.create_eq (ThE.node the) Bool._false)@lcon in
       lcon
+    | Dec(n1,n2) ->
+      let lcon = Conflict.split t pcon n1 n2 in
+      let eq = EqCon.create_eq ~dec:() n1 n2 in
+      eq@lcon
 
   let key = expsubst
 

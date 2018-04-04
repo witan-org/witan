@@ -162,6 +162,3 @@ val add_pexp: t -> Pexp.t -> unit
 
 val age_merge_opt: t -> Node.t -> Node.t -> Age.t option
 (** Give the age at which the given node merged *)
-
-val age_merge: t -> Node.t -> Node.t -> Age.t
-(** Give the age at which the given node merged *)

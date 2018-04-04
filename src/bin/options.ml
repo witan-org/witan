@@ -45,6 +45,9 @@ type t = {
 
   (* Step options *)
   step_limit  : int;
+
+  (* seed for shuffling *)
+  seed_shuffle  : int option;
 }
 
 (* Creating option records *)
@@ -55,8 +58,8 @@ let mk_input_options f language =
   let file = Filename.basename f in
   { dir; file; language; }
 
-let mk input time_limit size_limit step_limit type_only =
-  { input; time_limit; size_limit; step_limit; type_only }
+let mk input time_limit size_limit step_limit type_only seed_shuffle =
+  { input; time_limit; size_limit; step_limit; type_only; seed_shuffle }
 
 (* Argument converters *)
 (* ************************************************************************ *)
@@ -181,8 +184,12 @@ let all =
     let doc = {|Stop the program if it tries and use more the $(docv) steps.|} in
     Cmdliner.Arg.(value & opt int (-1) & info ["steps"] ~docs ~docv:"STEPS" ~doc)
   in
+  let seed =
+    let doc = {|Give a seed for the randomness used in the search (default fixed).|} in
+    Cmdliner.Arg.(value & opt (some int) None & info ["seed"] ~docs ~docv:"STEPS" ~doc)
+  in
   let type_only =
     let doc = {|Stop the program after parsing and typing.|} in
     Cmdliner.Arg.(value & flag & info ["type-only"] ~doc)
   in
-  Cmdliner.Term.(const mk $ input_options $ time $ size $ step $ type_only)
+  Cmdliner.Term.(const mk $ input_options $ time $ size $ step $ type_only $ seed)

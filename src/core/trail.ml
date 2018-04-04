@@ -200,10 +200,3 @@ let age_merge_opt t n1 n2 =
         if c < 0 then ret age1 n1' n2 else ret age2 n1 n2'
     in
     aux t n1 n2
-
-let age_merge t n1 n2 =
-  match age_merge_opt t n1 n2 with
-  | None ->
-    invalid_arg (Format.asprintf "age_merge: node %a and %a not merged"
-                   Node.pp n1 Node.pp n2)
-  | Some c -> c

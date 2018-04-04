@@ -32,6 +32,10 @@ let () =
     | `Error `Exn -> exit 1
     | `Ok opts -> opts
   in
+  begin match opts.Options.seed_shuffle with
+    | None   -> Witan_stdlib.Shuffle.set_shuffle None;
+    | Some i ->  Witan_stdlib.Shuffle.set_shuffle (Some [|i|]);
+  end;
   (* Parse input *)
   let statements = Witan_solver.Input.read
       ?language:Options.(opts.input.language)
@@ -73,6 +77,25 @@ let () =
                  Witan_core.Id.mk s ty
                in
                Witan_solver.Notypecheck.R.add_new Witan_stdlib.Std.Impossible env id t';
+             | Clause l ->
+               let map t =
+                 match Witan_solver.Notypecheck.parse_formula env Witan_solver.Notypecheck.MId.empty t with
+                 | exception (Witan_solver.Notypecheck.Typing_error (msg, _, t)) ->
+                   Format.eprintf
+                     "%a:@\n%s:@ %a"
+                     Dolmen.ParseLocation.fmt (Witan_solver.Notypecheck.get_loc t) msg
+                     Dolmen.Term.print t;
+                   Pervasives.exit 2
+                 | t ->
+                   SynTerm.node_of_term t
+               in
+               let l = Witan_stdlib.Shuffle.shufflel l in
+               let l = List.map map l in
+               let l = Witan_stdlib.Shuffle.shufflel l in
+               let cl = Witan_theories_bool.Bool._or l in
+               clauses := cl::!clauses;
+               Egraph.Delayed.register d cl;
+               Witan_theories_bool.Bool.set_true d Trail.pexp_fact cl
              | Antecedent t ->
                let map t =
                  match Witan_solver.Notypecheck.parse_formula env Witan_solver.Notypecheck.MId.empty t with

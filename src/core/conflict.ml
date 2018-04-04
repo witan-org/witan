@@ -169,7 +169,24 @@ module ChoGenH = Stdlib.XHashtbl.Make(struct
 module Exp = Trail.Exp
 module Con = Trail.Con
 
-type conflict = Trail.t
+module TrailCache = Stdlib.MkDatatype(struct
+    type t = Node.t * Node.t
+    [@@ deriving eq, show, ord]
+
+    let hash (a,b) = CCHash.combine2 (Node.hash a) (Node.hash b)
+  end)
+
+type conflict = {
+  trail : Trail.t;
+  trail_cache : Trail.Age.t option TrailCache.H.t;
+  mutable todolist : (Levels.t * Trail.Pcon.t) list;
+}
+
+let create_env trail = {
+  trail;
+  trail_cache = TrailCache.H.create 256;
+  todolist = [];
+}
 
 module type Exp = sig
 
@@ -252,8 +269,17 @@ module Conflict = struct
 
   type t = conflict
 
-  let age_merge t n1 n2 = Trail.age_merge t n1 n2
-  let age_merge_opt t n1 n2 = Trail.age_merge_opt t n1 n2
+  let age_merge_opt t n1 n2 =
+    TrailCache.H.memo
+      (fun (n1,n2) -> Trail.age_merge_opt t.trail n1 n2)
+      t.trail_cache (n1,n2)
+
+  exception NeverMerged of Node.t * Node.t
+
+  let age_merge t n1 n2 =
+    match age_merge_opt t n1 n2 with
+    | Some a -> a
+    | None -> raise (NeverMerged(n1,n2))
 
   let analyse' (type a) t exp e pcon =
     let module Exp = (val (ExpRegistry.get exp) : Exp with type t = a) in
@@ -273,28 +299,6 @@ module Conflict = struct
     f con c
 end
 
-let convert_lcon t l =
-  let map (type a) con (c:a) dec pc =
-    if dec = `Dec then (Levels.No,pc)
-    else
-      let module Con = (val (ConRegistry.get con) : Con with type t = a) in
-      (Con.levels t c, pc)
-  in
-  List.map (fun (Trail.Pcon.Pcon(con,c,dec) as pc) -> map con c dec pc) l
-
-let compare_level_con (l1,_) (l2,_) = - (Levels.compare l1 l2)
-
-let sort_lcon l = List.sort compare_level_con l
-
-let merge_lcon l1 l2 = List.merge compare_level_con l1 l2
-
-let lcon_to_node l =
-  let map (type a) con (c:a) =
-    let module Con = (val (ConRegistry.get con) : Con with type t = a) in
-    Con.apply_learnt c
-  in
-  List.map (fun (Trail.Pcon.Pcon(con,c,_)) -> map con c) l
-
 let _or = ref (fun _ -> assert false)
 let _set_true = ref (fun _ _ _ -> assert false)
 let _equality = ref (fun _ _ -> assert false)
@@ -305,62 +309,108 @@ let apply_learnt d n =
 
 module Learnt = Node
 
-let learn trail (Trail.Pexp.Pexp(_,exp,x) as pexp) =
-  Debug.dprintf0 debug "[Conflict] @[Learning@]";
-  let t = trail in
-  let module Exp = (val (ExpRegistry.get exp)) in
-  Debug.dprintf2 debug "[Conflict] @[The contradiction: %a@]"
-    pp_pexp pexp;
-  let l = Exp.from_contradiction trail x in
-  let lcon = sort_lcon (convert_lcon t l) in
-  Debug.dprintf2 debug "[Conflict] @[Initial conflict:%a@]"
-    (Pp.list Pp.comma pp_lcon) lcon;
-  let analysis_done lv l =
+
+module TodoList : sig
+  val merge: Conflict.t -> Trail.Pcon.t list -> unit
+
+  type state =
+    | Finish of (Age.t * (Node.t * parity) list * Node.t Bag.t)
+    | Next of Age.t * Trail.Pcon.t
+
+  val state: Conflict.t -> state
+end = struct
+
+  let convert t l =
+    let map (type a) con (c:a) dec pc =
+      if dec = `Dec then (Levels.No,pc)
+      else
+        let module Con = (val (ConRegistry.get con) : Con with type t = a) in
+        (Con.levels t c, pc)
+    in
+    List.map (fun (Trail.Pcon.Pcon(con,c,dec) as pc) -> map con c dec pc) l
+
+  let compare_level_con (l1,_) (l2,_) = - (Levels.compare l1 l2)
+
+  let sort l = List.sort compare_level_con l
+
+  let merge t l2 =
+    let l2 = convert t l2 in
+    let l2 = sort l2 in
+      Debug.dprintf2 debug "[Conflict] @[Analyse resulted in: %a@]"
+        (Pp.list Pp.comma pp_lcon) l2;
+    t.todolist <- List.merge compare_level_con l2 t.todolist
+
+  let analysis_done t lv l =
     let backtrack_level = Levels.get_second_last lv in
     Debug.dprintf4 debug "[Conflict] @[End analysis with (bl %a): %a@]"
       Age.pp backtrack_level
       (Pp.list Pp.comma pp_lcon) l;
     (** remove the one before the first decision (level 0)) *)
     let l = List.fold_left (fun acc (lv,(Trail.Pcon.Pcon(_,_,dec) as c)) ->
-        if dec = `NoDec && Levels.before_first_dec t lv then acc else c::acc
+        if dec = `NoDec && Levels.before_first_dec t.trail lv then acc else c::acc
       ) [] l in
     (backtrack_level, l)
-  in
-  (** last_dec_done keep separate the conflict obtained from the
-      explanation of the last decision (could return its input) *)
-  let rec aux = function
-    | [] -> assert false (** absurd: understand why *)
-    | (Levels.No,_)::_                           -> assert false (** absurd: understand when *)
-    | (l1,_)::_ as l when Levels.before_last_dec t l1 ->
-      analysis_done l1 l
-    | (l1,_)::[] as l when Levels.at_most_one_after_last_dec t l1 ->
-      analysis_done l1 l
-    | (l1,_)::(l2,_)::_ as l when Levels.at_most_one_after_last_dec t l1 && Levels.before_last_dec t l2 ->
-      analysis_done (Levels.merge l1 l2) l
+
+  let to_nodes l =
+    let map (type a) con (c:a) =
+      let module Con = (val (ConRegistry.get con) : Con with type t = a) in
+      Con.apply_learnt c
+    in
+    List.map (fun (Trail.Pcon.Pcon(con,c,_)) -> map con c) l
+
+  type state =
+    | Finish of (Age.t * (Node.t * parity) list * Node.t Bag.t)
+    | Next of Age.t * Trail.Pcon.t
+
+  let finish t lv =
+    let backtrack_level, l = analysis_done t lv t.todolist in
+    let fold useful (type a) (con:a Con.t) (c:a) =
+      let module Con = (val ConRegistry.get con) in
+      Bag.concat useful (Con.useful_nodes c)
+    in
+    let useful =
+      List.fold_left
+        (fun acc (Trail.Pcon.Pcon(con,c,_)) -> fold acc con c)
+        Bag.empty l
+    in
+    let l = to_nodes l in
+    (** The clause is the negation of the conjunction of the hypothesis *)
+    let l = List.map (fun (c,p) -> (c,match p with | Neg -> Pos | Pos -> Neg)) l in
+    Finish (backtrack_level, l, useful)
+
+  let state t =
+    match t.todolist with
+    | [] -> assert false
+    | (l1,_)::_  when Levels.before_last_dec t.trail l1 ->
+      finish t l1
+    | (l1,_)::[] when Levels.at_most_one_after_last_dec t.trail l1 ->
+      finish t l1
+    | (l1,_)::(l2,_)::_ when
+        Levels.at_most_one_after_last_dec t.trail l1 && Levels.before_last_dec t.trail l2 ->
+      finish t (Levels.merge l1 l2)
     | (l1,pcon)::lcon ->
-      let age = Levels.get_last l1 in
-      let pexp = Trail.get_pexp t age in
+      t.todolist <- lcon;
+      Next(Levels.get_last l1,pcon)
+end
+
+let learn trail (Trail.Pexp.Pexp(_,exp,x) as pexp) =
+  Debug.dprintf0 debug "[Conflict] @[Learning@]";
+  let t = create_env trail in
+  let module Exp = (val (ExpRegistry.get exp)) in
+  Debug.dprintf2 debug "[Conflict] @[The contradiction: %a@]"
+    pp_pexp pexp;
+  let l = Exp.from_contradiction t x in
+  TodoList.merge t l;
+  let rec aux t =
+    match TodoList.state t with
+    | Finish(backtrack,l,useful) -> backtrack,!_or l,useful
+    | Next(age,pcon) ->
+      let pexp = Trail.get_pexp t.trail age in
       let lcon' = Conflict.analyse t pexp pcon in
-      let lcon' = convert_lcon t lcon' in
-      Debug.dprintf4 debug "[Conflict] @[[%a] Analyse resulted in: %a@]"
-        Age.pp age (Pp.list Pp.comma pp_lcon) lcon';
-      let lcon = merge_lcon (sort_lcon lcon') lcon in
-      aux lcon
+      TodoList.merge t lcon';
+      aux t
   in
-  let backtrack_level, l = aux lcon in
-  let fold useful (type a) (con:a Con.t) (c:a) =
-    let module Con = (val ConRegistry.get con) in
-    Bag.concat useful (Con.useful_nodes c)
-  in
-  let useful =
-    List.fold_left
-      (fun acc (Trail.Pcon.Pcon(con,c,_)) -> fold acc con c)
-      Bag.empty l
-  in
-  let l = lcon_to_node l in
-  (** The clause is the negation of the conjunction of the hypothesis *)
-  let l = List.map (fun (c,p) -> (c,match p with | Neg -> Pos | Pos -> Neg)) l in
-  backtrack_level, !_or l, useful
+  aux t
 
 
 module EqCon = struct
@@ -423,10 +473,10 @@ module EqCon = struct
     then a, b
     else b, a
 
-  let create_eq l r =
+  let create_eq ?dec l r =
     if Node.equal l r
     then []
-    else [Trail.Pcon.pcon key {l;r}]
+    else [Trail.Pcon.pcon ?dec key {l;r}]
 
 end
 
@@ -518,3 +568,12 @@ module Specific = struct
     end)
 
 end
+
+
+let () = Exn_printer.register (fun fmt exn ->
+    match exn with
+    | Conflict.NeverMerged(n1,n2) ->
+      Format.fprintf fmt "age_merge: node %a and %a have not been merged."
+        Node.pp n1 Node.pp n2
+    | exn -> raise exn
+  )

@@ -49,6 +49,9 @@ type t = {
 
   (* Step options *)
   step_limit  : int;
+
+  (* seed for shuffling *)
+  seed_shuffle  : int option;
 }
 (** The aggregate type for all command line options *)
 

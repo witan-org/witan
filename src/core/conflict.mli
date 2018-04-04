@@ -174,7 +174,7 @@ module EqCon : sig
   val orient_split: Conflict.t -> t -> Node.t -> Node.t -> Node.t * Node.t
   (** orient the given node (a,b), l=a=b=r or l=b=a=r, in order to have l=fst=snd=r *)
 
-  val create_eq: Node.t -> Node.t -> Trail.Pcon.t list
+  val create_eq: ?dec:unit -> Node.t -> Node.t -> Trail.Pcon.t list
 
   val apply_learnt: t -> Typedef.Node.t * parity
 end
