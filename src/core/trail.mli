@@ -39,6 +39,7 @@ module Age: sig
   val pred: t -> t
   val succ: t -> t
   val to_int: t -> int
+  val of_int: int -> t
 
   val (<) : t -> t -> bool
   val (<=): t -> t -> bool

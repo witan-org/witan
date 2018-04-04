@@ -46,6 +46,7 @@ module Age = struct
   let pred x = x - 1
   let succ x = x + 1
   let to_int x = x
+  let of_int x = x
 
   let (<)  : t -> t -> bool = (<)
   let (<=) : t -> t -> bool = (<=)

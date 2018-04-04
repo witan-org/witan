@@ -179,13 +179,30 @@ module TrailCache = Stdlib.MkDatatype(struct
 type conflict = {
   trail : Trail.t;
   trail_cache : Trail.Age.t option TrailCache.H.t;
-  mutable todolist : (Levels.t * Trail.Pcon.t) list;
+  mutable index: int;
+  mutable nb_in_todolist : int;
+  todolist : (Trail.Age.t * Trail.Pcon.t) list array;
+  mutable fromdec  : Trail.Pcon.t list;
+  mutable levels_before_last_dec : Levels.t;
+  mutable before_last_dec : Trail.Pcon.t list;
+  mutable before_first_dec : Trail.Pcon.t list;
 }
 
-let create_env trail = {
+let create_env trail =
+  Debug.dprintf4 debug "create_env %a %a"
+    Trail.Age.pp (Trail.current_age trail)
+    Trail.Age.pp (Trail.last_dec trail);
+  let size = 1 + Age.to_int (Trail.current_age trail) - Age.to_int (Trail.last_dec trail)  in
+  {
   trail;
   trail_cache = TrailCache.H.create 256;
-  todolist = [];
+  index = size-1;
+  nb_in_todolist = 0;
+  todolist = Array.make size [];
+  fromdec = [];
+  levels_before_last_dec = Levels.No;
+  before_last_dec = [];
+  before_first_dec = [];
 }
 
 module type Exp = sig
@@ -334,21 +351,36 @@ end = struct
   let sort l = List.sort compare_level_con l
 
   let merge t l2 =
-    let l2 = convert t l2 in
-    let l2 = sort l2 in
-      Debug.dprintf2 debug "[Conflict] @[Analyse resulted in: %a@]"
-        (Pp.list Pp.comma pp_lcon) l2;
-    t.todolist <- List.merge compare_level_con l2 t.todolist
+    Debug.dprintf2 debug "[Conflict] @[Analyse resulted in: %a@]"
+      (Pp.list Pp.comma pp_pcon) l2;
+    let iter (type a) con (c:a) dec pc =
+      if dec = `Dec
+      then t.fromdec <- pc::t.fromdec
+      else
+        let module Con = (val (ConRegistry.get con) : Con with type t = a) in
+        let lv = Con.levels t c in
+        if Levels.before_first_dec t.trail lv
+        then t.before_first_dec <- pc::t.before_first_dec
+        else if Levels.before_last_dec t.trail lv
+        then begin
+          t.before_last_dec <- pc::t.before_last_dec;
+          t.levels_before_last_dec <- Levels.merge lv t.levels_before_last_dec;
+        end
+        else
+          let index = Age.to_int (Levels.get_last lv) - Age.to_int (Trail.last_dec t.trail) in
+          t.todolist.(index) <- (Levels.get_second_last lv,pc)::t.todolist.(index);
+    in
+    List.iter (fun (Trail.Pcon.Pcon(con,c,dec) as pc) -> iter con c dec pc) l2
 
-  let analysis_done t lv l =
+  let analysis_done t last =
+    let lv,last = match last with
+      | None -> t.levels_before_last_dec, []
+      | Some (lv,c) -> Levels.add t lv t.levels_before_last_dec, [c] in
     let backtrack_level = Levels.get_second_last lv in
+    let l = List.rev_append last (List.rev_append t.fromdec t.before_last_dec) in
     Debug.dprintf4 debug "[Conflict] @[End analysis with (bl %a): %a@]"
       Age.pp backtrack_level
-      (Pp.list Pp.comma pp_lcon) l;
-    (** remove the one before the first decision (level 0)) *)
-    let l = List.fold_left (fun acc (lv,(Trail.Pcon.Pcon(_,_,dec) as c)) ->
-        if dec = `NoDec && Levels.before_first_dec t.trail lv then acc else c::acc
-      ) [] l in
+      (Pp.list Pp.comma pp_pcon) l;
     (backtrack_level, l)
 
   let to_nodes l =
@@ -362,8 +394,8 @@ end = struct
     | Finish of (Age.t * (Node.t * parity) list * Node.t Bag.t)
     | Next of Age.t * Trail.Pcon.t
 
-  let finish t lv =
-    let backtrack_level, l = analysis_done t lv t.todolist in
+  let finish t last =
+    let backtrack_level, l = analysis_done t last in
     let fold useful (type a) (con:a Con.t) (c:a) =
       let module Con = (val ConRegistry.get con) in
       Bag.concat useful (Con.useful_nodes c)
@@ -378,19 +410,22 @@ end = struct
     let l = List.map (fun (c,p) -> (c,match p with | Neg -> Pos | Pos -> Neg)) l in
     Finish (backtrack_level, l, useful)
 
-  let state t =
-    match t.todolist with
-    | [] -> assert false
-    | (l1,_)::_  when Levels.before_last_dec t.trail l1 ->
-      finish t l1
-    | (l1,_)::[] when Levels.at_most_one_after_last_dec t.trail l1 ->
-      finish t l1
-    | (l1,_)::(l2,_)::_ when
-        Levels.at_most_one_after_last_dec t.trail l1 && Levels.before_last_dec t.trail l2 ->
-      finish t (Levels.merge l1 l2)
-    | (l1,pcon)::lcon ->
-      t.todolist <- lcon;
-      Next(Levels.get_last l1,pcon)
+  let rec state t =
+    Debug.dprintf2 debug "state: %i %i" t.index (Array.length t.todolist);
+    if t.index = -1
+    then finish t None (** a decision that directly make a conflict *)
+    else
+      match t.todolist.(t.index) with
+      | [] ->
+        if t.index = 0
+        then finish t None
+        else begin t.index <- t.index - 1; state t end
+      | ((a,_) as p)::_ when t.nb_in_todolist = 1 && Trail.before_last_dec t.trail a ->
+        finish t (Some p)
+      | (_,c)::l ->
+        t.nb_in_todolist <- t.nb_in_todolist - 1;
+        t.todolist.(t.index) <- l;
+        Next(Age.of_int (t.index + (Age.to_int (Trail.last_dec t.trail))), c)
 end
 
 let learn trail (Trail.Pexp.Pexp(_,exp,x) as pexp) =
