@@ -32,6 +32,8 @@ let () =
     | `Error `Exn -> exit 1
     | `Ok opts -> opts
   in
+  List.iter (fun f -> Witan_popop_lib.Debug.set_flag f) opts.Options.debug_flags;
+  Witan_popop_lib.Debug.(if test_flag stack_trace then Printexc.record_backtrace true);
   begin match opts.Options.seed_shuffle with
     | None   -> Witan_stdlib.Shuffle.set_shuffle None;
     | Some i ->  Witan_stdlib.Shuffle.set_shuffle (Some [|i|]);
@@ -49,8 +51,7 @@ let () =
     let res =
     Witan_solver.Scheduler.run
       ~theories
-      ~limit:1000
-    (* :(if opts.Options.step_limit < 0 then None else Some opts.Options.step_limit) *)
+      ?limit:(if opts.Options.step_limit < 0 then None else Some opts.Options.step_limit)
       (fun d ->
          Gen.iter (fun stmt ->
              let open Dolmen.Statement in

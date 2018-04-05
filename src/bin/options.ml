@@ -48,6 +48,9 @@ type t = {
 
   (* seed for shuffling *)
   seed_shuffle  : int option;
+
+  (* debug flags *)
+  debug_flags : Witan_popop_lib.Debug.flag list;
 }
 
 (* Creating option records *)
@@ -58,8 +61,8 @@ let mk_input_options f language =
   let file = Filename.basename f in
   { dir; file; language; }
 
-let mk input time_limit size_limit step_limit type_only seed_shuffle =
-  { input; time_limit; size_limit; step_limit; type_only; seed_shuffle }
+let mk input time_limit size_limit step_limit type_only seed_shuffle debug_flags =
+  { input; time_limit; size_limit; step_limit; type_only; seed_shuffle; debug_flags }
 
 (* Argument converters *)
 (* ************************************************************************ *)
@@ -140,6 +143,22 @@ let parse_size arg =
 let c_time = parse_time, print_time
 let c_size = parse_size, print_size
 
+(* Debug option *)
+let debug_flags_options = "DEBUG FLAGS"
+
+let debug =
+  let list_flags =
+    List.map (fun (name,flag,_,desc) ->
+        let doc = Format.asprintf "%a" Witan_popop_lib.Pp.formatted desc in
+        let info = Cmdliner.Arg.info ["debug-"^name] ~doc ~docs:debug_flags_options in
+        flag, info
+      )
+      (Witan_popop_lib.Debug.list_flags ())
+
+  in
+  Cmdliner.Arg.(value & vflag_all [] list_flags)
+
+
 (* Command terms *)
 (* ************************************************************************ *)
 
@@ -148,6 +167,7 @@ let common_options = "COMMON OPTIONS"
 let man = [
   `S common_options;
   `P "Common options for the prover";
+  `S debug_flags_options;
 ]
 
 let info = Cmdliner.Term.(info ~man ~sdocs:common_options ~version:"0.1" "witan")
@@ -192,4 +212,4 @@ let all =
     let doc = {|Stop the program after parsing and typing.|} in
     Cmdliner.Arg.(value & flag & info ["type-only"] ~doc)
   in
-  Cmdliner.Term.(const mk $ input_options $ time $ size $ step $ type_only $ seed)
+  Cmdliner.Term.(const mk $ input_options $ time $ size $ step $ type_only $ seed $ debug)

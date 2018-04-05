@@ -52,6 +52,9 @@ type t = {
 
   (* seed for shuffling *)
   seed_shuffle  : int option;
+
+  (* debug flags *)
+  debug_flags : Witan_popop_lib.Debug.flag list;
 }
 (** The aggregate type for all command line options *)
 
