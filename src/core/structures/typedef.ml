@@ -261,8 +261,8 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
       if Simple_vector.is_uninitialized Node.names i then
         let s = Strings.find_new_name Node.used_names ""
         (** TODO use Sem.pp or Sem.print_debug *) in
-        Debug.dprintf3 debug_create "[Egraph] @[index %a into @@%s@]"
-          D.pp v s;
+        Debug.dprintf3 debug_create "[Egraph] @[@@%s is %a@]"
+          s D.pp v;
         Simple_vector.set Node.names i s
     end;
     node
@@ -316,6 +316,7 @@ end
 
 module type RegisteredValue = sig
   type s
+  module V : Value with type t = s
   val key: s value
   (** nodevalue *)
   include Datatype
@@ -339,8 +340,25 @@ module type RegisteredValue = sig
 
 end
 
+
+module RegisteredValueRegistry = Value.Make_Registry(struct
+    type 'a data = (module RegisteredValue with type s = 'a)
+    let pp (type a) (value: a data) =
+      let module RegisteredValue = (val value) in
+      RegisteredValue.V.pp
+    let key (type a) (value: a data) =
+      let module RegisteredValue = (val value) in
+      RegisteredValue.key
+  end)
+
+let get_registered_value = RegisteredValueRegistry.get
+
+
 module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
 
+  module All = struct
+
+  module V = D
   module HC = Hashcons.MakeTag(struct
       open Node
       type t = nodevalue
@@ -393,8 +411,8 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
     begin
       if Simple_vector.is_uninitialized Node.names i then
         let s = Strings.find_new_name Node.used_names basename in
-        Debug.dprintf3 debug_create "[Egraph] @[index %a into @@%s@]"
-          D.pp v s;
+        Debug.dprintf3 debug_create "[Egraph] @[@@%s is %a@]"
+          s D.pp v;
         Simple_vector.set Node.names i s
     end;
     node
@@ -417,8 +435,12 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
   let coerce_nodevalue: Values.t -> t = function
     | Node.Value(_,_,value',_) as v -> assert (Value.equal value' D.key); v
 
+  end
+
+  include All
   let () =
     ValueRegistry.register (module D: Value with type t = D.t);
+    RegisteredValueRegistry.register (module All: RegisteredValue with type s = D.t);
     Node.ValueIndex.set Node.valueindex D.key (fun v ty -> index v ty)
 
 end

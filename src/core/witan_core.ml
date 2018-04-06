@@ -52,10 +52,12 @@ module Value = struct
   let print = Typedef.print_value
 
   module type Value = Typedef.Value
+  module type Registered = Typedef.RegisteredValue
 
   module Register = Typedef.RegisterValue
 
   let get = Typedef.get_value
+  let get_registered = Typedef.get_registered_value
 end
 
 module Values = Typedef.Values

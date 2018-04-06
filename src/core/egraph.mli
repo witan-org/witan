@@ -107,6 +107,8 @@ module Delayed : sig
     (** wakeup when this node is registered *)
   val attach_reg_sem: t -> 'a Sem.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when a new semantical class is registered *)
+  val attach_reg_value: t -> 'a Value.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+    (** wakeup when a new value is registered *)
   val attach_node: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when it is not anymore the representative class *)
 

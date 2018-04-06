@@ -85,6 +85,7 @@ module Dis : sig
   type t
   type elt
   val pp: t Pp.pp
+  val empty: t
   val of_node: ThE.t -> elt
   val to_node: elt -> ThE.t
   val test_disjoint: (elt -> Trail.Age.t -> unit) -> t -> t -> t
@@ -93,12 +94,14 @@ module Dis : sig
   val inter : t -> t -> t
   val is_empty : t -> bool
   val choose : t -> elt * Trail.Age.t
+  val iter : (elt -> Trail.Age.t -> unit) -> t -> unit
 end = struct
   type t = Trail.Age.t ThE.M.t
   type elt = ThE.t
+  let empty = ThE.M.empty
   let pp fmt s =
     Format.fprintf fmt "{%a}"
-      (Pp.iter2 ThE.M.iter Pp.nothing Pp.nothing ThE.pp Pp.nothing) s
+      (Pp.iter2 ThE.M.iter Pp.comma Pp.colon ThE.pp Trail.Age.pp) s
   let of_node x = x
   let to_node x = x
   let test_disjoint f m1 m2 =
@@ -108,9 +111,24 @@ end = struct
   let is_empty = ThE.M.is_empty
   let inter m1 m2 = ThE.M.inter (fun _ v1 v2 -> assert (Trail.Age.equal v1 v2); Some v2) m1 m2
   let choose m1 = ThE.M.choose m1
+  let iter = ThE.M.iter
 end
 
 let dom : Dis.t Dom.t = Dom.create_key "dis"
+
+(** For each value key give the value *)
+module MValues = Value.MkMap(struct type ('a, _) t = 'a end)
+
+type exp =
+  | Merge of Trail.Pexp.t * Node.t * Node.t * Dis.elt * Trail.Age.t
+  | SubstUpTrue of ThE.t * Node.t (* e1 *) * Node.t (* e2 *) * Node.t
+  | SubstUpFalse of ThE.t * (Node.t * (Dis.t option * unit MValues.t)) list
+  | SubstDownTrue of ThE.t
+  | SubstDownFalse of ThE.t * Dis.elt
+  | Dec of Node.t * Node.t
+
+let exp : exp Trail.Exp.t =
+  Trail.Exp.create_key "Equality"
 
 module D = struct
   type t = Dis.t
@@ -121,12 +139,6 @@ module D = struct
     | None, None -> true
     | _ -> false
 
-  type expmerge =
-  | Merge of Trail.Pexp.t * Node.t * Node.t * Dis.elt * Trail.Age.t
-
-  let expmerge : expmerge Trail.Exp.t =
-    Trail.Exp.create_key "Equality.merge"
-
   let merge d pexp (s1,cl1) (s2,cl2) _ =
     match s1, s2 with
     | None, None -> raise Impossible
@@ -136,7 +148,7 @@ module D = struct
       Delayed.set_dom_premerge d dom cl1 s
     | Some s1, Some s2 ->
       let s = Dis.test_disjoint (fun i age ->
-          let pexp = Delayed.mk_pexp d expmerge (Merge(pexp,cl1,cl2,i,age)) in
+          let pexp = Delayed.mk_pexp d exp (Merge(pexp,cl1,cl2,i,age)) in
           Delayed.contradiction d pexp) s1 s2 in
       Delayed.set_dom_premerge d dom cl1 s;
       Delayed.set_dom_premerge d dom cl2 s
@@ -186,9 +198,6 @@ let new_tag n age =
 
 exception Found of Node.t * Node.t
 
-(** For each value key give the value *)
-module MValues = Value.MkMap(struct type ('a, _) t = 'a end)
-
 let find_not_disequal d s =
   let is_disequal (dis1,values1) (dis2,values2) =
     (match dis1, dis2 with
@@ -236,16 +245,6 @@ let find_not_disequal d s =
   with Found (cl1,cl2) ->
     `Found (cl1,cl2)
 
-type expsubst =
-| SubstUpTrue of ThE.t * Node.t (* e1 *) * Node.t (* e2 *) * Node.t
-| SubstUpFalse of ThE.t * (Node.t * (Dis.t option * unit MValues.t)) list
-| SubstDownTrue of ThE.t
-| SubstDownFalse of ThE.t * Dis.elt
-| Dec of Node.t * Node.t
-
-let expsubst : expsubst Trail.Exp.t =
-  Trail.Exp.create_key "Equality.subst"
-
 let norm_set d the =
   let v = ThE.sem the in
   let own = ThE.node the in
@@ -259,7 +258,7 @@ let norm_set d the =
     false
   with Found (e1,e2) ->
     (** TODO remove that and choose what to do. ex: int real *)
-    let pexp = Delayed.mk_pexp d expsubst (SubstUpTrue (the,e1,e2,own)) in
+    let pexp = Delayed.mk_pexp d exp (SubstUpTrue (the,e1,e2,own)) in
     Bool.set_true d pexp own;
     true
 
@@ -274,7 +273,7 @@ module ChoEquals = struct
     Debug.dprintf6 print_decision
       "[Equality] @[decide on merge of %a and %a in %a@]"
       Node.pp cl1 Node.pp cl2 ThE.pp the;
-    let pexp = Delayed.mk_pexp d expsubst (Dec(cl1,cl2)) in
+    let pexp = Delayed.mk_pexp d exp (Dec(cl1,cl2)) in
     Delayed.register d cl1;
     Delayed.register d cl2;
     Delayed.merge d pexp cl1 cl2
@@ -289,7 +288,7 @@ module ChoEquals = struct
       else
         match find_not_disequal d v with
         | `AllDiff al ->
-          let pexp = Delayed.mk_pexp d expsubst (SubstUpFalse(the,al)) in
+          let pexp = Delayed.mk_pexp d exp (SubstUpFalse(the,al)) in
           Bool.set_false d pexp own;
           DecNo
         | `Found (cl1,cl2) ->
@@ -312,19 +311,19 @@ let norm_dom d the =
       let age = Trail.Age.succ (Egraph.Delayed.current_age d) in
       let dis, stag = new_tag the age in
       let pexp =
-        Delayed.mk_pexp d expsubst (SubstDownFalse(the,dis)) in
+        Delayed.mk_pexp d exp (SubstDownFalse(the,dis)) in
       Egraph.Delayed.add_pexp d pexp;
       Node.S.iter (fun cl -> set_dom d pexp cl (stag ())) v;
       Demon.AliveStopped
     | Some true ->
       begin match Th.only_two v with
         | Some (cl1,cl2) ->
-          let pexp = Delayed.mk_pexp d expsubst (SubstDownTrue(the)) in
+          let pexp = Delayed.mk_pexp d exp (SubstDownTrue(the)) in
           Delayed.merge d pexp cl1 cl2; Demon.AliveStopped
         | None ->
           match find_not_disequal d v with
           | `AllDiff al ->
-            let pexp = Delayed.mk_pexp d expsubst (SubstUpFalse(the,al)) in
+            let pexp = Delayed.mk_pexp d exp (SubstUpFalse(the,al)) in
             Bool.set_false d pexp own; (** contradiction *)
             raise Impossible
           | `Found _ ->
@@ -333,7 +332,7 @@ let norm_dom d the =
     | None ->
       match find_not_disequal d v with
       | `AllDiff al ->
-        let pexp = Delayed.mk_pexp d expsubst (SubstUpFalse(the,al)) in
+        let pexp = Delayed.mk_pexp d exp (SubstUpFalse(the,al)) in
         Bool.set_false d pexp own;
         Demon.AliveStopped
       | `Found _ -> (** they are still not proved disequal *)
@@ -465,36 +464,15 @@ end
 
 let () = Conflict.register_con(module ConDis)
 
-module ExpMerge = struct
+module Exp = struct
   open Conflict
-  open D
-  type t = expmerge
+
+  type t = exp
 
   let pp fmt = function
     | Merge  (pexp,cl1,cl2,i,_)   ->
       Format.fprintf fmt "Merge!(%a,%a,%a,%a)"
         pp_pexp pexp Node.pp cl1 Node.pp cl2 ThE.pp (Dis.to_node i)
-
-
-  let analyse _ _ _ = raise Impossible
-
-  let from_contradiction t (Merge(pexp,cl1,cl2,i,age)) =
-    let lcon = Conflict.analyse t pexp (Trail.Pcon.pcon EqCon.key {l=cl1;r=cl2}) in
-    let diff = ConDis.create_diff t cl1 cl2 i age in
-    diff::lcon
-
-  let key = expmerge
-
-end
-
-let () = Conflict.register_exp(module ExpMerge)
-
-module ExpSubst = struct
-  open Conflict
-
-  type t = expsubst
-
-  let pp fmt = function
     | SubstUpTrue    (v,e1,e2,cl)   -> (** two are equals *)
       Format.fprintf fmt "SubstUpTrue(%a,%a,%a,%a)"
         ThE.pp v Node.pp e1 Node.pp e2 Node.pp cl
@@ -521,26 +499,30 @@ module ExpSubst = struct
       let lcon = Conflict.split t pcon own Bool._false in
       let al = CCList.diagonal al in
       let fold lcon ((e1,(dis1,val1)),(e2,(dis2,val2))) =
+        let diff_value () = (** different values *)
+          let fold2_inter (type a) (k:a Value.t) v1 v2 acc =
+            let module V = (val Value.get k) in
+            if not (V.equal v1 v2) then
+              (EqCon.create_eq e1 (Node.index_value k v1 (Node.ty e1))) @
+              (EqCon.create_eq e2 (Node.index_value k v2 (Node.ty e2))) @
+              acc
+            else acc
+          in
+          let lcon' = MValues.fold2_inter {fold2_inter} val1 val2 lcon in
+          assert (not (lcon == lcon')); (** One is different *)
+          lcon'
+        in
         match dis1, dis2 with
         | Some dis1, Some dis2 ->
           let dis = Dis.inter dis1 dis2 in
-          if Dis.is_empty dis then
-            (** different values *)
-            let fold2_inter (type a) (k:a Value.t) v1 v2 acc =
-              let module V = (val Value.get k) in
-              if not (V.equal v1 v2) then
-                (EqCon.create_eq e1 (Node.index_value k v1 (Node.ty e1))) @
-                (EqCon.create_eq e2 (Node.index_value k v2 (Node.ty e2))) @
-                acc
-              else acc
-            in
-            MValues.fold2_inter {fold2_inter} val1 val2 lcon
+          if Dis.is_empty dis
+          then diff_value ()
           else
-          (** choose the oldest? *)
-          let d,age = Dis.choose dis in
-          let diff = ConDis.create_diff t e1 e2 d age in
-          diff::lcon
-        | _ -> raise Impossible
+            (** choose the oldest? *)
+            let d,age = Dis.choose dis in
+            let diff = ConDis.create_diff t e1 e2 d age in
+            diff::lcon
+        | _ -> diff_value ()
       in
       List.fold_left fold lcon al
     | SubstDownTrue  (the)   -> begin
@@ -563,15 +545,27 @@ module ExpSubst = struct
       let lcon = Conflict.split t pcon n1 n2 in
       let eq = EqCon.create_eq ~dec:() n1 n2 in
       eq@lcon
+    | Merge(pexp,cl1,cl2,i,age) ->
+      assert (pexp == Trail.pexp_fact);
+      (** only for bool currently *)
+      let cl2' = if Node.equal cl2 Bool._true then Bool._false else Bool._true in
+      let lcon = Conflict.split t pcon cl1 cl2' in
+      let diff = ConDis.create_diff t cl1 cl2 i age in
+      diff::lcon
 
-  let key = expsubst
+  let key = exp
 
-  let from_contradiction _ _ = raise Impossible
+  let from_contradiction t = function
+    | Merge(pexp,cl1,cl2,i,age) ->
+      let lcon = Conflict.analyse t pexp (Trail.Pcon.pcon EqCon.key {l=cl1;r=cl2}) in
+      let diff = ConDis.create_diff t cl1 cl2 i age in
+      diff::lcon
+    | _ -> raise Impossible
 
 end
 
 
-let () = Conflict.register_exp(module ExpSubst)
+let () = Conflict.register_exp(module Exp)
 
 
 (** ITE *)
@@ -704,6 +698,67 @@ end
 
 let () = Conflict.register_exp(module ExpITE)
 
+(** {2 Link between diff and values} *)
+(** If can't be a value it they share a diff tag, are different *)
+
+let init_diff_to_value (type a) (type b)
+    ?(already_registered=([]: b list))
+    d0 (value: (module Witan_core_structures.Typedef.RegisteredValue with type s = a and type t = b))
+    ~(they_are_different:(Delayed.t -> Trail.Pexp.t -> Node.t -> a -> unit)) =
+
+  let module Val = (val value) in
+  let propagate_diff d v =
+    let own = Val.node v in
+    let dis = Opt.get_def Dis.empty (Egraph.Delayed.get_dom d dom own) in
+    let iter elt age =
+      let iter n =
+        if not (Delayed.is_equal d own n) then
+          let pexp =
+            Delayed.mk_pexp d exp (Merge(Trail.pexp_fact,n,Val.node v,elt,age)) in
+          they_are_different d pexp n (Val.value v)
+      in
+      Node.S.iter iter (ThE.sem (Dis.to_node elt))
+    in
+    Dis.iter iter dis
+  in
+  let key = Demon.Fast.create (Format.asprintf "DiffToValue.%a" Value.pp Val.key)
+  in
+  let module D = Demon.Fast.Register(struct
+      module Data = Val
+      let key = key
+      let throttle = 100
+      let immediate = false
+
+      let wakeup d = function
+        | Events.Fired.EventDom(_,_,v) ->
+          propagate_diff d v
+        | _ -> raise Impossible
+    end)
+  in
+
+  let init d (v:Val.t) =
+    propagate_diff d v;
+    Demon.Fast.attach d key [Demon.Create.EventDom(Val.node v,dom,v)]
+  in
+  D.init d0;
+  Demon.Fast.register_init_daemon_value
+    ~name:(Format.asprintf "DiffToValue.Init.%a" Value.pp Val.key)
+    (module Val)
+    init
+    d0;
+  List.iter (init d0) already_registered
+
+(** {3 For booleans} *)
+(* Since the module Bool is linked before *)
+
+let bool_init_diff_to_value d =
+  init_diff_to_value
+    d (module Bool.BoolValue)
+    ~they_are_different:(fun d pexp n b ->
+        if not b then Bool.set_true d pexp n
+        else Bool.set_false d pexp n
+      )
+    ~already_registered:[Bool.value_true;Bool.value_false]
 
 (** {2 Interpretations} *)
 let () =
@@ -775,4 +830,5 @@ let th_register env =
   Demon.Fast.attach env
     DaemonInitITE.key [Demon.Create.EventRegSem(ITE.key,())];
   SynTerm.register_converter env converter;
+  bool_init_diff_to_value env;
   ()

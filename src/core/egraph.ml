@@ -907,6 +907,12 @@ module Delayed = struct
     let reg_events = event::reg_events in
     Sem.Vector.set t.env.sem sem reg_events
 
+  let attach_reg_value (type a) t (value : a Value.t) dem event =
+    let event = Events.Wait.Event (dem,event) in
+    let value_table = get_table_value t.env value in
+    let reg_events = event::value_table.reg_events in
+    VValueTable.set t.env.value value {value_table with reg_events}
+
   let attached_reg_node
       (type k) (type d) d node (dem:(k,d) Events.Dem.t) : k Enum.t =
     Enum.from_list

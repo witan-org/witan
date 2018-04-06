@@ -189,6 +189,8 @@ let rec apply_learnt learntdec llearnt t d =
       Conflict.apply_learnt d n;
       S.flush d in
     Bag.iter iter_learnt llearnt;
+    if Conflict.learnt_is_already_true d learntdec
+    then assert false; (** absurd: If it is already true it should not be this conflict *)
     iter_learnt learntdec;
     run_until_dec t d;
     Debug.dprintf0 debug_pushpop "[Scheduler] Learnt applied";

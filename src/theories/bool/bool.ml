@@ -434,7 +434,8 @@ let () =
         | (n,Conflict.Neg) -> (n,true)) l in
     gen false l in
   Conflict._or := gen_or;
-  Conflict._set_true := set_true
+  Conflict._set_true := set_true;
+  Conflict._is_true := is_true
 
 let set_false env pexp node = set_bool env pexp node false
 

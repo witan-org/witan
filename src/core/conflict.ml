@@ -39,7 +39,7 @@ module Levels = struct
     | No
     | One of Age.t
     | Two of Age.t * Age.t
-  [@@ deriving eq]
+  [@@ deriving eq, show]
 
   let pp fmt = function
     | No -> Pp.string fmt "-"
@@ -109,6 +109,14 @@ module Levels = struct
     | No -> assert false
     | One a
     | Two(a,_) -> a
+
+  let get_before_last_dec t = function
+    | No -> Trail.Age.min
+    | One a -> a
+    | Two (a,_) when Trail.before_last_dec t a -> a
+    | Two (_,b) ->
+      assert (Trail.before_last_dec t b);
+      b
 
 end
 
@@ -189,9 +197,6 @@ type conflict = {
 }
 
 let create_env trail =
-  Debug.dprintf4 debug "create_env %a %a"
-    Trail.Age.pp (Trail.current_age trail)
-    Trail.Age.pp (Trail.last_dec trail);
   let size = 1 + Age.to_int (Trail.current_age trail) - Age.to_int (Trail.last_dec trail)  in
   {
   trail;
@@ -318,11 +323,16 @@ end
 
 let _or = ref (fun _ -> assert false)
 let _set_true = ref (fun _ _ _ -> assert false)
+let _is_true = ref (fun _ _ -> assert false)
 let _equality = ref (fun _ _ -> assert false)
 
 let apply_learnt d n =
   Egraph.Delayed.register d n;
   !_set_true d Trail.pexp_fact n
+
+let learnt_is_already_true d n =
+  Egraph.Delayed.is_registered d n &&
+  !_is_true d n
 
 module Learnt = Node
 
@@ -376,7 +386,7 @@ end = struct
     let lv,last = match last with
       | None -> t.levels_before_last_dec, []
       | Some (lv,c) -> Levels.add t lv t.levels_before_last_dec, [c] in
-    let backtrack_level = Levels.get_second_last lv in
+    let backtrack_level = Levels.get_before_last_dec t.trail lv in
     let l = List.rev_append last (List.rev_append t.fromdec t.before_last_dec) in
     Debug.dprintf4 debug "[Conflict] @[End analysis with (bl %a): %a@]"
       Age.pp backtrack_level
@@ -411,7 +421,6 @@ end = struct
     Finish (backtrack_level, l, useful)
 
   let rec state t =
-    Debug.dprintf2 debug "state: %i %i" t.index (Array.length t.todolist);
     if t.index = -1
     then finish t None (** a decision that directly make a conflict *)
     else

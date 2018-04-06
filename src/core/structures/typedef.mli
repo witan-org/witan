@@ -160,6 +160,7 @@ end
 
 module type RegisteredValue = sig
   type s
+  module V : Value with type t = s
   val key: s Value.t
 
   (** nodevalue *)
@@ -187,6 +188,8 @@ module type RegisteredValue = sig
 end
 
 module RegisterValue (D:Value) : RegisteredValue with type s = D.t
+
+val get_registered_value: 'a Value.t -> (module RegisteredValue with type s = 'a)
 
 val check_initialization: unit -> bool
 (** Check if the initialization of all the sem and value have been done *)

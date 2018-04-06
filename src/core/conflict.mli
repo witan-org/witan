@@ -103,6 +103,7 @@ val pp_pexp: Trail.Pexp.t Pp.pp
 module Levels : sig
 
   type t
+  [@@ deriving eq, show]
 
   val empty: t
 
@@ -150,6 +151,7 @@ val learn: Trail.t -> Trail.Pexp.t -> Trail.Age.t * Learnt.t * Node.t Bag.t
 (** Return the backtracking age, the constraint learnt and the useful nodes *)
 
 val apply_learnt: Egraph.Delayed.t -> Learnt.t -> unit
+val learnt_is_already_true: Egraph.Delayed.t -> Learnt.t -> bool
 
 
 (** {2 Generic conflict} *)
@@ -183,3 +185,4 @@ end
 val _or: ((Node.t * parity) list -> Node.t) ref
 val _equality: (Node.t -> Node.t -> Node.t) ref
 val _set_true: (Egraph.Delayed.t -> Trail.Pexp.t -> Node.t -> unit) ref
+val _is_true: (Egraph.Delayed.t -> Node.t -> bool) ref

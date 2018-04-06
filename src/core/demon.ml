@@ -35,6 +35,7 @@ module Create = struct
     | EventRegCl  : Node.t           * 'b -> 'b event
     | EventChange   : Node.t           * 'b -> 'b event
     | EventRegSem :        'a Sem.t  * 'b -> 'b event
+    | EventRegValue :      'a Value.t  * 'b -> 'b event
 
 
     let pp fmt = function
@@ -48,6 +49,8 @@ module Create = struct
         Format.fprintf fmt "changecl of %a" Node.pp node
       | EventRegSem (sem, _)    ->
         Format.fprintf fmt "regsem for %a" Sem.pp sem
+      | EventRegValue (value, _)    ->
+        Format.fprintf fmt "regvalue for %a" Value.pp value
 
 
     type 'b t = 'b event list
@@ -276,6 +279,8 @@ module Key = struct
           Egraph.Delayed.attach_reg_node t node dem.dk_id (k,data)
         | Create.EventRegSem (sem,data) ->
           Egraph.Delayed.attach_reg_sem t sem dem.dk_id (k,data)
+        | Create.EventRegValue (value,data) ->
+          Egraph.Delayed.attach_reg_value t value dem.dk_id (k,data)
       in
       List.iter iter events
 
@@ -463,7 +468,10 @@ module Fast = struct
         | EventChange   (node,data) ->
           Egraph.Delayed.attach_node d node dem.dk_id data
         | EventRegSem (sem,data) ->
-          Egraph.Delayed.attach_reg_sem d sem dem.dk_id data) events
+          Egraph.Delayed.attach_reg_sem d sem dem.dk_id data
+        | EventRegValue (value,data) ->
+          Egraph.Delayed.attach_reg_value d value dem.dk_id data
+      ) events
 
   let register_init_daemon
     (type a)
@@ -489,6 +497,31 @@ module Fast = struct
     let module RDaemonInit = Register(DaemonInit) in
     RDaemonInit.init init_d;
     attach init_d DaemonInit.key [Create.EventRegSem(ThTerm.key,())]
+
+  let register_init_daemon_value
+    (type a)
+    ~name
+    ?(immediate=false)
+    ?(throttle=100)
+    (value: (module Typedef.RegisteredValue with type t = a) )
+    (f:Egraph.Delayed.t -> a -> unit)
+    (init_d:Egraph.Delayed.t)
+    =
+    let module Val = (val value) in
+    let module DaemonInit = struct
+      let key = create name
+      module Data = Stdlib.DUnit
+      let immediate = immediate
+      let throttle = throttle
+      let wakeup d = function
+        | Events.Fired.EventRegValue(value,()) ->
+          let thterm = Val.coerce_nodevalue value in
+          f d thterm
+        | _ -> raise UnwaitedEvent
+    end in
+    let module RDaemonInit = Register(DaemonInit) in
+    RDaemonInit.init init_d;
+    attach init_d DaemonInit.key [Create.EventRegValue(Val.key,())]
 
 
 end

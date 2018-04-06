@@ -33,8 +33,10 @@ module Create : sig
     | EventRegCl  : Node.t           * 'b -> 'b event
     (** Warn when the class is not the representant of its eq-class anymore *)
     | EventChange   : Node.t           * 'b -> 'b event
-    (** a new semantical value 'a appear *)
+    (** a new theory term 'a appear *)
     | EventRegSem :        'a Sem.t  * 'b -> 'b event
+    (** a new value 'a appear *)
+    | EventRegValue :      'a Value.t  * 'b -> 'b event
 
 
   val pp: 'b event Pp.pp
@@ -122,7 +124,6 @@ module Fast: sig
   end
 
   val attach: Egraph.Delayed.t -> 'd t -> 'd Create.t -> unit
-  (** raise AlreadyDead if this key is already dead *)
 
   (** helper *)
   val register_init_daemon:
@@ -133,4 +134,16 @@ module Fast: sig
     (Egraph.Delayed.t -> 'a -> unit) ->
     Egraph.Delayed.t ->
     unit
+    (** *)
+
+  (** helper *)
+  val register_init_daemon_value:
+    name:string ->
+    ?immediate:bool ->
+    ?throttle:int ->
+    (module RegisteredValue with type t = 'a) ->
+    (Egraph.Delayed.t -> 'a -> unit) ->
+    Egraph.Delayed.t ->
+    unit
+    (** *)
 end
