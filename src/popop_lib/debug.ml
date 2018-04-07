@@ -239,7 +239,7 @@ let print_stat fmt (Stat(pp,name,r)) =
     pp !r
 
 let print_stats () =
-  dprintf2 stats "@[%a@]"
+  dprintf2 stats "@[%a@]@\n"
     (Pp.list Pp.newline print_stat)
     !registered_stats
 

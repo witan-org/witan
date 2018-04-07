@@ -15,8 +15,18 @@ if [ "$STEP" != "" ]; then
     STEP="--step $STEP"
 fi
 
-if test "$CVC4" = "$(_build/default/src/bin/witan.exe $SEED $STEP --input=smt2 $1 2>&1)"; then
-  exit 1
+if [ "$INVSTATUS" != "" ]; then
+    OK=0
+    BAD=1
 else
-  exit 0
+    #for deltasmt
+    OK=1
+    BAD=0
+fi
+
+
+if test "$CVC4" = "$(_build/default/src/bin/witan.exe $SEED $STEP --input=smt2 $1 2>&1)"; then
+  exit $OK
+else
+  exit $BAD
 fi
