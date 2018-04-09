@@ -41,4 +41,26 @@ module Q = struct
   let ge = geq
   let two = Q.of_int 2
   include Stdlib.MkDatatype(Q)
+
+  let of_string_decimal =
+    let decimal = Str.regexp "\\(+\\|-\\)?\\([0-9]+\\)\\([.]\\([0-9]*\\)\\)?" in
+    fun s ->
+      if not (Str.string_match decimal s 0) then None
+      else
+        let sgn = match Str.matched_group 1 s with
+          | "-" -> Q.minus_one
+          | "+" -> Q.one
+          | exception Not_found -> Q.one
+          | _ -> assert false in
+        let int_part = Q.of_string (Str.matched_group 2 s) in
+        let dec_part = match Str.matched_group 4 s with
+          | exception Not_found -> Q.zero
+          | "" -> Q.zero
+          | dec ->
+            let l = String.length dec in
+            let dec = Q.of_string dec in
+            let ten = Q.of_int 10 in
+            Witan_popop_lib.Util.foldi (fun acc _ -> Q.(acc * ten)) dec 1 l
+        in
+        Some Q.(sgn * (int_part + dec_part))
 end

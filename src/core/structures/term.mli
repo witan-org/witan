@@ -185,6 +185,41 @@ val ite_term : t
 
 val is_defined: id -> bool
 
+(** {2 Arithmetic } *)
+val _Real : t
+
+val const_real_id: string -> id
+val is_const_real_id: id -> bool
+val const_real_term: string -> t
+val is_const_real_term: t -> bool
+val get_const_real_id: id -> Q.t
+val get_const_real_term: t -> Q.t
+
+val add_real_id : int -> id
+val add_real_term : int -> t
+val is_add_real_id : id -> bool
+val is_add_real_term : t -> bool
+
+val lt_real_id : int -> id
+val lt_real_term : int -> t
+val is_lt_real_id : id -> bool
+val is_lt_real_term : t -> bool
+
+val le_real_id : int -> id
+val le_real_term : int -> t
+val is_le_real_id : id -> bool
+val is_le_real_term : t -> bool
+
+val sub_real_id : id
+val neg_real_id : id
+val mul_real_id : id
+val div_real_id : id
+
+val sub_real_term : t
+val neg_real_term : t
+val mul_real_term : t
+val div_real_term : t
+
 (** {2 Term substitution} *)
 
 module Subst : Map.S with type key = id

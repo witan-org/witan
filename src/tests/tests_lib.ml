@@ -63,3 +63,5 @@ exception ReachStepLimit
 exception Contradiction
 
 let run_exn = Witan_solver.Scheduler.run_exn
+
+let fresh ty s = SynTerm.node_of_term (Term.const (Id.mk s ty))

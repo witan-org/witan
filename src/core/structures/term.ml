@@ -464,21 +464,75 @@ let or_id =
 
 let is_or_id id = Id.H.mem int_of_or_id id
 
+let mk_nary s arg res =
+  let f_id_of_int = Stdlib.DInt.H.create 16 in
+  let int_of_f_id = Id.H.create 16 in
 
-let and_id_of_int = Stdlib.DInt.H.create 16
-let int_of_and_id = Id.H.create 16
+  let f_id =
+    Stdlib.DInt.H.memo (fun i ->
+        let args = CCList.replicate i arg in
+        let id = Id.mk s (arrows args res) in
+        add_defined id;
+        Id.H.add_new Std.Impossible int_of_f_id id i;
+        id
+      )
+      f_id_of_int
+  in
 
-let and_id =
-  Stdlib.DInt.H.memo (fun i ->
-      let args = CCList.replicate i _Prop in
-      let id = Id.mk "&&" (arrows args _Prop) in
+  let is_f_id id = Id.H.mem int_of_f_id id in
+
+  let f_term i = const (f_id i) in
+  let is_f_term = function
+    | {term = Id id} -> is_f_id id
+    | _ -> false in
+  f_id, is_f_id, f_term, is_f_term
+
+
+let and_id, is_and_id, and_term, is_and_term = mk_nary "&&" _Prop _Prop
+
+let _Real_id = Id.mk "Real" _Type
+let _Real = const _Real_id
+
+let const_real_id_of_int = Stdlib.DStr.H.create 16
+let int_of_const_real_id = Id.H.create 16
+
+let const_real_id =
+  (** TODO check the syntax *)
+  Stdlib.DStr.H.memo (fun s ->
+      let q = match Std.Q.of_string_decimal s with
+        | None -> invalid_arg (Printf.sprintf "bad real:%s" s)
+        | Some q -> q
+      in
+      let id = Id.mk s _Real in
       add_defined id;
-      Id.H.add_new Std.Impossible int_of_and_id id i;
+      Id.H.add_new Std.Impossible int_of_const_real_id id q;
       id
     )
-    and_id_of_int
+    const_real_id_of_int
 
-let is_and_id id = Id.H.mem int_of_and_id id
+let is_const_real_id id = Id.H.mem int_of_const_real_id id
+let get_const_real_id id = Id.H.find int_of_const_real_id id
+
+let add_real_id, is_add_real_id, add_real_term, is_add_real_term =
+  mk_nary "add" _Real _Real
+let lt_real_id, is_lt_real_id, lt_real_term, is_lt_real_term =
+  mk_nary "<" _Real _Prop
+let le_real_id, is_le_real_id, le_real_term, is_le_real_term =
+  mk_nary "<=" _Real _Prop
+
+let sub_real_id =
+  Id.mk "sub" (arrows [_Real; _Real] _Real)
+let neg_real_id =
+  Id.mk "neg" (arrows [_Real] _Real)
+let mul_real_id =
+  Id.mk "mul" (arrows [_Real; _Real] _Real)
+let div_real_id =
+  Id.mk "div" (arrows [_Real; _Real] _Real)
+
+let sub_real_term = const sub_real_id
+let neg_real_term = const neg_real_id
+let mul_real_term = const mul_real_id
+let div_real_term = const div_real_id
 
 let ite_id =
   let a_id = Id.mk "a" _Type in
@@ -491,10 +545,13 @@ let or_term i = const (or_id i)
 let is_or_term = function
   | {term = Id id} -> is_or_id id
   | _ -> false
-let and_term i = const (and_id i)
-let is_and_term = function
-  | {term = Id id} -> is_and_id id
+let const_real_term i = const (const_real_id i)
+let is_const_real_term = function
+  | {term = Id id} -> is_const_real_id id
   | _ -> false
+let get_const_real_term = function
+  | {term = Id id} -> get_const_real_id id
+  | _ -> raise Not_found
 let not_term = const not_id
 let true_term = const true_id
 let false_term = const false_id

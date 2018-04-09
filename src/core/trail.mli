@@ -57,6 +57,8 @@ module Pexp : sig
     | Pexp: age * 'a Exp.t * 'a -> t
     (** An explanation. The age indicate the state to consider *)
 
+  val pp: t Pp.pp
+
 end
 
 module Con: Keys.Key
@@ -163,3 +165,7 @@ val add_pexp: t -> Pexp.t -> unit
 
 val age_merge_opt: t -> Node.t -> Node.t -> Age.t option
 (** Give the age at which the given node merged *)
+
+(** backward reference *)
+
+val _pp_pexp: Pexp.t Pp.pp ref

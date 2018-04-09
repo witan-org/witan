@@ -1,0 +1,236 @@
+
+open OUnit
+open Tests_lib
+open Witan_theories_bool
+open Witan_theories_LRA
+open Witan_solver
+open Witan_core
+open Witan_stdlib.Std
+
+let theories = [Bool.th_register; Equality.th_register; Uninterp.th_register; LRA.th_register]
+
+let ($$) f x = f x
+
+let run = Scheduler.run_exn ~nodec:() ~theories
+let run_dec = Scheduler.run_exn ?nodec:None ~theories
+let ($$) f x = f x
+
+(* The tests with rundec check only the result on a model satisfying
+   the hypothesis *)
+
+
+let solve0a () =
+  let a  = fresh Term._Real "ar" in
+  let _1 = LRA.cst Q.one in
+  let a1 = LRA.add a _1 in
+  let env = run $$ fun env ->
+      register env a1; register env _1;
+      merge env a1 _1
+  in
+  assert_bool "a+1 = 1 => a = 0" (is_equal env a LRA.zero)
+
+let solve0b () =
+  let a  = fresh Term._Real "ar" in
+  let _1 = LRA.cst Q.one in
+  let _2 = LRA.cst Q.two in
+  let _4 = LRA.cst (Q.of_int 4) in
+  let a1 = LRA.add a _1 in
+  let _2a2 = LRA.add' Q.two a Q.one _2 in
+  let env = run $$ fun env ->
+      List.iter (register env) [a1;_1;_2;_4;_2a2];
+      merge env a1 _2
+  in
+  assert_bool "a+1 = 2 => 2*a+2 = 4" (is_equal env _2a2 _4)
+
+(* let solve0c () =
+ *   let a  = Variable.cst Term._Real "ar" in
+ *   let b  = Variable.cst Term._Real "br" in
+ *   let _1 = LRA.cst Q.one in
+ *   let a1 = LRA.add a _1 in
+ *   let b1 = LRA.add b _1 in
+ *   let env = run_dec $$ fun env ->
+ *       register env a1; register env b1;
+ *       merge env a1 b1
+ *   in
+ *   assert_bool "a+1 = b+1 => a = b" (is_equal env a b)
+ * 
+ * let solve1 () =
+ *   let a,b  = Shuffle.seq2 (Variable.cst Term._Real) ("ar","br") in
+ *   let _1 = LRA.cst Q.one in
+ *   let a1 = LRA.add a _1 in
+ *   let b1 = LRA.add b _1 in
+ *   let _2 = LRA.cst (Q.of_int 2) in
+ *   let a2 = LRA.add a _2 in
+ *   let b2 = LRA.add b _2 in
+ *   let env = run_dec $$ fun env ->
+ *       Shuffle.seql' (register env) [a1; b1; a2; b2];
+ *       merge env a1 b1
+ *   in
+ *   assert_bool "a+1 = b+1 => a+2 = b+2" (is_equal env a2 b2)
+ * 
+ * let solve2 () =
+ *   let a,b  = Shuffle.seq2 (Variable.cst Term._Real) ("ar","br") in
+ *   let _1 = LRA.cst Q.one in
+ *   let a1 = LRA.add a _1 in
+ *   let b1 = LRA.add b _1 in
+ *   let _2 = LRA.cst (Q.of_int 2) in
+ *   let a2 = LRA.add a _2 in
+ *   let b2 = LRA.add b _2 in
+ *   let env = run_dec $$ fun env ->
+ *       Shuffle.seql' (register env) [a1; b1; a2; b2];
+ *       merge env a2 b1
+ *   in
+ *   assert_bool "a+2 = b+1 => a+1 = b" (is_equal env a1 b)
+ * 
+ * let solve3 () =
+ *   let a,b  = Shuffle.seq2 (Variable.cst Term._Real) ("ar","br") in
+ *   let _1 = LRA.cst Q.one in
+ *   let b1 = LRA.add b _1 in
+ *   let _2 = LRA.cst (Q.of_int 2) in
+ *   let a2 = LRA.add a _2 in
+ *   let _3 = LRA.cst (Q.of_int 3) in
+ *   let env = run $$ fun env ->
+ *       Shuffle.seql [
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [b1;a2];
+ *            merge env a2 b1;
+ *         );
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [a;_2];
+ *            merge env a _2;
+ *         );
+ *         (fun () ->
+ *            register env _3;
+ *         );
+ *       ]
+ *   in
+ *   assert_bool "" (not (is_equal env b _2));
+ *   assert_bool "a+2 = b+1 => a = 2 => b = 3" (is_equal env b _3)
+ * 
+ * 
+ * let solve4 () =
+ *   let a,b,c =
+ *     Shuffle.seq3 (Variable.cst Term._Real) ("ar","br","cr") in
+ *   let t1 = LRA.cst (Q.of_int 2) in
+ *   let t1 = LRA.add t1 c in
+ *   let t1 = LRA.add a t1  in
+ *   let t1' = (LRA.cst (Q.of_int 1)) in
+ *   let t1' = LRA.add b t1' in
+ *   let t2  = a in
+ *   let t2' = LRA.cst (Q.of_int 2) in
+ *   let t2' = LRA.add t2' b in
+ *   let t3' = LRA.cst (Q.of_int (-3)) in
+ *   let env = run_dec $$ fun env ->
+ *       Shuffle.seql [
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t1;t1'];
+ *            merge env t1 t1');
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t2;t2'];
+ *            merge env t2 t2');
+ *         (fun () -> register env t3');
+ *       ]
+ *   in
+ *   assert_bool "a+(2+c) = b+1 => a = 2 + b => c = -3" (is_equal env c t3')
+ * 
+ * 
+ * let solve5 () =
+ *   let a  = Variable.cst Term._Real "ar" in
+ *   let b  = Variable.cst Term._Real "br" in
+ *   let c  = Variable.cst Term._Real "cr" in
+ *   let t1 = LRA.sub b c in
+ *   let t1  = LRA.add a t1  in
+ *   let t1' = (LRA.cst (Q.of_int 2)) in
+ *   let t2  = a in
+ *   let t2' = LRA.cst (Q.of_int 2) in
+ *   let t3 = LRA.add b c in
+ *   let t3' = LRA.add b b in
+ *   let env = run_dec $$ fun env ->
+ *       Shuffle.seql [
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t1;t1'];
+ *            merge env t1 t1');
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t2;t2'];
+ *            merge env t2 t2');
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t3;t3'];)
+ *       ]
+ *   in
+ *   assert_bool "a+(b-c) = 2 => a = 2 => b + c = 2b" (is_equal env t3 t3') *)
+
+
+let basic = "LRA.Basic" &:
+            [solve0a; (* solve0b; solve0c;
+              * solve1; solve2; solve3; solve4; solve5 *) ]
+
+(* let mult0 () =
+ *   let a  = Variable.cst Term._Real "ar" in
+ *   let b  = Variable.cst Term._Real "br" in
+ *   let t1  = LRA.sub a b  in
+ *   let t1' = LRA.mult a b in
+ *   let t2  = a in
+ *   let t2' = LRA.cst (Q.of_int 1) in
+ *   let t3 = LRA.mult_cst (Q.of_int 2) b in
+ *   let t3' = LRA.cst (Q.of_int 1) in
+ *   let env = run $$ fun env ->
+ *       Shuffle.seql [
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t1;t1'];
+ *            merge env t1 t1');
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t2;t2'];
+ *            merge env t2 t2');
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t3;t3'];)
+ *       ]
+ *   in
+ *   assert_bool "a - b = a * b -> a = 1 -> 1 = 2b" (is_equal env t3 t3')
+ * 
+ * (\** test that mult normalization trigger the needed solve *\)
+ * let mult1 () =
+ *   let a  = Variable.cst Term._Real "ar" in
+ *   let b  = Variable.cst Term._Real "br" in
+ *   let c  = Variable.cst Term._Real "cr" in
+ *   let t1  = LRA.mult a b  in
+ *   let t1  = LRA.add a t1  in
+ *   let t1' = LRA.add b c in
+ *   let t1' = LRA.mult t1' a in
+ *   let t2  = a in
+ *   let t2' = LRA.cst (Q.of_int 2) in
+ *   let t3 = c in
+ *   let t3' = LRA.cst (Q.of_int 1) in
+ *   let env = run $$ fun env ->
+ *       Shuffle.seql [
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t1;t1'];
+ *            merge env t1 t1');
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t2;t2'];
+ *            merge env t2 t2');
+ *         (fun () ->
+ *            Shuffle.seql' (register env) [t3;t3'];)
+ *       ]
+ *   in
+ *   assert_bool "a + (a * b) = (b + c) * a -> a = 2 -> c = 1"
+ *     (is_equal env t3 t3')
+ * 
+ * let mult = "LRA.Mult" &: [mult0;mult1]
+ * 
+ * 
+ * let files = ["tests/tests_altergo_arith.split";
+ *              "tests/tests_popop.split";
+ *              "tests/tests_altergo_qualif.split"
+ *             ]
+ * 
+ * let altergo = TestList (List.map Tests_lib.test_split files)
+ * 
+ * let smtlib2sat =
+ *   "smtlib2-lra-sat" >:::
+ *     tests_smt2 Popop_of_smtlib2.Sat "tests/smtlib2/lra/sat/"
+ * 
+ * let smtlib2unsat =
+ *   "smtlib2-lra-unsat" >:::
+ *     tests_smt2 Popop_of_smtlib2.Unsat "tests/smtlib2/lra/unsat/" *)
+
+let tests = TestList [basic;(* (\* mult;*\)altergo; smtlib2sat; smtlib2unsat *)]

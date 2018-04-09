@@ -245,6 +245,8 @@ let register_exp (exp:(module Exp)) =
 
 let pp_pexp fmt (Trail.Pexp.Pexp(_,exp,e)) = ExpRegistry.print exp fmt e
 
+let () = Trail._pp_pexp := pp_pexp
+
 type parity = | Neg | Pos
 let neg_parity = function | Neg -> Pos | Pos -> Neg
 
