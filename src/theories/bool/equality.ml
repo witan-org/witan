@@ -443,7 +443,7 @@ module ConDis = struct
     let n, par = EqCon.apply_learnt {l=c.l1;r=c.r1} in
     n, neg_parity par
 
-  let create_diff t cl1 cl2 i age =
+  let create_diff_far t cl1 cl2 i age =
     let find_origin v cl =
       Node.S.fold_left (fun acc cl0 ->
           match acc with
@@ -459,6 +459,23 @@ module ConDis = struct
     let cl2_0 = Opt.get (find_origin v cl2) in
     let diff = Trail.Pcon.pcon key {l1=cl1;l0=cl1_0;r0=cl2_0;r1=cl2;disequality=ThE.node the; age} in
     diff
+
+    let create_diff_near t cl1 cl2 i age =
+    let find_origin v cl =
+      Node.S.fold_left (fun acc cl0 ->
+          match acc with
+          | Some _ -> acc
+          | None ->
+            match Conflict.age_merge_opt t cl cl0 with
+            | Some _ -> Some cl0
+            | None -> None) None v
+    in
+    let the = Dis.to_node i in
+    let v = ThE.sem the in
+    let cl1_0 = Opt.get (find_origin v cl1) in
+    let cl2_0 = Opt.get (find_origin v cl2) in
+    let diff = Trail.Pcon.pcon key {l1=cl1_0;l0=cl1_0;r0=cl2_0;r1=cl2_0;disequality=ThE.node the; age} in
+    diff, (Trail.Pcon.pcon EqCon.key {l=cl1_0;r=cl2_0})
 
 end
 
@@ -520,7 +537,7 @@ module Exp = struct
           else
             (** choose the oldest? *)
             let d,age = Dis.choose dis in
-            let diff = ConDis.create_diff t e1 e2 d age in
+            let diff = ConDis.create_diff_far t e1 e2 d age in
             diff::lcon
         | _ -> diff_value ()
       in
@@ -550,16 +567,24 @@ module Exp = struct
       (** only for bool currently *)
       let cl2' = if Node.equal cl2 Bool._true then Bool._false else Bool._true in
       let lcon = Conflict.split t pcon cl1 cl2' in
-      let diff = ConDis.create_diff t cl1 cl2 i age in
+      let diff = ConDis.create_diff_far t cl1 cl2 i age in
       diff::lcon
 
   let key = exp
 
+  let far_disequality = Debug.register_flag "far-disequality"
+      ~desc:"Instead of explaining conflict with distinct near the disequality, explain it far from it"
+
   let from_contradiction t = function
     | Merge(pexp,cl1,cl2,i,age) ->
-      let lcon = Conflict.analyse t pexp (Trail.Pcon.pcon EqCon.key {l=cl1;r=cl2}) in
-      let diff = ConDis.create_diff t cl1 cl2 i age in
-      diff::lcon
+      if Debug.test_flag far_disequality then
+        let lcon = Conflict.analyse t pexp (Trail.Pcon.pcon EqCon.key {l=cl1;r=cl2}) in
+        let diff = ConDis.create_diff_far t cl1 cl2 i age in
+        diff::lcon
+      else
+        let diff, eq = ConDis.create_diff_near t cl1 cl2 i age in
+        let lcon = Conflict.analyse t pexp eq in
+        diff::lcon
     | _ -> raise Impossible
 
 end
@@ -701,6 +726,31 @@ let () = Conflict.register_exp(module ExpITE)
 (** {2 Link between diff and values} *)
 (** If can't be a value it they share a diff tag, are different *)
 
+(** Give for a node the values that are different *)
+let iter_on_value_different
+    (type a)
+    (type b)
+    (value: (module Witan_core_structures.Typedef.RegisteredValue with type s = a and type t = b))
+    ~they_are_different
+    (d:Delayed.t)
+    (own:Node.t) =
+  let module Val = (val value) in
+  let dis = Opt.get_def Dis.empty (Egraph.Delayed.get_dom d dom own) in
+  let iter elt age =
+    let iter n =
+      if not (Delayed.is_equal d own n) then
+        match Delayed.get_value d Val.key n with
+        | None -> ()
+        | Some v ->
+        let pexp =
+          Delayed.mk_pexp d exp (Merge(Trail.pexp_fact,own,n,elt,age)) in
+        they_are_different pexp n v
+    in
+    Node.S.iter iter (ThE.sem (Dis.to_node elt))
+  in
+  Dis.iter iter dis
+
+(** Give for a value the nodes that are different *)
 let init_diff_to_value (type a) (type b)
     ?(already_registered=([]: b list))
     d0 (value: (module Witan_core_structures.Typedef.RegisteredValue with type s = a and type t = b))

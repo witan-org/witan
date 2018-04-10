@@ -1011,6 +1011,10 @@ let get_trail t =
    *         t.current_delayed == unsat_delayed); *)
   t.trail
 
+let get_getter t =
+  (* assert (t.current_delayed == dumb_delayed); *)
+  t.current_delayed
+
 
 let new_dec t =
   assert (t.current_delayed == dumb_delayed);
@@ -1047,8 +1051,11 @@ module type Getter = sig
 
 end
 
+module Getter : Getter with type t = Delayed.t = Delayed
+
 module type Ro = sig
-  include Getter
+  type t = private Getter.t
+  include Getter with type t := t
 
   (** {3 Immediate information} *)
   val register : t -> Node.t -> unit

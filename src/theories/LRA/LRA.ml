@@ -28,7 +28,7 @@ open Witan_stdlib.Std
 
 let debug = Debug.register_info_flag
   ~desc:"for the arithmetic theory"
-  "arith"
+  "LRA"
 
 let real : Q.t Value.t = Value.create_key "Q"
 
@@ -88,7 +88,7 @@ module D = Interval.Convexe
 let dom : D.t Dom.t = Dom.create_key "ARITH"
 
 type exp =
-  | ExpAdd of SE.t * Node.t
+  | ExpAdd of SE.t * Node.t (** on what we propagated *)
   | ExpEmptyDomMerge of Trail.Pexp.t * Node.t * Node.t
   | ExpEmptyDomInter of Trail.Pexp.t * Node.t
   | ExpDistIsZero of SE.t
@@ -97,10 +97,13 @@ type exp =
   | ExpIsSingleton of Trail.Pexp.t  * Node.t
                       * bool (* the domain of node *) * RealValue.t
   | ExpCst of RealValue.t
+  | ExpDec of Node.t * Q.t
 [@@ deriving show]
 
+(** The explanation for a dom will always work on conflict which is an inequality *)
+
 let exp : exp Trail.Exp.t =
-  Trail.Exp.create_key "Arith.exp"
+  Trail.Exp.create_key "LRA.exp"
 
 let set_dom d pexp node v b =
   match D.is_singleton v with
@@ -144,7 +147,7 @@ let () = Dom.register(module struct
   end)
 
 module DaemonPropa = struct
-  let key = Demon.Fast.create "Arith.DaemonPropa"
+  let key = Demon.Fast.create "LRA.DaemonPropa"
 
   module Data = SE
 
@@ -163,7 +166,7 @@ module DaemonPropa = struct
     | None ->
       let pexp = Delayed.mk_pexp del exp pexp in
       let pexp = Delayed.mk_pexp del exp (ExpEmptyDomInter(pexp,node)) in
-      Debug.dprintf6 debug "[Arith] upd node = %a d = %a d' = %a"
+      Debug.dprintf6 debug "[LRA] upd node = %a d = %a d' = %a"
         Node.pp node D.pp d D.pp d';
       Delayed.contradiction del pexp
     | Some d' ->
@@ -325,7 +328,7 @@ let to_poly = function
   | GZero _ -> raise Impossible
 
 let choarith : Node.t Trail.Cho.t =
-  Trail.Cho.create_key "Arith.cho"
+  Trail.Cho.create_key "LRA.cho"
 
 let make_dec node = Trail.GCho(node,choarith,node)
 
@@ -373,7 +376,7 @@ let interp_conpoly d p =
   | Some i when D.equal i acc -> Conflict.True
   | Some _ -> Conflict.ToDecide
 
-let condom : conpair Trail.con = Trail.Con.create_key "Arith.dom"
+let condom : conpair Trail.con = Trail.Con.create_key "LRA.dom"
 
 (** Return the corresponding bound *)
 let get_exp_conpoly {exp={Polynome.cst}} = Q.neg cst
@@ -534,7 +537,7 @@ module GenEquality = struct
     (** cl1 -> cl2 -> cl1 = 0 *)
     assert (conpair_is_an_equality p);
     assert (Polynome.is_zero (Opt.get p.mi).exp);
-    Debug.dprintf6 debug "[Arith] %a=%a: %a" Node.pp cl1 Node.pp cl2 pp_conpair p;
+    Debug.dprintf6 debug "[LRA] %a=%a: %a" Node.pp cl1 Node.pp cl2 pp_conpair p;
     ComputeConflict.unknown_con t condom p
 
   let expspecial =
@@ -561,431 +564,366 @@ module GenEquality = struct
   let () = Equality.register_sort Term._Real expspecial
 
 end
+*)
+
+type conpoly = {
+  minb : (Node.t * Trail.Age.t) option;
+  maxb : (Node.t * Trail.Age.t) option;
+  bound: bound;
+  eqs : (Node.t * Node.t) list;
+  singleton: Node.t list;
+}
+
+let pp_conpoly fmt c =
+  let ppb c fmt = function
+    | None -> ()
+    | Some (n,a) ->
+      Format.fprintf fmt "%s%a[%a]" c Node.pp n Trail.Age.pp a
+  in
+  Format.fprintf fmt "0 %a %a %a"
+    Interval.pp_bound c.bound
+    (ppb " ") c.minb
+    (ppb " - ") c.maxb
 
 module ConDom = struct
-  open Conflict
-  type t = conpair
+  type t = conpoly
 
-  let pp = pp_conpair
+  let pp = pp_conpoly
 
-  let key = condom
+  let key = Trail.Con.create_key "Arith.con"
 
   let pp_v fmt v =
     Pp.iter2 SE.M.iter Pp.semi Pp.nothing Pp.nothing pp_conpoly fmt v
 
-  class finalized (v: conpoly SE.M.t) : Conflict.finalized = object
-    method pp fmt = pp_v fmt v
-    method test d =
-      SE.M.fold_left (fun acc _ m ->
-          match interp_conpoly d m, acc with
-          | True,_ -> True
-          | False,_ -> acc
-          | ToDecide,True -> True
-          | ToDecide,_ -> ToDecide
-        ) False v
-    method decide :
-      'a. 'a Conflict.fold_decisions -> Solver.Delayed.t -> 'a -> 'a =
-      fun f d acc ->
-      SE.M.fold_left (fun acc s m ->
-          match interp_conpoly d m with
-          | True | False -> acc
-          | ToDecide ->
-            if Bool.is_unknown d (SE.node s) then
-              f.fold_decisions acc Bool.chobool (SE.node s) true
-            else acc
-        ) acc v
-    method conflict_add _ =
-      SE.M.fold_left
-        (fun acc s _ -> Node.M.add (SE.node s) false acc)
-        Node.M.empty v
-
-  end
-
-  let finalize _ sl =
-    Debug.dprintf2 debug "[Arith] @[sl:%a@]"
-      (Bag.pp Pp.semi pp_conpair) sl;
-    let s = Bag.fold_left (fun acc p ->
-        let add acc coef m =
-          match m with
-          | None -> acc
-          | Some m ->
-            (* p.mi and p.ma imply the conflict, so we learn the negation
-               not (0 < p) = 0 <= -p
-            *)
-            let coef = Q.neg coef in
-            let m = {m with imp = Polynome.mult_cst coef m.imp;
-                            exp = Polynome.mult_cst coef m.exp;
-                            bound = inv_bound m.bound;
-                    }in
-            let p = SE.node (index (Conflict m.imp)) in
-            (* let p = of_poly m.imp in *)
-            SE.M.add (SE.index (S.GZero(p,m.bound)) Bool.ty) m acc
-        in
-        let acc = add acc Q.one p.mi in
-        let acc = add acc Q.minus_one p.ma in
-        acc
-      ) SE.M.empty sl in
-    Debug.dprintf2 Conflict.print_conflicts
-      "[Arith] @[conflict:%a.@]" pp_v s;
-    if SE.M.is_empty s
-    then None
-    else Some (new finalized s)
-
-  let clatlimit t age node rcl =
-    if ComputeConflict.before_first_dec t age
-    then GRequested (dist_conpair node rcl)
-    else
-      let p = { imp = Polynome.zero; exp = dist node rcl; bound = Large;
-                deps = Deps.empty } in
-      GRequested {mi=Some p;ma=Some p}
-
-
-
-  let eq_sym p = cst_mult_conpair Q.minus_one p
-  let eq_transitivity p1 p2 = add_conpair p1 p2
-  let eq_check ~from ~to_ p =
-    conpair_is_an_equality p &&
-    Polynome.equal (Opt.get p.mi).exp (dist from to_)
-  let eq_other ~from ~to_ = dist_conpair from to_
-  let finish t x =
-    let f p = Conflict.ComputeConflict.add_deps t p.deps in
-    Opt.iter f x.mi;
-    Opt.iter f x.ma;
-    x
-
+  let levels _ = assert false
+  let split _ = assert false
+  let apply_learnt _ = assert false
+  let useful_nodes _ = assert false
 end
 
-module EConDom = Conflict.RegisterCon(ConDom)
+let () = Conflict.register_con(module ConDom)
 
 module ExpEquality = struct
-  open Conflict
-  (* open IterExp *)
-  open ComputeConflict
+  (* open Conflict *)
 
   type t = exp
   let pp = pp_exp
-
-  let extract_add s node = match SE.sem s with
-    | S.Cst _
-    | S.GZero _
-    | S.Conflict _
-      -> raise Impossible
-    (* cl1 = 1/q1*(SE.node s) - q2/q1*cl2 *)
-    | S.Add (q1,cl1,q2,cl2) when Node.equal node cl1 ->
-      cl1, (Q.inv q1), SE.node s, Q.neg (Q.div q2 q1), cl2
-    (* cl2 = 1/q2*(SE.node s) - q1/q2*cl1 *)
-    | S.Add (q1,cl1,q2,cl2) when Node.equal node cl2 ->
-      cl2, (Q.inv q2), SE.node s, Q.neg (Q.div q1 q2), cl1
-    (* SE.node s = q1*cl1 + q2*cl2 *)
-    | S.Add (q1,cl1,q2,cl2) ->
-      SE.node s,q1,cl1,q2,cl2
-
-  (** the result must be physically one or the other *)
-  let best_bound_inf op1 op2 =
-    match op1,op2 with
-    | None, None -> None
-    | None, (Some _ as p) | (Some _ as p), None -> p
-    | Some p1, Some p2 ->
-      let q1 = get_exp_conpoly p1 in
-      let q2 = get_exp_conpoly p2 in
-      if Interval.compare_bounds_inf (q1,p1.bound) (q2,p2.bound) < 0
-      then op2 else op1
-
-  (** the result must be physically one or the other *)
-  let best_bound_sup op1 op2 =
-    match op1,op2 with
-    | None, None -> None
-    | None, (Some _ as p) | (Some _ as p), None -> p
-    | Some p1, Some p2 ->
-      let q1 = get_exp_conpoly p1 in
-      let q2 = get_exp_conpoly p2 in
-      if Interval.compare_bounds_sup (q1,p1.bound) (q2,p2.bound) < 0
-      then op1 else op2
-
-  let best_bound p1 p2 =
-    { mi = best_bound_inf p1.mi p2.mi;
-      ma = best_bound_sup p1.ma p2.ma }
-
-  (**
-     0 <= x + P     x + Q < 0
-     implies
-       0 < x - x + P - Q      ( -P <= x < -Q )
-     there was an empty domain so that it was not verified. So for the proof
-     we suppose that it is not verified
-     0 <= Q - P
-  *)
-  let bound_distance_not_verified p1 =
-    { mi =
-        Opt.map2 (fun mi ma ->
-            let p = x_p_cy_conpoly ma Q.minus_one mi in
-            { p  with bound = inv_bound p.bound }
-          ) p1.mi p1.ma;
-      ma = None }
-
-  let get_pexp_or_add_def t pexp =
-    match Conflict.Helpers.get_pexp_or_add t pexp condom with
-    | None -> assert false
-    | Some p -> p
-
-  let get_dom t age node =
-    (* Look at all the modifications of the cls that are part of the
-       equivalence class of this node, and keep the two with the best bounds
-    *)
-    Debug.dprintf2 ~nobox:() debug "@,@[<v 3>@[[Arith] get_dom for %a@]" Node.pp node;
-    let f t =
-      let mod_doms = get_dom_before_last_dec t age node dom in
-      let mi, ma =
-        List.fold_left
-          (fun (((mi,_) as miacc),((ma,_) as maacc))
-            (mod_dom:Trail.mod_dom) ->
-            (** dom -> modcl *)
-            let p' = (get_pexp_or_add_def t mod_dom.modpexp) in
-            let mi'' = best_bound_inf mi p'.mi in
-            let ma'' = best_bound_sup ma p'.ma in
-            (if mi'' == mi then miacc else (p'.mi,mod_dom.modcl)),
-            (if ma'' == ma then maacc else (p'.ma,mod_dom.modcl)))
-          ((None,(* dumb *) zero),(None,(* dumb *) zero))
-          mod_doms in
-      let f which = function
-        | (None,_) ->
-          Debug.dprintf0 debug "[Arith] Choose None";
-          None
-        | (d,modcl) ->
-          (** node -> modcl *)
-          Debug.dprintf4 debug "[Arith] Choose %a from %a" (Opt.pp pp_conpoly) d Node.pp modcl;
-          Opt.map2 add_conpoly d (which (get_rlist_conpair t node modcl))
-      in
-      { mi = f (fun c -> c.mi) mi; ma = f (fun c -> c.ma) ma }
-    in
-    let p,deps = ComputeConflict.wrap_deps t f in
-    let add_deps m = {m with deps = Deps.concat deps m.deps } in
-    Debug.dprintf0 ~nobox:() debug "@]";
-    { mi = Opt.map add_deps p.mi; ma = Opt.map add_deps p.ma }
-
-
-  let analyse t age con = function
-    | ExpCst(node,q) ->
-      Conflict.return con condom
-        (mk_conpair (Polynome.of_list (Q.neg q) [node,Q.one]))
-    | ExpAdd (s,cls) -> begin
-      match SE.sem s with
-      | S.Add _->
-        let cl0, q1, cl1, q2, cl2 = extract_add s cls in
-        let d1 = get_dom t age cl1 in
-        (* Debug.dprintf2 debug "[Arith] d1=%a" pp_conpair d1; *)
-        let d2 = get_dom t age cl2 in
-        (* Debug.dprintf2 debug "[Arith] d2=%a" pp_conpair d2; *)
-        let semv = mk_conpair
-            (Polynome.of_list Q.zero [cl0,Q.one;cl1,Q.neg q1;cl2,Q.neg q2]) in
-        let d0 = add_conpair semv (cx_p_cy_conpair q1 d1 q2 d2) in
-        (* Debug.dprintf2 debug "[Arith] d0=%a" pp_conpair d0; *)
-        (* Debug.dprintf10 debug *)
-        (*   "[Arith] cl0=%a q1=%a cl1=%a q2=%a cl2=%a" *)
-        (* Node.pp cl0 Q.pp q1 Node.pp cl1 Q.pp q2 Node.pp cl2 ; *)
-        Conflict.return con condom d0
-      | S.Conflict p ->
-        let repr = Polynome.fold (fun acc node _ ->
-            Node.M.add (Conflict.ComputeConflict.get_repr_at t age node) node acc)
-            Node.M.empty p in
-        let cl0 = SE.node s in
-        let semv,p' = Polynome.fold (fun (semv,acc) node q ->
-            let node' = Conflict.ComputeConflict.get_repr_at t age node in
-            let node' = Node.M.find_exn Impossible node' repr in
-            let semv = x_p_cy_conpair semv q (get_rlist_conpair t node' node) in
-            semv,Polynome.add acc (Polynome.monome q node')
-          )
-            (mk_conpair p,Polynome.cst p.cst)
-            p in
-        let pcl0 = Polynome.monome Q.minus_one cl0 in
-        let semv = add_conpair semv (mk_conpair pcl0) in
-        let p' = Polynome.add p' pcl0 in
-        Debug.dprintf2 debug "[Arith] p=%a" Polynome.pp p;
-        Debug.dprintf2 debug "[Arith] semv=%a" pp_conpair semv;
-        Debug.dprintf2 debug "[Arith] p'=%a" Polynome.pp p';
-        let mi = match semv.mi with
-          | None -> assert false
-          | Some mi -> mi in
-        assert (Polynome.equal p' mi.exp);
-        let qcls = Node.M.find_exn Impossible cls (mi.exp).poly in
-        let semv = cst_mult_conpair (Q.inv qcls) semv in
-        let mi = match semv.mi with
-          | None -> assert false
-          | Some mi -> mi in
-        let semv =
-          Polynome.fold (fun semv node q ->
-              if Node.equal node cls then semv
-              else
-                let d = get_dom t age node in
-                x_p_cy_conpair semv (Q.neg q) d
-            ) semv (mi.exp) in
-        Conflict.return con condom semv
-      | _ -> raise Impossible
-      end
-    | ExpGZeroDown (s,nonot) ->
-      let node,b = match SE.sem s with
-        | S.GZero (node,b) -> node,b
-        | _ -> raise Impossible in
-      let cl0 = SE.node s in
-      ComputeConflict.unknown_con t conclause
-        (Bool.get_dom t age cl0 Node.M.empty);
-      let p =
-        let exp = Polynome.monome Q.one node in
-        if nonot
-        then
-          {mi = Some
-               { imp = exp; exp; bound=b;
-                 deps = Deps.empty};
-           ma = None}
-        else
-          {ma = Some
-               { imp = exp; exp;
-                 bound=inv_bound b;
-                 deps = Deps.empty};
-           mi = None}
-      in
-      Conflict.return con condom p
-    | ExpEmptyDomMerge (pexp,cl1,cl2) ->
-      let d1 = get_dom t age cl1 in
-      let d2 = get_dom t age cl2 in
-      let eq,deps =
-        Conflict.ComputeConflict.Equal.one_pexp t ~from:cl1 ~to_:cl2 condom
-          zero_conpair Deps.empty pexp
-      in
-      Conflict.ComputeConflict.add_deps t deps;
-      assert (conpair_is_an_equality eq);
-      Debug.dprintf6 debug "d1=%a;@ d2=%a;@ eq=%a"
-        pp_conpair d1 pp_conpair d2 pp_conpair eq;
-      let d2 = add_conpair eq d2 in
-      let r = best_bound d1 d2 in
-      Debug.dprintf4 debug "d2=%a@ r=%a"
-        pp_conpair d2 pp_conpair r;
-      let r = bound_distance_not_verified r in
-      assert (None <> r.mi);
-      assert (match Polynome.is_cst (Opt.get r.mi).exp,
-                    (Opt.get r.mi).bound with
-             | Some q, Strict -> Q.lt Q.zero q
-             | Some q, Large  -> Q.leq Q.zero q
-             | None,_  -> false);
-      return con condom r
-    | ExpEmptyDomInter (pexp,cl1) ->
-      let d1 = get_dom t age cl1 in
-      Debug.dprintf2 debug "d1=%a" pp_conpair d1;
-      let d2 = (get_pexp_or_add_def t pexp) in
-      Debug.dprintf2 debug "d2=%a" pp_conpair d2;
-      let r' = best_bound d1 d2 in
-      let r = bound_distance_not_verified r' in
-      Debug.dprintf4 debug "r'=%a r=%a@"
-        pp_conpair r' pp_conpair r;
-      assert (None <> r.mi);
-      assert (match Polynome.is_cst (Opt.get r.mi).exp,
-                    (Opt.get r.mi).bound with
-             | Some q, Strict -> Q.lt Q.zero q
-             | Some q, Large  -> Q.leq Q.zero q
-             | None,_  -> false);
-      return con condom r
-    | ExpGZeroUp(s,nonot) ->
-      let node,b = match SE.sem s with
-        | S.GZero (node,b) -> node,b
-        | _ -> raise Impossible in
-      let d = get_dom t age node in
-      Debug.dprintf6 debug "node=%a %a d=%a" Node.pp node pp_bound b pp_conpair d;
-      if nonot then begin
-        assert ( implies d {ma = None; mi = Some { (mk_conpoly (Polynome.monome Q.one node)) with bound = b}} );
-        ComputeConflict.unknown_con t condom
-          { d with ma = None }
-      end else  begin
-        assert ( implies d {mi = None; ma = Some { (mk_conpoly (Polynome.monome Q.one node))
-                                                   with bound = inv_bound b}} );
-        ComputeConflict.unknown_con t condom
-          { d with mi = None }
-      end;
-      Conflict.return con conclause Node.M.empty
-    | ExpDistIsZero s ->
-      let cl0, q1, cl1, q2, cl2 = extract_add s (SE.node s) in
-      let d0 = get_dom t age cl0 in
-      let semv = mk_conpair
-          (Polynome.of_list Q.zero [cl0,Q.minus_one;cl1,q1;cl2,q2]) in
-      return con condom (add_conpair semv d0)
-    | ExpIsSingleton(pexp,node,b,cst) ->
-      let q = match SE.sem cst with | Cst q -> q | _ -> raise Impossible in
-      let d1 = if b then get_dom t age node else {mi=None;ma=None} in
-      let d2 = (get_pexp_or_add_def t pexp) in
-      let r = best_bound d1 d2 in
-      Debug.dprintf8
-        debug
-        "r=%a d1=%a d2=%a q=%a"
-        pp_conpair r pp_conpair d1 pp_conpair d2 Q.pp q;
-      Conflict.return con condom r
-
-  let expdomlimit _t _age dom' node con v _ =
-    let v = Opt.get_exn Impossible v in
-    let v = Dom.Eq.coerce dom' dom v in
-    let mk = function
-      | None -> None
-      | Some (v,bound) ->
-        let p = Polynome.of_list (Q.neg v) [node,Q.one] in
-        Some {imp = p; exp = p; bound; deps = Deps.empty} in
-    let mi,ma = D.get_convexe_hull v in
-    return con condom {mi=mk mi;ma=mk ma}
-
   let key = exp
 
-  let same_sem (type a) t age (sem':a sem) (v:a) con exp cl1 cl2 =
-    let r1 = analyse t age condom exp in
-    let p = match r1 with
-      | GRequested p1 ->
-        let p2 =
-          match Sem.Eq.eq_type S.key sem' with
-          | None -> raise Impossible (* understand why that happend *)
-          | Some Types.Eq ->
-            Polynome.x_p_cy (Polynome.monome Q.one cl2) Q.minus_one
-                (to_poly v)
-        in
-        x_p_cy_conpair p1 Q.minus_one (mk_conpair p2)
-      | GOther _ -> raise Impossible (* not created by analyse *)
-    in
-    Debug.dprintf6 debug_todo "@[same_sem cl1:%a cl2:%a = %a@]"
-      Node.pp cl1 Node.pp cl2 pp_conpair p;
-    assert (conpair_is_an_equality p);
-    assert (Polynome.equal (Opt.get p.mi).exp (dist cl1 cl2));
-    Conflict.return con condom p
+  (* let extract_add s node = match SE.sem s with
+   *   | S.Cst _
+   *   | S.GZero _
+   *   | S.Conflict _
+   *     -> raise Impossible
+   *   (\* cl1 = 1/q1*(SE.node s) - q2/q1*cl2 *\)
+   *   | S.Add (q1,cl1,q2,cl2) when Node.equal node cl1 ->
+   *     cl1, (Q.inv q1), SE.node s, Q.neg (Q.div q2 q1), cl2
+   *   (\* cl2 = 1/q2*(SE.node s) - q1/q2*cl1 *\)
+   *   | S.Add (q1,cl1,q2,cl2) when Node.equal node cl2 ->
+   *     cl2, (Q.inv q2), SE.node s, Q.neg (Q.div q1 q2), cl1
+   *   (\* SE.node s = q1*cl1 + q2*cl2 *\)
+   *   | S.Add (q1,cl1,q2,cl2) ->
+   *     SE.node s,q1,cl1,q2,cl2
+   * 
+   * (\** the result must be physically one or the other *\)
+   * let best_bound_inf op1 op2 =
+   *   match op1,op2 with
+   *   | None, None -> None
+   *   | None, (Some _ as p) | (Some _ as p), None -> p
+   *   | Some p1, Some p2 ->
+   *     let q1 = get_exp_conpoly p1 in
+   *     let q2 = get_exp_conpoly p2 in
+   *     if Interval.compare_bounds_inf (q1,p1.bound) (q2,p2.bound) < 0
+   *     then op2 else op1
+   * 
+   * (\** the result must be physically one or the other *\)
+   * let best_bound_sup op1 op2 =
+   *   match op1,op2 with
+   *   | None, None -> None
+   *   | None, (Some _ as p) | (Some _ as p), None -> p
+   *   | Some p1, Some p2 ->
+   *     let q1 = get_exp_conpoly p1 in
+   *     let q2 = get_exp_conpoly p2 in
+   *     if Interval.compare_bounds_sup (q1,p1.bound) (q2,p2.bound) < 0
+   *     then op1 else op2
+   * 
+   * let best_bound p1 p2 =
+   *   { mi = best_bound_inf p1.mi p2.mi;
+   *     ma = best_bound_sup p1.ma p2.ma }
+   * 
+   * (\**
+   *    0 <= x + P     x + Q < 0
+   *    implies
+   *      0 < x - x + P - Q      ( -P <= x < -Q )
+   *    there was an empty domain so that it was not verified. So for the proof
+   *    we suppose that it is not verified
+   *    0 <= Q - P
+   * *\)
+   * let bound_distance_not_verified p1 =
+   *   { mi =
+   *       Opt.map2 (fun mi ma ->
+   *           let p = x_p_cy_conpoly ma Q.minus_one mi in
+   *           { p  with bound = inv_bound p.bound }
+   *         ) p1.mi p1.ma;
+   *     ma = None }
+   * 
+   * let get_pexp_or_add_def t pexp =
+   *   match Conflict.Helpers.get_pexp_or_add t pexp condom with
+   *   | None -> assert false
+   *   | Some p -> p
+   * 
+   * let get_dom t age node =
+   *   (\* Look at all the modifications of the cls that are part of the
+   *      equivalence class of this node, and keep the two with the best bounds
+   *   *\)
+   *   Debug.dprintf2 ~nobox:() debug "@,@[<v 3>@[[LRA] get_dom for %a@]" Node.pp node;
+   *   let f t =
+   *     let mod_doms = get_dom_before_last_dec t age node dom in
+   *     let mi, ma =
+   *       List.fold_left
+   *         (fun (((mi,_) as miacc),((ma,_) as maacc))
+   *           (mod_dom:Trail.mod_dom) ->
+   *           (\** dom -> modcl *\)
+   *           let p' = (get_pexp_or_add_def t mod_dom.modpexp) in
+   *           let mi'' = best_bound_inf mi p'.mi in
+   *           let ma'' = best_bound_sup ma p'.ma in
+   *           (if mi'' == mi then miacc else (p'.mi,mod_dom.modcl)),
+   *           (if ma'' == ma then maacc else (p'.ma,mod_dom.modcl)))
+   *         ((None,(\* dumb *\) zero),(None,(\* dumb *\) zero))
+   *         mod_doms in
+   *     let f which = function
+   *       | (None,_) ->
+   *         Debug.dprintf0 debug "[LRA] Choose None";
+   *         None
+   *       | (d,modcl) ->
+   *         (\** node -> modcl *\)
+   *         Debug.dprintf4 debug "[LRA] Choose %a from %a" (Opt.pp pp_conpoly) d Node.pp modcl;
+   *         Opt.map2 add_conpoly d (which (get_rlist_conpair t node modcl))
+   *     in
+   *     { mi = f (fun c -> c.mi) mi; ma = f (fun c -> c.ma) ma }
+   *   in
+   *   let p,deps = ComputeConflict.wrap_deps t f in
+   *   let add_deps m = {m with deps = Deps.concat deps m.deps } in
+   *   Debug.dprintf0 ~nobox:() debug "@]";
+   *   { mi = Opt.map add_deps p.mi; ma = Opt.map add_deps p.ma }
+   * 
+   * 
+   * let analyse t age con = function
+   *   | ExpCst(node,q) ->
+   *     Conflict.return con condom
+   *       (mk_conpair (Polynome.of_list (Q.neg q) [node,Q.one]))
+   *   | ExpAdd (s,cls) -> begin
+   *     match SE.sem s with
+   *     | S.Add _->
+   *       let cl0, q1, cl1, q2, cl2 = extract_add s cls in
+   *       let d1 = get_dom t age cl1 in
+   *       (\* Debug.dprintf2 debug "[LRA] d1=%a" pp_conpair d1; *\)
+   *       let d2 = get_dom t age cl2 in
+   *       (\* Debug.dprintf2 debug "[LRA] d2=%a" pp_conpair d2; *\)
+   *       let semv = mk_conpair
+   *           (Polynome.of_list Q.zero [cl0,Q.one;cl1,Q.neg q1;cl2,Q.neg q2]) in
+   *       let d0 = add_conpair semv (cx_p_cy_conpair q1 d1 q2 d2) in
+   *       (\* Debug.dprintf2 debug "[LRA] d0=%a" pp_conpair d0; *\)
+   *       (\* Debug.dprintf10 debug *\)
+   *       (\*   "[LRA] cl0=%a q1=%a cl1=%a q2=%a cl2=%a" *\)
+   *       (\* Node.pp cl0 Q.pp q1 Node.pp cl1 Q.pp q2 Node.pp cl2 ; *\)
+   *       Conflict.return con condom d0
+   *     | S.Conflict p ->
+   *       let repr = Polynome.fold (fun acc node _ ->
+   *           Node.M.add (Conflict.ComputeConflict.get_repr_at t age node) node acc)
+   *           Node.M.empty p in
+   *       let cl0 = SE.node s in
+   *       let semv,p' = Polynome.fold (fun (semv,acc) node q ->
+   *           let node' = Conflict.ComputeConflict.get_repr_at t age node in
+   *           let node' = Node.M.find_exn Impossible node' repr in
+   *           let semv = x_p_cy_conpair semv q (get_rlist_conpair t node' node) in
+   *           semv,Polynome.add acc (Polynome.monome q node')
+   *         )
+   *           (mk_conpair p,Polynome.cst p.cst)
+   *           p in
+   *       let pcl0 = Polynome.monome Q.minus_one cl0 in
+   *       let semv = add_conpair semv (mk_conpair pcl0) in
+   *       let p' = Polynome.add p' pcl0 in
+   *       Debug.dprintf2 debug "[LRA] p=%a" Polynome.pp p;
+   *       Debug.dprintf2 debug "[LRA] semv=%a" pp_conpair semv;
+   *       Debug.dprintf2 debug "[LRA] p'=%a" Polynome.pp p';
+   *       let mi = match semv.mi with
+   *         | None -> assert false
+   *         | Some mi -> mi in
+   *       assert (Polynome.equal p' mi.exp);
+   *       let qcls = Node.M.find_exn Impossible cls (mi.exp).poly in
+   *       let semv = cst_mult_conpair (Q.inv qcls) semv in
+   *       let mi = match semv.mi with
+   *         | None -> assert false
+   *         | Some mi -> mi in
+   *       let semv =
+   *         Polynome.fold (fun semv node q ->
+   *             if Node.equal node cls then semv
+   *             else
+   *               let d = get_dom t age node in
+   *               x_p_cy_conpair semv (Q.neg q) d
+   *           ) semv (mi.exp) in
+   *       Conflict.return con condom semv
+   *     | _ -> raise Impossible
+   *     end
+   *   | ExpGZeroDown (s,nonot) ->
+   *     let node,b = match SE.sem s with
+   *       | S.GZero (node,b) -> node,b
+   *       | _ -> raise Impossible in
+   *     let cl0 = SE.node s in
+   *     ComputeConflict.unknown_con t conclause
+   *       (Bool.get_dom t age cl0 Node.M.empty);
+   *     let p =
+   *       let exp = Polynome.monome Q.one node in
+   *       if nonot
+   *       then
+   *         {mi = Some
+   *              { imp = exp; exp; bound=b;
+   *                deps = Deps.empty};
+   *          ma = None}
+   *       else
+   *         {ma = Some
+   *              { imp = exp; exp;
+   *                bound=inv_bound b;
+   *                deps = Deps.empty};
+   *          mi = None}
+   *     in
+   *     Conflict.return con condom p
+   *   | ExpEmptyDomMerge (pexp,cl1,cl2) ->
+   *     let d1 = get_dom t age cl1 in
+   *     let d2 = get_dom t age cl2 in
+   *     let eq,deps =
+   *       Conflict.ComputeConflict.Equal.one_pexp t ~from:cl1 ~to_:cl2 condom
+   *         zero_conpair Deps.empty pexp
+   *     in
+   *     Conflict.ComputeConflict.add_deps t deps;
+   *     assert (conpair_is_an_equality eq);
+   *     Debug.dprintf6 debug "d1=%a;@ d2=%a;@ eq=%a"
+   *       pp_conpair d1 pp_conpair d2 pp_conpair eq;
+   *     let d2 = add_conpair eq d2 in
+   *     let r = best_bound d1 d2 in
+   *     Debug.dprintf4 debug "d2=%a@ r=%a"
+   *       pp_conpair d2 pp_conpair r;
+   *     let r = bound_distance_not_verified r in
+   *     assert (None <> r.mi);
+   *     assert (match Polynome.is_cst (Opt.get r.mi).exp,
+   *                   (Opt.get r.mi).bound with
+   *            | Some q, Strict -> Q.lt Q.zero q
+   *            | Some q, Large  -> Q.leq Q.zero q
+   *            | None,_  -> false);
+   *     return con condom r
+   *   | ExpEmptyDomInter (pexp,cl1) ->
+   *     let d1 = get_dom t age cl1 in
+   *     Debug.dprintf2 debug "d1=%a" pp_conpair d1;
+   *     let d2 = (get_pexp_or_add_def t pexp) in
+   *     Debug.dprintf2 debug "d2=%a" pp_conpair d2;
+   *     let r' = best_bound d1 d2 in
+   *     let r = bound_distance_not_verified r' in
+   *     Debug.dprintf4 debug "r'=%a r=%a@"
+   *       pp_conpair r' pp_conpair r;
+   *     assert (None <> r.mi);
+   *     assert (match Polynome.is_cst (Opt.get r.mi).exp,
+   *                   (Opt.get r.mi).bound with
+   *            | Some q, Strict -> Q.lt Q.zero q
+   *            | Some q, Large  -> Q.leq Q.zero q
+   *            | None,_  -> false);
+   *     return con condom r
+   *   | ExpGZeroUp(s,nonot) ->
+   *     let node,b = match SE.sem s with
+   *       | S.GZero (node,b) -> node,b
+   *       | _ -> raise Impossible in
+   *     let d = get_dom t age node in
+   *     Debug.dprintf6 debug "node=%a %a d=%a" Node.pp node pp_bound b pp_conpair d;
+   *     if nonot then begin
+   *       assert ( implies d {ma = None; mi = Some { (mk_conpoly (Polynome.monome Q.one node)) with bound = b}} );
+   *       ComputeConflict.unknown_con t condom
+   *         { d with ma = None }
+   *     end else  begin
+   *       assert ( implies d {mi = None; ma = Some { (mk_conpoly (Polynome.monome Q.one node))
+   *                                                  with bound = inv_bound b}} );
+   *       ComputeConflict.unknown_con t condom
+   *         { d with mi = None }
+   *     end;
+   *     Conflict.return con conclause Node.M.empty
+   *   | ExpDistIsZero s ->
+   *     let cl0, q1, cl1, q2, cl2 = extract_add s (SE.node s) in
+   *     let d0 = get_dom t age cl0 in
+   *     let semv = mk_conpair
+   *         (Polynome.of_list Q.zero [cl0,Q.minus_one;cl1,q1;cl2,q2]) in
+   *     return con condom (add_conpair semv d0)
+   *   | ExpIsSingleton(pexp,node,b,cst) ->
+   *     let q = match SE.sem cst with | Cst q -> q | _ -> raise Impossible in
+   *     let d1 = if b then get_dom t age node else {mi=None;ma=None} in
+   *     let d2 = (get_pexp_or_add_def t pexp) in
+   *     let r = best_bound d1 d2 in
+   *     Debug.dprintf8
+   *       debug
+   *       "r=%a d1=%a d2=%a q=%a"
+   *       pp_conpair r pp_conpair d1 pp_conpair d2 Q.pp q;
+   *     Conflict.return con condom r
+   * 
+   * let expdomlimit _t _age dom' node con v _ =
+   *   let v = Opt.get_exn Impossible v in
+   *   let v = Dom.Eq.coerce dom' dom v in
+   *   let mk = function
+   *     | None -> None
+   *     | Some (v,bound) ->
+   *       let p = Polynome.of_list (Q.neg v) [node,Q.one] in
+   *       Some {imp = p; exp = p; bound; deps = Deps.empty} in
+   *   let mi,ma = D.get_convexe_hull v in
+   *   return con condom {mi=mk mi;ma=mk ma}
+   * 
+   * 
+   * let same_sem (type a) t age (sem':a sem) (v:a) con exp cl1 cl2 =
+   *   let r1 = analyse t age condom exp in
+   *   let p = match r1 with
+   *     | GRequested p1 ->
+   *       let p2 =
+   *         match Sem.Eq.eq_type S.key sem' with
+   *         | None -> raise Impossible (\* understand why that happend *\)
+   *         | Some Types.Eq ->
+   *           Polynome.x_p_cy (Polynome.monome Q.one cl2) Q.minus_one
+   *               (to_poly v)
+   *       in
+   *       x_p_cy_conpair p1 Q.minus_one (mk_conpair p2)
+   *     | GOther _ -> raise Impossible (\* not created by analyse *\)
+   *   in
+   *   Debug.dprintf6 debug_todo "@[same_sem cl1:%a cl2:%a = %a@]"
+   *     Node.pp cl1 Node.pp cl2 pp_conpair p;
+   *   assert (conpair_is_an_equality p);
+   *   assert (Polynome.equal (Opt.get p.mi).exp (dist cl1 cl2));
+   *   Conflict.return con condom p *)
+
+  let analyse _ = assert false
+  let from_contradiction _ = assert false
 
 end
 
-module EExpEquality = Conflict.RegisterExp(ExpEquality)
+let () = Conflict.register_exp(module ExpEquality)
 
 
-module ChoArith = struct
+module ChoLRA = struct
   open Conflict
 
-  module Key = Node
-  module Data = Q
+  module OnWhat = Node
 
-  let make_decision env dec node b =
-    Debug.dprintf6 Conflict.print_decision
-      "[Arith] decide %a on %a at %a"
-      Q.pp b Node.pp node Trail.print_dec dec;
-    let pexp = Trail.mk_pcho dec choarith node b in
+  let make_decision node b env =
+    Debug.dprintf4 print_decision
+      "[LRA] decide %a on %a" Q.pp b Node.pp node;
+    let pexp = Egraph.Delayed.mk_pexp env exp (ExpDec(node,b)) in
     set_dom env pexp node (D.singleton b) false
 
   let choose_decision env node =
     let v = Opt.get_def D.reals (Delayed.get_dom env dom node) in
     match D.is_singleton v with
     | Some _ -> DecNo
-    | None -> DecTodo (D.choose v)
-
-  let analyse t con node v =
-    ComputeConflict.set_dec_cho t choarith node;
-    let p = {imp = Polynome.zero; exp = Polynome.of_list (Q.neg v) [node,Q.one];
-             bound = Large; deps = Deps.empty} in
-    return con condom {mi=Some p;ma=Some p}
-
+    | None -> DecTodo (make_decision node (D.choose v))
   let key = choarith
 
 end
 
-module EChoArith = Conflict.RegisterCho(ChoArith)
-*)
+let () = Conflict.register_cho(module ChoLRA)
+
 (** API *)
 
 let index x = SE.node (SE.index x Term._Real)
@@ -1064,7 +1002,7 @@ let th_register env =
   RDaemonPropa.init env;
   Demon.Fast.register_init_daemon
     ~immediate:true
-    ~name:"Arith.DaemonInit"
+    ~name:"LRA.DaemonInit"
     (module SE)
     DaemonPropa.init
     env;

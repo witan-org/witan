@@ -56,8 +56,11 @@ module type Getter = sig
 
 end
 
+module Getter : Getter
+
 module type Ro = sig
-  include Getter
+  type t = private Getter.t
+  include Getter with type t := t
 
   val register : t -> Node.t -> unit
   (** Add a new class to register *)
@@ -171,6 +174,7 @@ val flush: Delayed.t -> unit
 (* val make_decisions : Delayed.t -> attached_daemons -> unit *)
 
 val get_trail : t -> Trail.t
+val get_getter : t -> Getter.t
 val new_dec : t -> Trail.dec
 val current_age : t -> Trail.Age.t
 val current_nbdec : t -> int

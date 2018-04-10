@@ -23,6 +23,13 @@
 
 let theories = Witan_theories_bool.[Bool.th_register; Equality.th_register; Uninterp.th_register ]
 
+
+let () =
+  if not Witan_core.(Egraph.check_initialization () &&
+                     Conflict.check_initialization ()) then
+    exit 1
+
+
 let () =
   (* Parse command line options *)
   let opts = match Cmdliner.Term.eval (Options.all, Options.info) with

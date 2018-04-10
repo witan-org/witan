@@ -249,6 +249,7 @@ and conflict_analysis t pexp =
   else
     let backlevel, learnt, useful =
       Conflict.learn
+        (Egraph.get_getter t.solver_state)
         (Egraph.get_trail t.solver_state)
         pexp
     in

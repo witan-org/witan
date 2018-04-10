@@ -185,6 +185,7 @@ module TrailCache = Stdlib.MkDatatype(struct
   end)
 
 type conflict = {
+  getter: Egraph.Getter.t;
   trail : Trail.t;
   trail_cache : Trail.Age.t option TrailCache.H.t;
   mutable index: int;
@@ -196,19 +197,20 @@ type conflict = {
   mutable before_first_dec : Trail.Pcon.t list;
 }
 
-let create_env trail =
+let create_env getter trail =
   let size = 1 + Age.to_int (Trail.current_age trail) - Age.to_int (Trail.last_dec trail)  in
   {
-  trail;
-  trail_cache = TrailCache.H.create 256;
-  index = size-1;
-  nb_in_todolist = 0;
-  todolist = Array.make size [];
-  fromdec = [];
-  levels_before_last_dec = Levels.No;
-  before_last_dec = [];
-  before_first_dec = [];
-}
+    getter;
+    trail;
+    trail_cache = TrailCache.H.create 256;
+    index = size-1;
+    nb_in_todolist = 0;
+    todolist = Array.make size [];
+    fromdec = [];
+    levels_before_last_dec = Levels.No;
+    before_last_dec = [];
+    before_first_dec = [];
+  }
 
 module type Exp = sig
 
@@ -292,6 +294,8 @@ let pp_lcon fmt (l,pcon) =
 module Conflict = struct
 
   type t = conflict
+
+  let getter x = x.getter
 
   let age_merge_opt t n1 n2 =
     TrailCache.H.memo
@@ -439,9 +443,9 @@ end = struct
         Next(Age.of_int (t.index + (Age.to_int (Trail.last_dec t.trail))), c)
 end
 
-let learn trail (Trail.Pexp.Pexp(_,exp,x) as pexp) =
+let learn getter trail (Trail.Pexp.Pexp(_,exp,x) as pexp) =
   Debug.dprintf0 debug "[Conflict] @[Learning@]";
-  let t = create_env trail in
+  let t = create_env getter trail in
   let module Exp = (val (ExpRegistry.get exp)) in
   Debug.dprintf2 debug "[Conflict] @[The contradiction: %a@]"
     pp_pexp pexp;
@@ -502,13 +506,24 @@ module EqCon = struct
     else if Node.equal c.r b
     then Some a, None
     else
-      let age_a = Conflict.age_merge t c.l a in
-      let age_b = Conflict.age_merge t c.l b in
-      let cmp = Age.compare age_a age_b in
-      assert (cmp <> 0);
-      if cmp < 0
-      then Some a, Some b
-      else Some b, Some a
+      match Conflict.age_merge_opt t c.l a,
+            Conflict.age_merge_opt t c.l b with
+      | Some age_a, Some age_b ->
+        let cmp = Age.compare age_a age_b in
+        assert (cmp <> 0);
+        if cmp < 0
+        then Some a, Some b
+        else Some b, Some a
+      | Some _, None ->
+        (** They must be equal to one of them *)
+        assert (Conflict.age_merge_opt t c.r b <> None);
+        Some a, Some b
+      | None, Some _ ->
+        (** They must be equal to one of them *)
+        assert (Conflict.age_merge_opt t c.r a <> None);
+        Some b, Some a
+      | None, None ->
+        assert false (** absurd: One of them must be equal with the left *)
 
   let orient_split t c a b =
     let age_a = Conflict.age_merge t c.l a in
@@ -623,3 +638,9 @@ let () = Exn_printer.register (fun fmt exn ->
         Node.pp n1 Node.pp n2
     | exn -> raise exn
   )
+
+
+let check_initialization () =
+  ConRegistry.is_well_initialized ()
+  && ExpRegistry.is_well_initialized ()
+  && ChoRegistry.is_well_initialized ()

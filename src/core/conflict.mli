@@ -69,6 +69,8 @@ module Conflict : sig
 
   val split: t -> Trail.Pcon.t -> Node.t -> Node.t -> Trail.Pcon.t list
 
+  val getter: t -> Egraph.Getter.t
+
 end
 
 module Exp = Trail.Exp
@@ -147,7 +149,7 @@ val pp_pcon: Trail.Pcon.t Pp.pp
 
 module Learnt: Stdlib.Datatype
 
-val learn: Trail.t -> Trail.Pexp.t -> Trail.Age.t * Learnt.t * Node.t Bag.t
+val learn: Egraph.Getter.t -> Trail.t -> Trail.Pexp.t -> Trail.Age.t * Learnt.t * Node.t Bag.t
 (** Return the backtracking age, the constraint learnt and the useful nodes *)
 
 val apply_learnt: Egraph.Delayed.t -> Learnt.t -> unit
@@ -180,6 +182,8 @@ module EqCon : sig
 
   val apply_learnt: t -> Typedef.Node.t * parity
 end
+
+val check_initialization: unit -> bool
 
 (** {2 From boolean theory } *)
 val _or: ((Node.t * parity) list -> Node.t) ref

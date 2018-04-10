@@ -693,3 +693,274 @@ module Union = struct
       let pp = pp
     end)
 end
+
+module ConvexeInfo (Info: sig
+    include Stdlib.Datatype
+    val nothing: t
+  end) = struct
+
+  type t = { minb : bound; minv: Q.t; mini: Info.t;
+             maxv: Q.t; maxb: bound; maxi: Info.t }
+
+  let pp fmt t =
+    let print_bound_left fmt = function
+      | Large  -> Format.fprintf fmt "["
+      | Strict -> Format.fprintf fmt "]" in
+    let print_bound_right fmt = function
+      | Large  -> Format.fprintf fmt "]"
+      | Strict -> Format.fprintf fmt "[" in
+    if t.minb=Large && t.maxb=Large && Q.equal t.minv t.maxv
+    then Format.fprintf fmt "{%a}" Q.pp t.minv
+    else
+    Format.fprintf fmt "%a%a;%a%a"
+      print_bound_left t.minb
+      Q.pp t.minv
+      Q.pp t.maxv
+      print_bound_right t.maxb
+
+  let compare e1 e2 =
+    let compare_bound b1 b2 = match b1, b2 with
+      | Strict, Large -> 1
+      | Large, Strict -> -1
+      | _             -> 0
+    in
+    let c = Q.compare e1.minv e2.minv in
+    if c = 0 then c else
+    let c = compare_bound e1.minb e2.minb in
+    if c = 0 then c else
+    let c = Q.compare e1.maxv e2.maxv in
+    if c = 0 then c else
+    let c = compare_bound e1.maxb e2.maxb in
+    if c = 0 then c else
+    let c = Info.compare e1.mini e2.mini in
+    if c = 0 then c else
+    let c = Info.compare e1.maxi e2.maxi in
+    c
+
+  let equal e1 e2 =
+    e1.minb == e2.minb && e1.maxb == e2.maxb &&
+    Q.equal e1.minv e2.minv && Q.equal e1.maxv e2.maxv &&
+    Info.equal e1.mini e2.mini && Info.equal e1.maxi e2.maxi
+
+  let hash e =
+    let hash_bound = function
+      | Large -> 1
+      | Strict -> 3 in
+    CCHash.combine6
+      (hash_bound e.minb) (hash_bound e.maxb)
+      (Hashtbl.hash e.minv) (Hashtbl.hash e.maxv)
+      (Info.hash e.mini) (Info.hash e.maxi)
+
+  include Stdlib.MkDatatype(struct
+      type nonrec t = t
+      let equal = equal let compare = compare
+      let hash = hash let pp = pp
+    end)
+
+  let invariant e =
+    not (Q.equal e.minv Q.inf) &&
+    not (Q.equal e.maxv Q.minus_inf) &&
+    let c = Q.compare e.minv e.maxv in
+    if c = 0
+    then e.minb = Large && e.maxb = Large
+    else c < 0
+
+  let is_singleton = function
+    | {minv;maxv} when Q.equal minv maxv -> Some minv
+    | _ -> None
+
+  let singleton ~min_info ?(max_info=min_info) q =
+    let t = {minb=Large; minv = q; maxv = q; maxb= Large; mini = min_info; maxi = max_info} in
+    assert (invariant t);
+    t
+
+  let except e x =
+    let is_min = Q.equal e.minv x in
+    let is_max = Q.equal e.maxv x in
+    if is_min && is_max then None
+    else if is_min
+    then Some {e with minb=Strict}
+    else if Q.equal e.maxv x
+    then Some {e with maxb=Strict}
+    else Some e
+
+  let lower_min_max e1 e2 =
+    let c = Q.compare e1.minv e2.minv in
+    match e1.minb, e2.minb with
+    | Strict, Large when c =  0 -> e2,e1
+    | _             when c <= 0 -> e1,e2
+    | _                         -> e2,e1
+
+  let bigger_min_max e1 e2 =
+    let c = Q.compare e1.maxv e2.maxv in
+    match e1.maxb, e2.maxb with
+    | Strict, Large when c =  0 -> e1,e2
+    | _             when c >= 0 -> e2,e1
+    | _                         -> e1,e2
+
+
+  let is_distinct e1 e2 =
+    (** x1 in e1, x2 in e2 *)
+    (** order by the minimum *)
+    let emin,emax = lower_min_max e1 e2 in (** emin.minv <= emax.minv *)
+    (** look for inclusion *)
+    let c = Q.compare emin.maxv emax.minv in
+    match emin.maxb, emax.minb with
+    (** emin.minv <? e1 <? emin.maxv < emax.minv <? e2 <? emax.maxv *)
+    | _ when c <  0 -> true
+    (** emin.minv <? e1 <  emin.maxv = emax.minv <  e2 <? emax.maxv *)
+    (** emin.minv <? e1 <  emin.maxv = emax.minv <= e2 <? emax.maxv *)
+    (** emin.minv <? e1 <= emin.maxv = emax.minv <  e2 <? emax.maxv *)
+    | Strict, Strict | Strict, Large | Large, Strict
+      when c = 0 -> true
+    | _ -> false
+
+  let is_included e1 e2 =
+    assert (invariant e1);
+    assert (invariant e2);
+    compare_bounds_inf (e2.minv,e2.minb) (e1.minv,e1.minb) <= 0 &&
+    compare_bounds_sup (e1.maxv,e1.maxb) (e2.maxv,e2.maxb) <= 0
+
+  let mem x e =
+    (match e.minb with
+     | Strict -> Q.lt e.minv x
+     | Large  -> Q.le e.minv x)
+    &&
+    (match e.maxb with
+     | Strict -> Q.lt x e.maxv
+     | Large  -> Q.le x e.maxv)
+
+  let mult_pos q e =
+    {e with minv = Q.mul e.minv q; maxv = Q.mul e.maxv q}
+
+  let mult_neg q e =
+    { minb = e.maxb; maxb = e.minb;
+      minv = Q.mul e.maxv q;
+      maxv = Q.mul e.minv q;
+      mini= e.mini; maxi = e.maxi
+    }
+
+  let mult_cst q e =
+    assert (Q.is_real q);
+    let c = Q.sign q in
+    if c = 0      then invalid_arg "mult_cst q = 0"
+    else if c > 0 then mult_pos q e
+    else               mult_neg q e
+
+  let add_cst q e =
+    {e with minv = Q.add e.minv q; maxv = Q.add e.maxv q}
+
+  let mult_bound b1 b2 =
+    match b1, b2 with
+    | Large , Large  -> Large
+    | _              -> Strict
+
+  let add ~min_info ?(max_info=min_info) e1 e2 =
+    let t = {minb = mult_bound e1.minb e2.minb;
+             minv = Q.add e1.minv e2.minv;
+             maxv = Q.add e1.maxv e2.maxv;
+             maxb = mult_bound e1.maxb e2.maxb;
+             mini = min_info ; maxi = max_info} in
+    assert (invariant t); t
+
+  let minus ~min_info ?max_info e1 e2 =
+    add ~min_info ?max_info e1 (mult_neg Q.minus_one e2)
+
+  let gt ~min_info q =
+    let t = {minb=Strict; minv = q; mini = min_info; maxv = Q.inf; maxb= Strict; maxi = Info.nothing} in
+    assert (invariant t); t
+
+  let ge ~min_info q =
+    let t = {minb=Large; minv = q;  mini = min_info; maxv = Q.inf; maxb= Strict; maxi = Info.nothing} in
+    assert (invariant t); t
+
+  let lt ~max_info q =
+    let t = {minb=Strict; minv = Q.minus_inf; mini = Info.nothing; maxv = q; maxb= Strict; maxi = max_info} in
+    assert (invariant t); t
+
+  let le ~max_info q =
+    let t = {minb=Strict; minv = Q.minus_inf; mini = Info.nothing; maxv = q; maxb= Large; maxi = max_info} in
+    assert (invariant t); t
+
+  let union e1 e2 =
+    let emin,_ = lower_min_max  e1 e2 in
+    let _,emax = bigger_min_max e1 e2 in
+    {minb = emin.minb; minv = emin.minv; mini = emin.mini;
+     maxv = emax.maxv; maxb = emax.maxb; maxi = emin.maxi;}
+
+  let inter e1 e2 =
+    let ((minv,minb) as min,mini) =
+      if compare_bounds_inf (e1.minv,e1.minb) (e2.minv,e2.minb) < 0
+      then ((e2.minv,e2.minb),e2.mini) else ((e1.minv,e1.minb),e1.mini)
+    in
+    let ((maxv,maxb) as max,maxi) =
+      if compare_bounds_sup (e1.maxv,e1.maxb) (e2.maxv,e2.maxb) < 0
+      then ((e1.maxv,e1.maxb),e1.maxi) else ((e2.maxv,e2.maxb),e2.maxi)
+    in
+    if compare_bounds_inf_sup min max > 0
+    then None
+    else if Q.equal minv maxv && minb = Large && maxb = Large
+    then Some (singleton ~min_info:mini ~max_info:maxi minv)
+    else Some {minv;minb;mini;maxv;maxb;maxi}
+
+  let inter e1 e2 =
+    let r = inter e1 e2 in
+    assert (Opt.for_all invariant r);
+    r
+
+  (** intersection set.
+      if the two arguments are equals, return the second
+  *)
+
+  let zero ?max_info ~min_info = singleton ~min_info ?max_info Q.zero
+  let reals = {minb=Strict; minv=Q.minus_inf; mini=Info.nothing;
+               maxb=Strict; maxv=Q.inf; maxi=Info.nothing}
+  let () = assert (invariant reals)
+
+  let is_reals = function
+    | {minb=Strict; minv; maxb=Strict; maxv}
+      when Q.equal minv Q.minus_inf &&
+           Q.equal maxv Q.inf     -> true
+    | _ -> false
+
+  let choose = function
+    | {minb=Large;minv} -> minv
+    | {maxb=Large;maxv} -> maxv
+    | {minv;maxv} when Q.equal Q.minus_inf minv && Q.equal Q.inf maxv ->
+      Q.zero
+    | {minv;maxv} when Q.equal Q.minus_inf minv ->
+      Q.make (Z.sub (Q.to_bigint maxv) Z.one) Z.one
+    | {minv;maxv} when Q.equal Q.inf maxv ->
+      Q.make (Z.add (Q.to_bigint minv) Z.one) Z.one
+    | {minv;maxv} ->
+      let q = Q.make (Z.add Z.one (Q.to_bigint minv)) Z.one in
+      if Q.lt q maxv then q
+      else Q.add maxv (Q.div_2exp (Q.sub minv maxv) 1)
+
+
+  let nb_incr = 100
+  let z_nb_incr = Z.of_int nb_incr
+  let choose_rnd rnd = function
+    | {minv;maxv} when Q.equal Q.minus_inf minv ->
+      Q.make (Z.sub (Z.of_int (rnd nb_incr)) (Q.to_bigint maxv)) Z.one
+    | {minv;maxv} when Q.equal Q.inf maxv ->
+      Q.make (Z.add (Z.of_int (rnd nb_incr)) (Q.to_bigint minv)) Z.one
+    | {minv;maxv} when Q.equal minv maxv -> minv
+    | {minv;maxv} ->
+      let d = Q.sub maxv minv in
+      let i = 1 + rnd (nb_incr - 2) in
+      let x = Q.make (Z.of_int i) (Z.of_int 100) in
+      let q = Q.add minv (Q.mul x d) in
+      assert (Q.lt minv q);
+      assert (Q.lt q maxv);
+      q
+
+  let get_convexe_hull e =
+    let mk v b =
+      match Q.classify v with
+      | Q.ZERO | Q.NZERO -> Some (v,b)
+      | Q.INF | Q.MINF -> None
+      | Q.UNDEF -> assert false in
+    mk e.minv e.minb, mk e.maxv e.maxb
+
+end
