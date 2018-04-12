@@ -20,7 +20,7 @@ remove: [
     [make "uninstall"]
 ]
 depends: [
-  "containers" {>= "1.0"}
+  "containers" {>= "2.1"}
   "dolmen"
   "spelll"
   "cmdliner"
