@@ -143,15 +143,15 @@ module D = struct
     match s1, s2 with
     | None, None -> raise Impossible
     | Some s, None ->
-      Delayed.set_dom_premerge d dom cl2 s
+      Delayed.set_dom d dom cl2 s
     | None, Some s ->
-      Delayed.set_dom_premerge d dom cl1 s
+      Delayed.set_dom d dom cl1 s
     | Some s1, Some s2 ->
       let s = Dis.test_disjoint (fun i age ->
           let pexp = Delayed.mk_pexp d exp (Merge(pexp,cl1,cl2,i,age)) in
           Delayed.contradiction d pexp) s1 s2 in
-      Delayed.set_dom_premerge d dom cl1 s;
-      Delayed.set_dom_premerge d dom cl2 s
+      Delayed.set_dom d dom cl1 s;
+      Delayed.set_dom d dom cl2 s
 
 
   let pp fmt s = Dis.pp fmt s
@@ -160,12 +160,12 @@ end
 
 let () = Dom.register(module D)
 
-let set_dom d pexp cl s =
+let set_dom d _pexp cl s =
   let s = match Delayed.get_dom d dom cl with
     | Some s' ->
       Dis.test_disjoint (fun _ -> assert false) s' s
     | None -> s in
-  Delayed.set_dom d pexp dom cl s
+  Delayed.set_dom d dom cl s
 
 let check_sem v cl =
   let own = ThE.node (ThE.index v Bool.ty) in

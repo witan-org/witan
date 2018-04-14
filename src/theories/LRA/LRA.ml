@@ -111,7 +111,9 @@ let set_dom d pexp node v b =
     let cst = RealValue.index q Term._Real in
     let pexp = Delayed.mk_pexp d exp (ExpIsSingleton(pexp,node,b,cst)) in
     Delayed.set_value d pexp real node q
-  | None -> Delayed.set_dom d pexp dom node v
+  | None ->
+    (** the pexp must be in the dom *)
+    Delayed.set_dom d dom node v
 
 let minus_or_one inv =
   if inv then Q.minus_one else Q.one
@@ -137,12 +139,12 @@ let () = Dom.register(module struct
             Delayed.contradiction d pexp
           | Some i ->
             if not (D.equal i i1) then
-              Delayed.set_dom_premerge d dom cl1 i;
+              Delayed.set_dom d dom cl1 i;
             if not (D.equal i i2) then
-              Delayed.set_dom_premerge d dom cl2 i
+              Delayed.set_dom d dom cl2 i
         end
       | Some i1, _, _, cl2 | _, cl2, Some i1, _ ->
-        Delayed.set_dom_premerge d dom cl2 i1
+        Delayed.set_dom d dom cl2 i1
       | None,_,None,_ -> raise Impossible
   end)
 
@@ -1014,8 +1016,9 @@ let th_register env =
     (fun d value ->
        let v = RealValue.value value in
        let s = D.singleton v in
-       let pexp = Delayed.mk_pexp d exp (ExpCst value) in
-       Delayed.set_dom d pexp dom (RealValue.node value) s
+       let _pexp = Delayed.mk_pexp d exp (ExpCst value) in
+       (** something must be done with the pexp *)
+       Delayed.set_dom d dom (RealValue.node value) s
     ) env;
   ()
 

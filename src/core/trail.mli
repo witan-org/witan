@@ -143,21 +143,6 @@ module Cho: Keys.Key
 type chogen =
   | GCho: Node.t * 'k Cho.t * 'k -> chogen
 
-
-(** {2 Trail for domains, currently not used } *)
-
-val add_pexp_dom:
-  t -> Pexp.t -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit
-(** A domain has been modified *)
-
-val add_pexp_dom_premerge:
-  t -> 'b Dom.t ->
-  nodeto:Node.t ->
-  nodefrom:Node.t ->
-  nodefrom0:Node.t ->
-  unit
-(** A domain has been modified during the merge of classes *)
-
 val add_pexp: t -> Pexp.t -> unit
 (** generic *)
 

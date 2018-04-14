@@ -524,28 +524,23 @@ module Delayed = struct
         (ExpSameValue(pexp,node0,nodevalue)) in
     set_semvalue_pending t pexp node0 node0'
 
-  let set_dom_pending (type a) t pexp (dom : a Dom.t) node0 new_v =
+  let set_dom_pending (type a) t (dom : a Dom.t) node0 new_v =
     Debug.incr stats_set_dom;
     let node = find t node0 in
     let domtable = (get_table_dom t.env dom) in
     let new_table = Node.M.add_opt node new_v domtable.table in
     let domtable = { domtable with table = new_table } in
     VDomTable.set t.env.dom dom domtable;
-    Trail.add_pexp_dom t.env.trail pexp dom ~node ~node0;
     let events = Node.M.find_opt node domtable.events in
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (node,dom)
 
-  let set_dom_premerge_pending (type a) t (dom : a Dom.t)
-      ~from:node0' node0 (new_v:a) =
+  let set_dom_premerge_pending (type a) t (dom : a Dom.t) ~from:_ node0 (new_v:a) =
     Debug.incr stats_set_dom;
-    let node' = find t node0' in
     let node  = find t node0 in
     let domtable = (get_table_dom t.env dom) in
     let new_table = Node.M.add node new_v domtable.table in
     let domtable = { domtable with table = new_table } in
     VDomTable.set t.env.dom dom domtable;
-    Trail.add_pexp_dom_premerge t.env.trail dom
-      ~nodefrom:node' ~nodefrom0:node0' ~nodeto:node;
     let events = Node.M.find_opt node domtable.events in
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (node0,dom)
 
@@ -819,20 +814,23 @@ module Delayed = struct
     check d node;
     set_value_pending d pexp node nodevalue
 
-  let set_value (type a)  d pexp (value : a Value.t) node v =
+  let set_values d pexp node nodevalue =
     Debug.dprintf4 debug_few
-      "[Egraph] @[set_dom for %a with %a@]"
-      Node.pp node (print_value value) v;
-    let nodevalue = Values.index value v (Node.ty node) in
+      "[Egraph] @[set_value for %a with %a@]"
+      Node.pp node Values.pp nodevalue;
     set_value_pending d pexp node nodevalue
 
-  let set_dom d pexp dom node v =
+  let set_value (type a)  d pexp (value : a Value.t) node v =
+    let nodevalue = Values.index value v (Node.ty node) in
+    set_values d pexp node nodevalue
+
+  let set_dom d dom node v =
     Debug.dprintf4 debug_few
       "[Egraph] @[set_dom for %a with %a@]"
       Node.pp node (print_dom dom) v;
     check d node;
-    set_dom_pending d pexp dom node (Some v)
-  
+    set_dom_pending d dom node (Some v)
+
   let set_dom_premerge d dom node v =
     Debug.dprintf4 debug
       "[Egraph] @[set_dom_premerge for %a with %a@]"
@@ -845,13 +843,13 @@ module Delayed = struct
         "set_dom_premerge should be used only on the \
          nodeasses currently merged")) in
     set_dom_premerge_pending d dom ~from:node' node v
-  
-  let unset_dom d pexp dom node =
+
+  let unset_dom d dom node =
     Debug.dprintf2 debug
       "[Egraph] @[unset_dom for %a@]"
       Node.pp node;
     check d node;
-    set_dom_pending d pexp dom node None
+    set_dom_pending d dom node None
 
   let register_decision t chogen =
     t.sched_decision chogen

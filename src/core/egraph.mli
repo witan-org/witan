@@ -76,16 +76,10 @@ module Delayed : sig
   include Ro with type t := t
 
   (** {3 Immediate modifications} *)
-  val set_dom  : t -> Pexp.t -> 'a Dom.t -> Node.t -> 'a -> unit
+  val set_dom  : t -> 'a Dom.t -> Node.t -> 'a -> unit
   (** change the dom of the equivalence class *)
-  
-  val set_dom_premerge  : t -> 'a Dom.t -> Node.t -> 'a -> unit
-  (** [set_dom_premerge d node] must be used only during the merge of two class
-        [cl1] and [cl2], with one of them being [node].
-        The explication is the explication given for the merge
-  *)
-  
-  val unset_dom  : t -> Pexp.t -> 'a Dom.t -> Node.t -> unit
+
+  val unset_dom  : t -> 'a Dom.t -> Node.t -> unit
   (** remove the dom of the equivalence class *)
 
   (** {3 Delayed modifications} *)
@@ -96,6 +90,9 @@ module Delayed : sig
   (** attach value to an equivalence class *)
 
   val set_value: t -> Trail.Pexp.t -> 'a Value.t -> Node.t -> 'a -> unit
+  (** attach value to an equivalence class *)
+
+  val set_values: t -> Trail.Pexp.t -> Node.t -> Values.t -> unit
   (** attach value to an equivalence class *)
 
   (** {3 Delayed modifications} *)

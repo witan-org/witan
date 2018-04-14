@@ -161,21 +161,6 @@ let add_merge_finish:
     let old_repr = if Node.equal node1_repr new_repr then node2_repr else node1_repr in
     t.nodehist <- Node.M.add old_repr (t.age,new_repr) t.nodehist
 
-let add_pexp_dom:
-  t -> Pexp.t -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit =
-  fun _t _pexp _dom ~node:_ ~node0:_ ->
-    ()
-
-let add_pexp_dom_premerge:
-  t -> 'b Dom.t ->
-  nodeto:Node.t ->
-  nodefrom:Node.t ->
-  nodefrom0:Node.t ->
-  unit =
-  fun _t _dom ~nodeto:_ ~nodefrom:_ ~nodefrom0:_ ->
-    ()
-
-
 let exp_fact : unit Exp.t = Exp.create_key "Trail.fact"
 let pexp_fact = Pexp.Pexp(Age.bef,exp_fact,())
 
