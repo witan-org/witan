@@ -175,7 +175,7 @@ module ChoGenH = Stdlib.XHashtbl.Make(struct
   end)
 
 module Exp = Trail.Exp
-module Con = Trail.Con
+module Hyp = Trail.Hyp
 
 module TrailCache = Stdlib.MkDatatype(struct
     type t = Node.t * Node.t
@@ -190,11 +190,11 @@ type conflict = {
   trail_cache : Trail.Age.t option TrailCache.H.t;
   mutable index: int;
   mutable nb_in_todolist : int;
-  todolist : (Trail.Age.t * Trail.Pcon.t) list array;
-  mutable fromdec  : Trail.Pcon.t list;
+  todolist : (Trail.Age.t * Trail.Phyp.t) list array;
+  mutable fromdec  : Trail.Phyp.t list;
   mutable levels_before_last_dec : Levels.t;
-  mutable before_last_dec : Trail.Pcon.t list;
-  mutable before_first_dec : Trail.Pcon.t list;
+  mutable before_last_dec : Trail.Phyp.t list;
+  mutable before_first_dec : Trail.Phyp.t list;
 }
 
 let create_env getter trail =
@@ -222,11 +222,11 @@ module type Exp = sig
 
 
   val from_contradiction:
-    conflict (* -> Age.t *) -> t -> Trail.Pcon.t list
+    conflict (* -> Age.t *) -> t -> Trail.Phyp.t list
     (** First step of the analysis done on the trail. *)
 
   val analyse  :
-    conflict (* -> Age.t *) -> t -> Trail.Pcon.t -> Trail.Pcon.t list
+    conflict (* -> Age.t *) -> t -> Trail.Phyp.t -> Trail.Phyp.t list
 
 end
 
@@ -252,13 +252,13 @@ let () = Trail._pp_pexp := pp_pexp
 type parity = | Neg | Pos
 let neg_parity = function | Neg -> Pos | Pos -> Neg
 
-module type Con = sig
+module type Hyp = sig
 
   type t
 
   val pp: t Pp.pp
 
-  val key: t Trail.Con.t
+  val key: t Trail.Hyp.t
 
   val apply_learnt: t -> Node.t * parity
 
@@ -266,30 +266,30 @@ module type Con = sig
 
   val useful_nodes: t -> Node.t Bag.t
 
-  val split: conflict -> t -> Node.t -> Node.t -> Trail.Pcon.t list
+  val split: conflict -> t -> Node.t -> Node.t -> Trail.Phyp.t list
 
 end
 
-module ConRegistry = Con.Make_Registry(struct
-    type 'a data = (module Con with type t = 'a)
-    let pp (type a) (con: a data) =
-      let module Con = (val con) in
-      Con.pp
-    let key (type a) (con: a data) =
-      let module Con = (val con) in
-      Con.key
+module HypRegistry = Hyp.Make_Registry(struct
+    type 'a data = (module Hyp with type t = 'a)
+    let pp (type a) (hyp: a data) =
+      let module Hyp = (val hyp) in
+      Hyp.pp
+    let key (type a) (hyp: a data) =
+      let module Hyp = (val hyp) in
+      Hyp.key
   end)
 
-let register_con (con:(module Con)) =
-  let module Con = (val con) in
-  let con = (module Con : Con with type t = Con.t) in
-  ConRegistry.register con
+let register_hyp (hyp:(module Hyp)) =
+  let module Hyp = (val hyp) in
+  let hyp = (module Hyp : Hyp with type t = Hyp.t) in
+  HypRegistry.register hyp
 
-let pp_pcon fmt (Trail.Pcon.Pcon(con,c,_)) =
-  (ConRegistry.print con) fmt c
+let pp_phyp fmt (Trail.Phyp.Phyp(hyp,c,_)) =
+  (HypRegistry.print hyp) fmt c
 
-let pp_lcon fmt (l,pcon) =
-  Format.fprintf fmt "%a[%a]" pp_pcon pcon Levels.pp l
+let pp_lhyp fmt (l,phyp) =
+  Format.fprintf fmt "%a[%a]" pp_phyp phyp Levels.pp l
 
 module Conflict = struct
 
@@ -312,19 +312,19 @@ module Conflict = struct
   let analyse' (type a) t exp e pcon =
     let module Exp = (val (ExpRegistry.get exp) : Exp with type t = a) in
     Debug.dprintf4 debug "[Conflict] @[Analyse using %a: %a@]"
-      (* Age.pp age *) Exp.pp e pp_pcon pcon;
+      (* Age.pp age *) Exp.pp e pp_phyp pcon;
     let res = Exp.analyse t e pcon in
     res
 
   let analyse t (Trail.Pexp.Pexp(_,exp,e)) pcon = analyse' t exp e pcon
 
-  let split t (Trail.Pcon.Pcon(con,c,dec)) a b =
+  let split t (Trail.Phyp.Phyp(hyp,c,dec)) a b =
     assert (dec = `NoDec);
-    let f (type a) (con: a Con.t) (c:a) =
-      let module Con = (val (ConRegistry.get con)) in
-      Con.split t c a b
+    let f (type a) (hyp: a Hyp.t) (c:a) =
+      let module Hyp = (val (HypRegistry.get hyp)) in
+      Hyp.split t c a b
     in
-    f con c
+    f hyp c
 end
 
 let _or = ref (fun _ -> assert false)
@@ -344,37 +344,37 @@ module Learnt = Node
 
 
 module TodoList : sig
-  val merge: Conflict.t -> Trail.Pcon.t list -> unit
+  val merge: Conflict.t -> Trail.Phyp.t list -> unit
 
   type state =
     | Finish of (Age.t * (Node.t * parity) list * Node.t Bag.t)
-    | Next of Age.t * Trail.Pcon.t
+    | Next of Age.t * Trail.Phyp.t
 
   val state: Conflict.t -> state
 end = struct
 
   let convert t l =
-    let map (type a) con (c:a) dec pc =
+    let map (type a) hyp (c:a) dec pc =
       if dec = `Dec then (Levels.No,pc)
       else
-        let module Con = (val (ConRegistry.get con) : Con with type t = a) in
-        (Con.levels t c, pc)
+        let module Hyp = (val (HypRegistry.get hyp) : Hyp with type t = a) in
+        (Hyp.levels t c, pc)
     in
-    List.map (fun (Trail.Pcon.Pcon(con,c,dec) as pc) -> map con c dec pc) l
+    List.map (fun (Trail.Phyp.Phyp(hyp,c,dec) as pc) -> map hyp c dec pc) l
 
-  let compare_level_con (l1,_) (l2,_) = - (Levels.compare l1 l2)
+  let compare_level_hyp (l1,_) (l2,_) = - (Levels.compare l1 l2)
 
-  let sort l = List.sort compare_level_con l
+  let sort l = List.sort compare_level_hyp l
 
   let merge t l2 =
-    Debug.dprintf2 debug "[Conflict] @[Analyse resulted in: %a@]"
-      (Pp.list Pp.comma pp_pcon) l2;
-    let iter (type a) con (c:a) dec pc =
+    Debug.dprintf2 debug "[Hypflict] @[Analyse resulted in: %a@]"
+      (Pp.list Pp.comma pp_phyp) l2;
+    let iter (type a) hyp (c:a) dec pc =
       if dec = `Dec
       then t.fromdec <- pc::t.fromdec
       else
-        let module Con = (val (ConRegistry.get con) : Con with type t = a) in
-        let lv = Con.levels t c in
+        let module Hyp = (val (HypRegistry.get hyp) : Hyp with type t = a) in
+        let lv = Hyp.levels t c in
         if Levels.before_first_dec t.trail lv
         then t.before_first_dec <- pc::t.before_first_dec
         else if Levels.before_last_dec t.trail lv
@@ -386,7 +386,7 @@ end = struct
           let index = Age.to_int (Levels.get_last lv) - Age.to_int (Trail.last_dec t.trail) in
           t.todolist.(index) <- (Levels.get_second_last lv,pc)::t.todolist.(index);
     in
-    List.iter (fun (Trail.Pcon.Pcon(con,c,dec) as pc) -> iter con c dec pc) l2
+    List.iter (fun (Trail.Phyp.Phyp(hyp,c,dec) as pc) -> iter hyp c dec pc) l2
 
   let analysis_done t last =
     let lv,last = match last with
@@ -396,29 +396,29 @@ end = struct
     let l = List.rev_append last (List.rev_append t.fromdec t.before_last_dec) in
     Debug.dprintf4 debug "[Conflict] @[End analysis with (bl %a): %a@]"
       Age.pp backtrack_level
-      (Pp.list Pp.comma pp_pcon) l;
+      (Pp.list Pp.comma pp_phyp) l;
     (backtrack_level, l)
 
   let to_nodes l =
-    let map (type a) con (c:a) =
-      let module Con = (val (ConRegistry.get con) : Con with type t = a) in
-      Con.apply_learnt c
+    let map (type a) hyp (c:a) =
+      let module Hyp = (val (HypRegistry.get hyp) : Hyp with type t = a) in
+      Hyp.apply_learnt c
     in
-    List.map (fun (Trail.Pcon.Pcon(con,c,_)) -> map con c) l
+    List.map (fun (Trail.Phyp.Phyp(hyp,c,_)) -> map hyp c) l
 
   type state =
     | Finish of (Age.t * (Node.t * parity) list * Node.t Bag.t)
-    | Next of Age.t * Trail.Pcon.t
+    | Next of Age.t * Trail.Phyp.t
 
   let finish t last =
     let backtrack_level, l = analysis_done t last in
-    let fold useful (type a) (con:a Con.t) (c:a) =
-      let module Con = (val ConRegistry.get con) in
-      Bag.concat useful (Con.useful_nodes c)
+    let fold useful (type a) (hyp:a Hyp.t) (c:a) =
+      let module Hyp = (val HypRegistry.get hyp) in
+      Bag.concat useful (Hyp.useful_nodes c)
     in
     let useful =
       List.fold_left
-        (fun acc (Trail.Pcon.Pcon(con,c,_)) -> fold acc con c)
+        (fun acc (Trail.Phyp.Phyp(hyp,c,_)) -> fold acc hyp c)
         Bag.empty l
     in
     let l = to_nodes l in
@@ -454,16 +454,16 @@ let learn getter trail (Trail.Pexp.Pexp(_,exp,x) as pexp) =
   let rec aux t =
     match TodoList.state t with
     | Finish(backtrack,l,useful) -> backtrack,!_or l,useful
-    | Next(age,pcon) ->
+    | Next(age,phyp) ->
       let pexp = Trail.get_pexp t.trail age in
-      let lcon' = Conflict.analyse t pexp pcon in
-      TodoList.merge t lcon';
+      let lhyp' = Conflict.analyse t pexp phyp in
+      TodoList.merge t lhyp';
       aux t
   in
   aux t
 
 
-module EqCon = struct
+module EqHyp = struct
 
   type t = {
     l: Node.t;
@@ -474,7 +474,7 @@ module EqCon = struct
       "%a =@, %a"
       Node.pp c.l Node.pp c.r
 
-  let key : t Con.t = Con.create_key "eq"
+  let key : t Hyp.t = Hyp.create_key "eq"
 
   let reg_apply_learnt = Ty.H.create 16
 
@@ -487,7 +487,7 @@ module EqCon = struct
 
   let useful_nodes c = Bag.list [c.l;c.r]
 
-  let not_found = Invalid_argument "Type not found in apply_learnt EqCon"
+  let not_found = Invalid_argument "Type not found in apply_learnt EqHyp"
 
   let apply_learnt c =
     match Ty.H.find_opt reg_apply_learnt (Node.ty c.l) with
@@ -537,16 +537,16 @@ module EqCon = struct
   let create_eq ?dec l r =
     if Node.equal l r
     then []
-    else [Trail.Pcon.pcon ?dec key {l;r}]
+    else [Trail.Phyp.phyp ?dec key {l;r}]
 
 end
 
-let () = register_con(module struct
-    include EqCon
+let () = register_hyp(module struct
+    include EqHyp
 
     let split t c a b =
       let l', r' = split t c a b in
-      Trail.Pcon.map key begin
+      Trail.Phyp.map key begin
       (match l' with
        | None -> []
        | Some r -> [{l=c.l; r}])
@@ -587,17 +587,17 @@ module Specific = struct
           let module Exp = (val (ExpRegistry.get exp)) in
           Debug.dprintf10 debug "[Conflict] @[Intermediary conflict diff value %a=%a=%a=%a: %a@]"
             Values.pp v1 Node.pp n1 Node.pp n2 Values.pp v2 Exp.pp e;
-          Exp.analyse t e (Trail.Pcon.pcon EqCon.key {l=n1;r=n2})
+          Exp.analyse t e (Trail.Phyp.phyp EqHyp.key {l=n1;r=n2})
         in
         (** splitting of the equality v1 = v2 *)
-        let pcon1 = (Trail.Pcon.pcon EqCon.key {l=Values.node v1;r=n1}) in
-        let pcon2 = (Trail.Pcon.pcon EqCon.key {l=n2;r=Values.node v2}) in
+        let phyp1 = (Trail.Phyp.phyp EqHyp.key {l=Values.node v1;r=n1}) in
+        let phyp2 = (Trail.Phyp.phyp EqHyp.key {l=n2;r=Values.node v2}) in
         (* if Trail.before_last_dec t (Trail.age_merge t (Values.node v1) n1) &&
          *    Trail.before_last_dec t (Trail.age_merge t (Values.node v2) n2)
          * then (\** An inverse propagation not powerful enough *\)
          *   pcon1::pcon2::(EqCon.create_eq n1 n2)
          * else *)
-          pcon1::pcon2::(f exp e)
+          phyp1::phyp2::(f exp e)
     end)
 
   let () = register_exp (module struct
@@ -612,14 +612,14 @@ module Specific = struct
           Format.fprintf fmt "same_value(%a,%a):%a"
             Node.pp n Values.pp value (ExpRegistry.print exp) e
 
-      let analyse t p pcon =
+      let analyse t p phyp =
         let Trail.Pexp.Pexp(_,exp,e) =
           match p with
           | Trail.ExpSameSem(pexp,_,_)
           | Trail.ExpSameValue(pexp,_,_) -> pexp in
         let f (type a) (exp:a Exp.t) e =
           let module Exp = (val (ExpRegistry.get exp)) in
-          Exp.analyse t e pcon
+          Exp.analyse t e phyp
         in
         f exp e
 
@@ -641,6 +641,6 @@ let () = Exn_printer.register (fun fmt exn ->
 
 
 let check_initialization () =
-  ConRegistry.is_well_initialized ()
+  HypRegistry.is_well_initialized ()
   && ExpRegistry.is_well_initialized ()
   && ChoRegistry.is_well_initialized ()

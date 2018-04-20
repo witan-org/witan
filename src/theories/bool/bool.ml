@@ -507,9 +507,9 @@ let () = Conflict.register_cho (module ChoBool)
 
 (** {2 Conflict} *)
 
-(** We could use instead directly EqCon, but it gives an example of a
-   simple conflict other than EqCon *)
-module ConProp = struct
+(** We could use instead directly EqHyp, but it gives an example of a
+   simple conflict other than EqHyp *)
+module HypProp = struct
   type t = (Node.t * bool)
 
   let pp fmt (n,b) =
@@ -517,7 +517,7 @@ module ConProp = struct
     then Format.fprintf fmt "¬%a" Node.pp n
     else Node.pp fmt n
 
-  let key : t Trail.Con.t = Trail.Con.create_key "conprop"
+  let key : t Trail.Hyp.t = Trail.Hyp.create_key "hypprop"
 
   let apply_learnt (n,b) = (n,if b then Conflict.Neg else Conflict.Pos)
 
@@ -531,18 +531,18 @@ module ConProp = struct
   let useful_nodes (n,_) = Bag.elt n
 
   let split t (n,b) a' b' =
-    let l', r' = Conflict.EqCon.split t {l=n;r=node_of_sign b} a' b' in
+    let l', r' = Conflict.EqHyp.split t {l=n;r=node_of_sign b} a' b' in
     (match l' with
      | None -> []
-     | Some r -> [Trail.Pcon.pcon Conflict.EqCon.key {l=n; r}])
+     | Some r -> [Trail.Phyp.phyp Conflict.EqHyp.key {l=n; r}])
     @
     (match r' with
      | None -> []
-     | Some l -> [Trail.Pcon.pcon key (l,b)])
+     | Some l -> [Trail.Phyp.phyp key (l,b)])
 
 end
 
-let () = Conflict.register_con (module ConProp)
+let () = Conflict.register_hyp (module HypProp)
 
 (** {2 Explanation} *)
 
@@ -572,30 +572,30 @@ module ExpProp = struct
         Node.pp n b
 
   let eq_of_bool ?dec n b =
-    Trail.Pcon.pcon ?dec ConProp.key (n,not b)
+    Trail.Phyp.phyp ?dec HypProp.key (n,not b)
 
-  let analyse_one_to_one ?dec t pcon to_ to_b from_ from_b =
+  let analyse_one_to_one ?dec t phyp to_ to_b from_ from_b =
     (** we have
         c: a = b
         we propagated: to_ = to_b
         because      : from_   = from_b
     *)
     let to_not = node_of_bool to_b in
-    let eqs = Conflict.split t pcon to_ to_not in
+    let eqs = Conflict.split t phyp to_ to_not in
     let eq = eq_of_bool ?dec from_ from_b in
     Debug.dprintf10 debug "clfrom:%a from_b:%b clto:%a to_b:%b eqs:%a eq:%a"
       Node.pp from_
       from_b
       Node.pp to_
       to_b
-      (Pp.list Pp.comma pp_pcon) eqs
-      pp_pcon eq;
+      (Pp.list Pp.comma pp_phyp) eqs
+      pp_phyp eq;
     (eq::eqs)
 
   let analyse :
     Conflict.t ->
-    t -> Trail.Pcon.t -> Trail.Pcon.t list =
-    fun t exp pcon ->
+    t -> Trail.Phyp.t -> Trail.Phyp.t list =
+    fun t exp phyp ->
       match exp with
       | ExpBCP  (thterm,_,_) when IArray.length (ThE.sem thterm).lits = 1 ->
         raise Impossible
@@ -604,13 +604,13 @@ module ExpProp = struct
         let own = ThE.node thterm in
         let eqs =
           match kind with
-          | BCP -> Conflict.split t pcon own propa
+          | BCP -> Conflict.split t phyp own propa
           | BCPOwnKnown ->
             let propa_sign = mulbool true (Opt.get (find v propa)) in
-            Conflict.split t pcon propa (node_of_bool propa_sign)
+            Conflict.split t phyp propa (node_of_bool propa_sign)
           | BCPLeavesKnown ->
             let sign = mulbool false v.topnot in
-            Conflict.split t pcon propa (node_of_bool sign)
+            Conflict.split t phyp propa (node_of_bool sign)
         in
         let eqs = if kind = BCPOwnKnown then (eq_of_bool own (mulbool true v.topnot))::eqs else eqs in
         fold (fun eqs (node,sign) ->
@@ -619,21 +619,21 @@ module ExpProp = struct
       | ExpUp (thterm,leaf)    ->
         let v = ThE.sem thterm in
         let own = ThE.node thterm in
-        analyse_one_to_one t pcon
+        analyse_one_to_one t phyp
           own (mulbool true v.topnot)
           leaf (mulbool true (Opt.get (find v leaf)))
       | ExpDown  (thterm,leaf)    ->
         let v = ThE.sem thterm in
         let own = ThE.node thterm in
-        analyse_one_to_one t pcon
+        analyse_one_to_one t phyp
           leaf (mulbool false (Opt.get (find v leaf)))
           own (mulbool false v.topnot)
       | ExpNot  ((_,clfrom,clto),b)->
-        analyse_one_to_one t pcon
+        analyse_one_to_one t phyp
             clto b
             clfrom (not b)
       | ExpDec (cl,b) ->
-        analyse_one_to_one ~dec:() t pcon
+        analyse_one_to_one ~dec:() t phyp
           cl b
           cl b
 
@@ -647,8 +647,8 @@ let () = Conflict.register_exp(module ExpProp)
 
 let () =
   let parity_of_bool b = if b then Conflict.Neg else Conflict.Pos in
-  Conflict.EqCon.register_apply_learnt ty
-    (fun {Conflict.EqCon.l;r} ->
+  Conflict.EqHyp.register_apply_learnt ty
+    (fun {Conflict.EqHyp.l;r} ->
        if Node.equal l node_false
        then (r,parity_of_bool true)
        else if Node.equal l node_true

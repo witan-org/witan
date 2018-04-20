@@ -61,15 +61,15 @@ module Pexp : sig
 
 end
 
-module Con: Keys.Key
+module Hyp: Keys.Key
 
-module Pcon : sig
+module Phyp : sig
   type t =
-    | Pcon: 'a Con.t * 'a * [`Dec | `NoDec]-> t
+    | Phyp: 'a Hyp.t * 'a * [`Dec | `NoDec]-> t
 
-  val pcon: ?dec:unit -> 'a Con.t -> 'a -> t
+  val phyp: ?dec:unit -> 'a Hyp.t -> 'a -> t
 
-  val map: 'a Con.t -> 'a list -> t list
+  val map: 'a Hyp.t -> 'a list -> t list
 
 end
 

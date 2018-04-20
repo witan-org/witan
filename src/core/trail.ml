@@ -71,16 +71,16 @@ end
 
 let _pp_pexp = Pexp._pp_pexp
 
-module Con = Keys.Make_key(struct end)
+module Hyp = Keys.Make_key(struct end)
 
-module Pcon = struct
+module Phyp = struct
   type t =
-    | Pcon: 'a Con.t * 'a * [`Dec | `NoDec]-> t
+    | Phyp: 'a Hyp.t * 'a * [`Dec | `NoDec]-> t
 
   (** `Dec indiquate the conflict come from the explanation of a
      decision and then should not be explained further *)
-  let pcon ?(dec:unit option) c v = Pcon(c,v,if dec=None then `NoDec else `Dec)
-  let map c l = List.map (pcon c) l
+  let phyp ?(dec:unit option) c v = Phyp(c,v,if dec=None then `NoDec else `Dec)
+  let map c l = List.map (phyp c) l
 end
 
 (** Indicate when a node stopped to be the representative, and what it becomes.

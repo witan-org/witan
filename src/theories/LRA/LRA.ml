@@ -568,7 +568,7 @@ module GenEquality = struct
 end
 *)
 
-type conpoly = {
+type hyppoly = {
   minb : (Node.t * Trail.Age.t) option;
   maxb : (Node.t * Trail.Age.t) option;
   bound: bound;
@@ -576,7 +576,7 @@ type conpoly = {
   singleton: Node.t list;
 }
 
-let pp_conpoly fmt c =
+let pp_hyppoly fmt c =
   let ppb c fmt = function
     | None -> ()
     | Some (n,a) ->
@@ -587,15 +587,15 @@ let pp_conpoly fmt c =
     (ppb " ") c.minb
     (ppb " - ") c.maxb
 
-module ConDom = struct
-  type t = conpoly
+module HypDom = struct
+  type t = hyppoly
 
-  let pp = pp_conpoly
+  let pp = pp_hyppoly
 
-  let key = Trail.Con.create_key "Arith.con"
+  let key = Trail.Hyp.create_key "Arith.hyp"
 
   let pp_v fmt v =
-    Pp.iter2 SE.M.iter Pp.semi Pp.nothing Pp.nothing pp_conpoly fmt v
+    Pp.iter2 SE.M.iter Pp.semi Pp.nothing Pp.nothing pp_hyppoly fmt v
 
   let levels _ = assert false
   let split _ = assert false
@@ -603,7 +603,7 @@ module ConDom = struct
   let useful_nodes _ = assert false
 end
 
-let () = Conflict.register_con(module ConDom)
+let () = Conflict.register_hyp(module HypDom)
 
 module ExpEquality = struct
   (* open Conflict *)

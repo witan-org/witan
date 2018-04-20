@@ -399,7 +399,7 @@ module RDaemonInit = Demon.Key.Register(DaemonInit)
 
 
 (** conflict *)
-module ConDis = struct
+module HypDis = struct
   open Conflict
 
   type t = {
@@ -411,7 +411,7 @@ module ConDis = struct
     age : Trail.Age.t;
     }
 
-  let key : t Trail.Con.t = Trail.Con.create_key "Diff"
+  let key : t Trail.Hyp.t = Trail.Hyp.create_key "Diff"
 
   let pp fmt c =
     Format.fprintf fmt "%a=%a≠%a=%a"
@@ -422,11 +422,11 @@ module ConDis = struct
 
   let split t c cl1 cl2 =
     if Conflict.age_merge_opt t cl1 c.l1 = None then
-      let cl1, cl2 = EqCon.orient_split t {l=c.r0;r=c.r1} cl1 cl2 in
-      (Trail.Pcon.pcon key {c with r1 = cl1})::(EqCon.create_eq cl2 c.r1)
+      let cl1, cl2 = EqHyp.orient_split t {l=c.r0;r=c.r1} cl1 cl2 in
+      (Trail.Phyp.phyp key {c with r1 = cl1})::(EqHyp.create_eq cl2 c.r1)
     else
-      let cl1, cl2 = EqCon.orient_split t {l=c.l0;r=c.l1} cl1 cl2 in
-      (Trail.Pcon.pcon key {c with l1 = cl1})::(EqCon.create_eq cl2 c.l1)
+      let cl1, cl2 = EqHyp.orient_split t {l=c.l0;r=c.l1} cl1 cl2 in
+      (Trail.Phyp.phyp key {c with l1 = cl1})::(EqHyp.create_eq cl2 c.l1)
 
 
   let useful_nodes c =
@@ -440,7 +440,7 @@ module ConDis = struct
     l
 
   let apply_learnt c =
-    let n, par = EqCon.apply_learnt {l=c.l1;r=c.r1} in
+    let n, par = EqHyp.apply_learnt {l=c.l1;r=c.r1} in
     n, neg_parity par
 
   let create_diff_far t cl1 cl2 i age =
@@ -457,7 +457,7 @@ module ConDis = struct
     let v = ThE.sem the in
     let cl1_0 = Opt.get (find_origin v cl1) in
     let cl2_0 = Opt.get (find_origin v cl2) in
-    let diff = Trail.Pcon.pcon key {l1=cl1;l0=cl1_0;r0=cl2_0;r1=cl2;disequality=ThE.node the; age} in
+    let diff = Trail.Phyp.phyp key {l1=cl1;l0=cl1_0;r0=cl2_0;r1=cl2;disequality=ThE.node the; age} in
     diff
 
     let create_diff_near t cl1 cl2 i age =
@@ -474,12 +474,12 @@ module ConDis = struct
     let v = ThE.sem the in
     let cl1_0 = Opt.get (find_origin v cl1) in
     let cl2_0 = Opt.get (find_origin v cl2) in
-    let diff = Trail.Pcon.pcon key {l1=cl1_0;l0=cl1_0;r0=cl2_0;r1=cl2_0;disequality=ThE.node the; age} in
-    diff, (Trail.Pcon.pcon EqCon.key {l=cl1_0;r=cl2_0})
+    let diff = Trail.Phyp.phyp key {l1=cl1_0;l0=cl1_0;r0=cl2_0;r1=cl2_0;disequality=ThE.node the; age} in
+    diff, (Trail.Phyp.phyp EqHyp.key {l=cl1_0;r=cl2_0})
 
 end
 
-let () = Conflict.register_con(module ConDis)
+let () = Conflict.register_hyp(module HypDis)
 
 module Exp = struct
   open Conflict
@@ -504,30 +504,30 @@ module Exp = struct
       Format.fprintf fmt "Dec(%a,%a)"
         Node.pp n1 Node.pp n2
 
-  let analyse t e pcon =
+  let analyse t e phyp =
     match e with
     | SubstUpTrue    (v,e1,e2,_)   -> (** two are equals *)
       let own = ThE.node v in
-      let lcon = Conflict.split t pcon own Bool._true in
-      let pcon = Trail.Pcon.pcon EqCon.key {l=e1;r=e2} in
-      pcon::lcon
+      let lhyp = Conflict.split t phyp own Bool._true in
+      let phyp = Trail.Phyp.phyp EqHyp.key {l=e1;r=e2} in
+      phyp::lhyp
     | SubstUpFalse   (v,al)   ->
       let own = ThE.node v in
-      let lcon = Conflict.split t pcon own Bool._false in
+      let lhyp = Conflict.split t phyp own Bool._false in
       let al = CCList.diagonal al in
-      let fold lcon ((e1,(dis1,val1)),(e2,(dis2,val2))) =
+      let fold lhyp ((e1,(dis1,val1)),(e2,(dis2,val2))) =
         let diff_value () = (** different values *)
           let fold2_inter (type a) (k:a Value.t) v1 v2 acc =
             let module V = (val Value.get k) in
             if not (V.equal v1 v2) then
-              (EqCon.create_eq e1 (Node.index_value k v1 (Node.ty e1))) @
-              (EqCon.create_eq e2 (Node.index_value k v2 (Node.ty e2))) @
+              (EqHyp.create_eq e1 (Node.index_value k v1 (Node.ty e1))) @
+              (EqHyp.create_eq e2 (Node.index_value k v2 (Node.ty e2))) @
               acc
             else acc
           in
-          let lcon' = MValues.fold2_inter {fold2_inter} val1 val2 lcon in
-          assert (not (lcon == lcon')); (** One is different *)
-          lcon'
+          let lhyp' = MValues.fold2_inter {fold2_inter} val1 val2 lhyp in
+          assert (not (lhyp == lhyp')); (** One is different *)
+          lhyp'
         in
         match dis1, dis2 with
         | Some dis1, Some dis2 ->
@@ -537,38 +537,38 @@ module Exp = struct
           else
             (** choose the oldest? *)
             let d,age = Dis.choose dis in
-            let diff = ConDis.create_diff_far t e1 e2 d age in
-            diff::lcon
+            let diff = HypDis.create_diff_far t e1 e2 d age in
+            diff::lhyp
         | _ -> diff_value ()
       in
-      List.fold_left fold lcon al
+      List.fold_left fold lhyp al
     | SubstDownTrue  (the)   -> begin
       let v = ThE.sem the in
       match Node.S.elements v with
       | [a;b] ->
-        let lcon = Conflict.split t pcon a b in
-        (EqCon.create_eq (ThE.node the) Bool._true)@lcon
+        let lhyp = Conflict.split t phyp a b in
+        (EqHyp.create_eq (ThE.node the) Bool._true)@lhyp
       | _ -> raise Impossible
     end
     | SubstDownFalse (the,_)   ->
-      let Trail.Pcon.Pcon(con,c,_) = pcon in
-      let c = Con.Eq.coerce con ConDis.key c in
-      let lcon = [] in
-      let lcon = (EqCon.create_eq c.l1 c.l0)@lcon in
-      let lcon = (EqCon.create_eq c.r1 c.r0)@lcon in
-      let lcon = (EqCon.create_eq (ThE.node the) Bool._false)@lcon in
-      lcon
+      let Trail.Phyp.Phyp(hyp,c,_) = phyp in
+      let c = Hyp.Eq.coerce hyp HypDis.key c in
+      let lhyp = [] in
+      let lhyp = (EqHyp.create_eq c.l1 c.l0)@lhyp in
+      let lhyp = (EqHyp.create_eq c.r1 c.r0)@lhyp in
+      let lhyp = (EqHyp.create_eq (ThE.node the) Bool._false)@lhyp in
+      lhyp
     | Dec(n1,n2) ->
-      let lcon = Conflict.split t pcon n1 n2 in
-      let eq = EqCon.create_eq ~dec:() n1 n2 in
-      eq@lcon
+      let lhyp = Conflict.split t phyp n1 n2 in
+      let eq = EqHyp.create_eq ~dec:() n1 n2 in
+      eq@lhyp
     | Merge(pexp,cl1,cl2,i,age) ->
       assert (pexp == Trail.pexp_fact);
       (** only for bool currently *)
       let cl2' = if Node.equal cl2 Bool._true then Bool._false else Bool._true in
-      let lcon = Conflict.split t pcon cl1 cl2' in
-      let diff = ConDis.create_diff_far t cl1 cl2 i age in
-      diff::lcon
+      let lhyp = Conflict.split t phyp cl1 cl2' in
+      let diff = HypDis.create_diff_far t cl1 cl2 i age in
+      diff::lhyp
 
   let key = exp
 
@@ -578,13 +578,13 @@ module Exp = struct
   let from_contradiction t = function
     | Merge(pexp,cl1,cl2,i,age) ->
       if Debug.test_flag far_disequality then
-        let lcon = Conflict.analyse t pexp (Trail.Pcon.pcon EqCon.key {l=cl1;r=cl2}) in
-        let diff = ConDis.create_diff_far t cl1 cl2 i age in
-        diff::lcon
+        let lhyp = Conflict.analyse t pexp (Trail.Phyp.phyp EqHyp.key {l=cl1;r=cl2}) in
+        let diff = HypDis.create_diff_far t cl1 cl2 i age in
+        diff::lhyp
       else
-        let diff, eq = ConDis.create_diff_near t cl1 cl2 i age in
-        let lcon = Conflict.analyse t pexp eq in
-        diff::lcon
+        let diff, eq = HypDis.create_diff_near t cl1 cl2 i age in
+        let lhyp = Conflict.analyse t pexp eq in
+        diff::lhyp
     | _ -> raise Impossible
 
 end
@@ -709,13 +709,13 @@ module ExpITE = struct
 
   let analyse :
       Conflict.t ->
-    (* Trail.age -> *) t -> Trail.Pcon.t -> Trail.Pcon.t list =
-    fun t (the,b) con ->
+    (* Trail.age -> *) t -> Trail.Phyp.t -> Trail.Phyp.t list =
+    fun t (the,b) hyp ->
       let v = EITE.sem the in
       let own = EITE.node the in
-      let lcon = Conflict.split t con own (if b then v.then_ else v.else_) in
-      let pcon = EqCon.create_eq v.cond (if b then Bool._true else Bool._false) in
-      pcon@lcon
+      let lhyp = Conflict.split t hyp own (if b then v.then_ else v.else_) in
+      let phyp = EqHyp.create_eq v.cond (if b then Bool._true else Bool._false) in
+      phyp@lhyp
 
   let from_contradiction _ _ = raise Impossible
 
