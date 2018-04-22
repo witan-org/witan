@@ -49,14 +49,14 @@ type semtable = Events.Wait.t list
 
 module VDomTable = Dom.MkVector (struct type ('a,'unused) t = 'a domtable end)
 
-module VSemTable = Sem.Vector
+module VSemTable = ThTermKind.Vector
 
 type 'a valuetable = {
   table : 'a Node.M.t;
   events : Events.Wait.t Bag.t Node.M.t;
   reg_events : Events.Wait.t list;
 }
-module VValueTable = Value.MkVector (struct type ('a,'unit) t = 'a valuetable end)
+module VValueTable = ValueKind.MkVector (struct type ('a,'unit) t = 'a valuetable end)
 
 (** Environnement *)
 
@@ -176,9 +176,9 @@ let get_table_dom t k =
       events = Node.M.empty }
 
 let get_table_sem t k =
-  Typedef.check_sem_registered k;
+  Typedef.check_thterm_registered k;
   VSemTable.inc_size k t.sem;
-  Sem.Vector.get_def t.sem k []
+  ThTermKind.Vector.get_def t.sem k []
 
 let get_table_value t k =
   Typedef.check_value_registered k;
@@ -294,7 +294,7 @@ let output_graph filename t =
         try
           let s   = Node.M.find node valuetable.table in
           Format.fprintf fmt "| {%a | %s}"
-            Value.pp value (escape_for_dot (print_value value) s);
+            ValueKind.pp value (escape_for_dot (print_value value) s);
         with Not_found -> ()
       in
       let print_ty fmt node =
@@ -306,10 +306,10 @@ let output_graph filename t =
         | None -> ()
         | Some thterm ->
           match Only_for_solver.sem_of_node thterm with
-          | Only_for_solver.Sem(sem,v) ->
-            let module S = (val get_sem sem) in
+          | Only_for_solver.ThTerm(sem,v) ->
+            let (module S) = get_thterm sem in
             Format.fprintf fmt "| {%a | %s}"
-              Sem.pp sem (escape_for_dot S.pp v)
+              ThTermKind.pp sem (escape_for_dot S.pp v)
       in
       Format.fprintf fmt "{%a %a %a %a %a}" (* "{%a | %a | %a}" *)
         Node.pp node
@@ -405,7 +405,7 @@ module Delayed = struct
     assert (is_current_env t);
     is_registered t.env node
 
-  let set_value_direct (type a) t (value : a Value.t) node0 new_v =
+  let set_value_direct (type a) t (value : a ValueKind.t) node0 new_v =
     Debug.incr stats_set_value;
     let node = find t node0 in
     let valuetable = get_table_value t.env value in
@@ -456,9 +456,9 @@ module Delayed = struct
         t (Some t.env.event_any_reg) node;
       (** reg_sem *)
       match Only_for_solver.open_node node with
-      | Only_for_solver.Sem thterm ->
+      | Only_for_solver.ThTerm thterm ->
         begin match Only_for_solver.sem_of_node thterm with
-        | Only_for_solver.Sem(sem,_) ->
+        | Only_for_solver.ThTerm(sem,_) ->
           let reg_events = get_table_sem t.env sem in
           Wait.wakeup_events_list Events.Wait.translate_regsem
             t (Some reg_events) (thterm)
@@ -518,7 +518,7 @@ module Delayed = struct
     set_semvalue_pending t pexp node0 node0'
 
   let set_value_pending t pexp node0 nodevalue =
-    let node0' = Values.node nodevalue in
+    let node0' = Value.node nodevalue in
     let pexp () =
       Trail.mk_pexp t.env.trail Trail.exp_same_sem
         (ExpSameValue(pexp,node0,nodevalue)) in
@@ -552,7 +552,7 @@ module Delayed = struct
     let domtable = (get_table_dom t.env dom) in
     let old_other_s = Node.M.find_opt node1 domtable.table in
     let old_repr_s = Node.M.find_opt node2  domtable.table in
-    let module Dom = (val (VDom.get_dom dom)) in
+    let (module Dom) = VDom.get_dom dom in
     Debug.dprintf12 debug_few
       "[Egraph] @[merge dom (%a(%a),%a)@ and (%a(%a),%a)@]"
       Node.pp node1 Node.pp node1_0
@@ -575,7 +575,7 @@ module Delayed = struct
     let iteri (type a) (dom : a Dom.t) (domtable : a domtable) =
       let s1 = Node.M.find_opt node1 domtable.table in
       let s2  = Node.M.find_opt node2  domtable.table in
-    let module Dom = (val (VDom.get_dom dom)) in
+    let (module Dom) = VDom.get_dom dom in
       if not (Dom.merged s1 s2)
       then begin
         dom_not_done := true;
@@ -590,10 +590,10 @@ module Delayed = struct
   let merge_values t pexp node0 node0' =
     let node  = find t node0 in
     let node' = find t node0'  in
-    let iteri (type a) (value:a Value.t) (valuetable:a valuetable) =
+    let iteri (type a) (value:a ValueKind.t) (valuetable:a valuetable) =
       let old_s = Node.M.find_opt node valuetable.table in
       let old_s'  = Node.M.find_opt node'  valuetable.table in
-      let module Value = (val (Typedef.get_value value)) in
+      let (module V) = Typedef.get_value value in
       Debug.dprintf12 debug
         "[Egraph] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
         Node.pp node Node.pp node0
@@ -607,16 +607,16 @@ module Delayed = struct
       | None, Some v' ->
         set_value_direct t value node0  v'
       | Some v, Some v' ->
-        if Value.equal v v'
+        if V.equal v v'
         then
           (* already same value. Does that really happen? *)
           ()
         else
           let ty = Node.ty node in
-          let v = Values.index value v ty in
-          let v' = Values.index value v' ty in
+          let v  = Value.index value v ty in
+          let v' = Value.index value v' ty in
           let pexp = Trail.mk_pexp t.env.trail Trail.exp_diff_value (v,node0,node0',v',pexp) in
-          raise (Contradiction(pexp))
+          raise (Contradiction pexp)
     in
     VValueTable.iter_initializedi {VValueTable.iteri} t.env.value
 
@@ -662,7 +662,7 @@ module Delayed = struct
     VDomTable.iter_initializedi {VDomTable.iteri} t.env.dom;
 
     (** move value events  *)
-    let iteri (type a) (value : a Value.t) (valuetable: a valuetable) =
+    let iteri (type a) (value : a ValueKind.t) (valuetable: a valuetable) =
       match Node.M.find_opt other_node valuetable.events with
       | None -> ()
       | Some other_events ->
@@ -716,7 +716,7 @@ module Delayed = struct
   *)
 
   let rec do_pending_daemon delayed (Events.Wait.DaemonKey (dem,runable)) =
-    let module Dem = (val Wait.get_dem dem) in
+    let (module Dem) = Wait.get_dem dem in
     match Dem.run delayed runable with
     | None -> ()
     | Some runable -> Wait.new_pending_daemon delayed dem runable
@@ -810,18 +810,18 @@ module Delayed = struct
 
   let set_nodevalue  d pexp node nodevalue =
     Debug.dprintf4 debug "[Egraph] @[add_pending_set_nodevalue for %a and %a@]"
-      Node.pp node Values.pp nodevalue;
+      Node.pp node Value.pp nodevalue;
     check d node;
     set_value_pending d pexp node nodevalue
 
   let set_values d pexp node nodevalue =
     Debug.dprintf4 debug_few
       "[Egraph] @[set_value for %a with %a@]"
-      Node.pp node Values.pp nodevalue;
+      Node.pp node Value.pp nodevalue;
     set_value_pending d pexp node nodevalue
 
-  let set_value (type a)  d pexp (value : a Value.t) node v =
-    let nodevalue = Values.index value v (Node.ty node) in
+  let set_value (type a)  d pexp (value : a ValueKind.t) node v =
+    let nodevalue = Value.index value v (Node.ty node) in
     set_values d pexp node nodevalue
 
   let set_dom d dom node v =
@@ -875,7 +875,7 @@ module Delayed = struct
     in
     VDomTable.set t.env.dom dom domtable
 
-  let attach_value (type a) t node (value : a Value.t) dem event =
+  let attach_value (type a) t node (value : a ValueKind.t) dem event =
     let node = find_def t node in
     let event = Events.Wait.Event (dem,event) in
     let valuetable = (get_table_value t.env value) in
@@ -899,13 +899,13 @@ module Delayed = struct
       t.env.event_reg <-
         Node.M.add_change Lists.singleton Lists.add node event t.env.event_reg
 
-  let attach_reg_sem (type a) t (sem : a Sem.t) dem event =
+  let attach_reg_sem (type a) t (sem : a ThTermKind.t) dem event =
     let event = Events.Wait.Event (dem,event) in
     let reg_events = get_table_sem t.env sem in
     let reg_events = event::reg_events in
-    Sem.Vector.set t.env.sem sem reg_events
+    ThTermKind.Vector.set t.env.sem sem reg_events
 
-  let attach_reg_value (type a) t (value : a Value.t) dem event =
+  let attach_reg_value (type a) t (value : a ValueKind.t) dem event =
     let event = Events.Wait.Event (dem,event) in
     let value_table = get_table_value t.env value in
     let reg_events = event::value_table.reg_events in
@@ -1030,22 +1030,22 @@ let get_direct_dom t dom node =
 module type Getter = sig
   type t
 
-  val is_equal      : t -> Node.t -> Node.t -> bool
+  val is_equal  : t -> Node.t -> Node.t -> bool
   val find_def  : t -> Node.t -> Node.t
   val get_dom   : t -> 'a Dom.t -> Node.t -> 'a option
     (** dom of the nodeass *)
-  val get_value   : t -> 'a Value.t -> Node.t -> 'a option
+  val get_value : t -> 'a ValueKind.t -> Node.t -> 'a option
     (** value of the nodeass *)
 
   (** {4 The nodeasses must have been marked has registered} *)
 
   val find      : t -> Node.t -> Node.t
-  val is_repr      : t -> Node.t -> bool
+  val is_repr   : t -> Node.t -> bool
 
   val is_registered : t -> Node.t -> bool
 
   val get_env : t -> 'a Env.t -> 'a
-  val set_env: t -> 'a Env.t -> 'a -> unit
+  val set_env : t -> 'a Env.t -> 'a -> unit
 
 end
 

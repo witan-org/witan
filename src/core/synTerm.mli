@@ -23,9 +23,9 @@
 
 open Typedef
 
-val key: Term.t Sem.t
+val key: Term.t ThTermKind.t
 
-include RegisteredSem with type s = Term.t
+include RegisteredThTerm with type s = Term.t
 
 val node_of_term : Term.t -> Node.t
 

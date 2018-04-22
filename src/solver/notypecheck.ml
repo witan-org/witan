@@ -230,7 +230,7 @@ let get_loc =
 
 (** used to complete partial model *)
 let get_model env d =
-  let model : Values.t Term.H.t = Term.H.create 16 in
+  let model : Value.t Term.H.t = Term.H.create 16 in
   R.iter (fun _ id ->
       let t = Term.const id in
       let n = SynTerm.node_of_term t in
@@ -244,4 +244,4 @@ let interp_model model n =
   (Interp.node ~leaf n)
 
 let check_model model expected n =
- Values.equal (interp_model model n) expected
+ Value.equal (interp_model model n) expected

@@ -37,22 +37,22 @@ exception UninitializedEnv of Env.K.t
 module type Getter = sig
   type t
 
-  val is_equal      : t -> Node.t -> Node.t -> bool
+  val is_equal  : t -> Node.t -> Node.t -> bool
   val find_def  : t -> Node.t -> Node.t
   val get_dom   : t -> 'a Dom.t -> Node.t -> 'a option
     (** dom of the class *)
-  val get_value   : t -> 'a Value.t -> Node.t -> 'a option
+  val get_value : t -> 'a ValueKind.t -> Node.t -> 'a option
     (** value of the class *)
 
   (** {4 The classes must have been registered} *)
 
   val find      : t -> Node.t -> Node.t
-  val is_repr      : t -> Node.t -> bool
+  val is_repr   : t -> Node.t -> bool
 
   val is_registered : t -> Node.t -> bool
 
   val get_env : t -> 'a Env.t -> 'a
-  val set_env: t -> 'a Env.t -> 'a -> unit
+  val set_env : t -> 'a Env.t -> 'a -> unit
 
 end
 
@@ -86,13 +86,13 @@ module Delayed : sig
   val set_sem  : t -> Trail.Pexp.t -> Node.t -> ThTerm.t -> unit
   (** attach a sem to an equivalence class *)
 
-  val set_nodevalue: t -> Trail.Pexp.t -> Node.t -> Values.t -> unit
+  val set_nodevalue: t -> Trail.Pexp.t -> Node.t -> Value.t -> unit
   (** attach value to an equivalence class *)
 
-  val set_value: t -> Trail.Pexp.t -> 'a Value.t -> Node.t -> 'a -> unit
+  val set_value: t -> Trail.Pexp.t -> 'a ValueKind.t -> Node.t -> 'a -> unit
   (** attach value to an equivalence class *)
 
-  val set_values: t -> Trail.Pexp.t -> Node.t -> Values.t -> unit
+  val set_values: t -> Trail.Pexp.t -> Node.t -> Value.t -> unit
   (** attach value to an equivalence class *)
 
   (** {3 Delayed modifications} *)
@@ -101,13 +101,13 @@ module Delayed : sig
   (** {3 Attach Event} *)
   val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when the dom change *)
-  val attach_value: t -> Node.t -> 'a Value.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+  val attach_value: t -> Node.t -> 'a ValueKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when a value is attached to this equivalence class *)
   val attach_reg_node: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when this node is registered *)
-  val attach_reg_sem: t -> 'a Sem.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+  val attach_reg_sem: t -> 'a ThTermKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when a new semantical class is registered *)
-  val attach_reg_value: t -> 'a Value.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+  val attach_reg_value: t -> 'a ValueKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when a new value is registered *)
   val attach_node: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when it is not anymore the representative class *)

@@ -26,7 +26,7 @@ open Witan_core
 type t = App of Node.t * Node.t
 val pp: t Pp.pp
 
-val sem: t Sem.t
+val sem: t ThTermKind.t
 
 (* val fun1 :
  *   Ty.t -> string ->

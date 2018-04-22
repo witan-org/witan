@@ -125,13 +125,13 @@ val pexp_fact: Pexp.t
 
 type exp_same_sem =
 | ExpSameSem   : Pexp.t * Node.t * ThTerm.t -> exp_same_sem
-| ExpSameValue : Pexp.t * Node.t * Values.t -> exp_same_sem
+| ExpSameValue : Pexp.t * Node.t * Value.t -> exp_same_sem
 
 val exp_same_sem : exp_same_sem Exp.t
 (** Two nodes have been merged because they shared the same semantical
     terms or value *)
 
-val exp_diff_value: (Values.t * Node.t * Node.t * Values.t * Pexp.t) Exp.t
+val exp_diff_value: (Value.t * Node.t * Node.t * Value.t * Pexp.t) Exp.t
 (** A contradiction have been reached because the given explanation
     makes one equivalence class be associated to two different values *)
 

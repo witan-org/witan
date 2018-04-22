@@ -31,26 +31,26 @@ let debug = Debug.register_info_flag
 module Create = struct
     type 'b event =
     | EventDom      : Node.t * 'a Dom.t  * 'b -> 'b event
-    | EventValue    : Node.t * 'a Value.t * 'b -> 'b event
-    | EventRegCl  : Node.t           * 'b -> 'b event
+    | EventValue    : Node.t * 'a ValueKind.t * 'b -> 'b event
+    | EventRegCl    : Node.t           * 'b -> 'b event
     | EventChange   : Node.t           * 'b -> 'b event
-    | EventRegSem :        'a Sem.t  * 'b -> 'b event
-    | EventRegValue :      'a Value.t  * 'b -> 'b event
+    | EventRegSem   :        'a ThTermKind.t  * 'b -> 'b event
+    | EventRegValue :      'a ValueKind.t  * 'b -> 'b event
 
 
     let pp fmt = function
       | EventDom      (node, dom, _) ->
         Format.fprintf fmt "dom:%a of %a" Dom.pp dom Node.pp node
       | EventValue    (node, value, _) ->
-        Format.fprintf fmt "value:%a of %a" Value.pp value Node.pp node
+        Format.fprintf fmt "value:%a of %a" ValueKind.pp value Node.pp node
       | EventRegCl  (node, _)    ->
         Format.fprintf fmt "registration of %a" Node.pp node
       | EventChange   (node, _)    ->
         Format.fprintf fmt "changecl of %a" Node.pp node
       | EventRegSem (sem, _)    ->
-        Format.fprintf fmt "regsem for %a" Sem.pp sem
+        Format.fprintf fmt "regsem for %a" ThTermKind.pp sem
       | EventRegValue (value, _)    ->
-        Format.fprintf fmt "regvalue for %a" Value.pp value
+        Format.fprintf fmt "regvalue for %a" ValueKind.pp value
 
 
     type 'b t = 'b event list
@@ -478,7 +478,7 @@ module Fast = struct
     ~name
     ?(immediate=false)
     ?(throttle=100)
-    (thterm: (module Typedef.RegisteredSem with type t = a) )
+    (thterm: (module Typedef.RegisteredThTerm with type t = a) )
     (f:Egraph.Delayed.t -> a -> unit)
     (init_d:Egraph.Delayed.t)
     =

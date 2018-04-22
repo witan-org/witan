@@ -30,7 +30,7 @@ val is_disequal : Egraph.d -> Node.t -> Node.t -> bool
 val ite : Node.t -> Node.t -> Node.t -> Node.t
 
 val iter_on_value_different:
-  (module Value.Registered with type s = 'a and type t = 'b) ->
+  (module ValueKind.Registered with type s = 'a and type t = 'b) ->
   they_are_different:(Trail.Pexp.t -> Node.t -> 'a -> unit) ->
   Egraph.Delayed.t -> Node.t -> unit
 

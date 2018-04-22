@@ -43,11 +43,11 @@ let bool_interp () =
   let nc = to_n tc in
   let leaf ~a ~b ~c t =
     if Term.equal t ta
-    then Some (Values.index Bool.dom a Bool.ty)
+    then Some (Value.index Bool.dom a Bool.ty)
     else if Term.equal t tb
-    then Some (Values.index Bool.dom b Bool.ty)
+    then Some (Value.index Bool.dom b Bool.ty)
     else if Term.equal t tc
-    then Some (Values.index Bool.dom c Bool.ty)
+    then Some (Value.index Bool.dom c Bool.ty)
     else None
   in
   let l = [
@@ -61,7 +61,7 @@ let bool_interp () =
   in
   let test (msg,n,v,leaf) =
     let v' = Interp.node ~leaf n in
-    match Values.value Bool.dom v' with
+    match Value.value Bool.dom v' with
     | None -> assert_failure (Printf.sprintf "Not a value of type bool: %s" msg)
     | Some v' -> assert_bool msg (v = v')
   in

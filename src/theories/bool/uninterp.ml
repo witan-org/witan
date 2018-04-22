@@ -32,7 +32,7 @@ let debug = Debug.register_info_flag
 
 type t = App of Node.t * Node.t
 
-let sem : t Sem.t = Sem.create_key "UF"
+let sem : t ThTermKind.t = ThTermKind.create_key "UF"
 
 module Th = struct
   module T = struct
@@ -69,7 +69,7 @@ end
 
 let pp = Th.pp
 
-module ThE = Sem.Register(Th)
+module ThE = ThTermKind.Register(Th)
 
 let app f g ty = Node.index_sem sem (App(f,g)) ty
 

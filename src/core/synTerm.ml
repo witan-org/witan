@@ -23,14 +23,14 @@
 
 open Typedef
 
-let synsem = Sem.create_key "syntax"
+let synsem = ThTermKind.create_key "syntax"
 
-module Sem = RegisterSem(struct
+module ThTerm = RegisterThTerm(struct
     let key = synsem
     include Term
   end)
 
-let node_of_term x = Sem.node (Sem.index x (x.Term.ty))
+let node_of_term x = ThTerm.node (ThTerm.index x (x.Term.ty))
 
 
 type env = {
@@ -88,12 +88,12 @@ module DaemonConvertTerm = struct
     | Events.Fired.EventRegSem(thterm,()) ->
       begin try begin
         let e = Egraph.Delayed.get_env d converters in
-        let thterm = Sem.coerce_thterm thterm in
-        let v = Sem.sem thterm in
+        let thterm = ThTerm.coerce_thterm thterm in
+        let v = ThTerm.sem thterm in
         let f, l = uncurry_app v in
         begin match f with
           | {Term.term = Id id} when not (Term.is_defined id) ->
-            let n = Sem.node thterm in
+            let n = ThTerm.node thterm in
             List.iter (fun f ->
                 Opt.iter
                   (Egraph.Delayed.register_decision d)
@@ -106,7 +106,7 @@ module DaemonConvertTerm = struct
           | None -> ()
           | Some node ->
             Egraph.Delayed.register d node;
-            Egraph.Delayed.merge d Trail.pexp_fact (Sem.node thterm) node
+            Egraph.Delayed.merge d Trail.pexp_fact (ThTerm.node thterm) node
         in
         List.iter iter e.converters
       end with Exit -> () end
@@ -120,6 +120,6 @@ let init env =
   Egraph.Delayed.set_env env converters {converters=[]; decvars = []};
   RDaemonConvertTerm.init env;
   Demon.Fast.attach env
-    DaemonConvertTerm.key [Demon.Create.EventRegSem(Sem.key,())];
+    DaemonConvertTerm.key [Demon.Create.EventRegSem(ThTerm.key,())];
 
-include Sem
+include ThTerm

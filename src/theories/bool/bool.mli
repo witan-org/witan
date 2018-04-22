@@ -24,8 +24,8 @@
 open Witan_core_structures
 
 type t
-val sem: t Sem.t
-val dom: bool Value.t
+val sem: t ThTermKind.t
+val dom: bool ValueKind.t
 
 val _true : Node.t
 val _false : Node.t
@@ -61,5 +61,5 @@ module BoolValue : Typedef.RegisteredValue with type s = bool
 
 val value_true : BoolValue.t
 val value_false: BoolValue.t
-val values_true : Values.t
-val values_false: Values.t
+val values_true : Value.t
+val values_false: Value.t

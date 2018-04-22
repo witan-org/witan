@@ -30,9 +30,9 @@ let debug = Debug.register_info_flag
   ~desc:"for the arithmetic theory"
   "LRA"
 
-let real : Q.t Value.t = Value.create_key "Q"
+let real : Q.t ValueKind.t = ValueKind.create_key "Q"
 
-module RealValue = Value.Register(struct
+module RealValue = ValueKind.Register(struct
     include Q
     let key = real
   end)
@@ -78,10 +78,10 @@ module S = struct
   end
   include T
   include Stdlib.MkDatatype(T)
-  let key : t Sem.t = Sem.create_key "SARITH"
+  let key : t ThTermKind.t = ThTermKind.create_key "SARITH"
 end
 
-module SE = Sem.Register(S)
+module SE = ThTermKind.Register(S)
 
 module D = Interval.Convexe
 

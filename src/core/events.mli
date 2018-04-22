@@ -28,9 +28,9 @@ module Fired : sig
     (** the domain dom of the class change *)
     | EventDom      : Node.t * 'a Dom.t  *      'b -> 'b event
     (** the value of the node has been set *)
-    | EventValue    : Node.t * 'a Value.t  *    'b -> 'b event
+    | EventValue    : Node.t * 'a ValueKind.t * 'b -> 'b event
     (** a new semantical term 'a point to this class (not complete) *)
-    | EventSem      : Node.t * 'a Sem.t  * 'a * 'b -> 'b event
+    | EventSem      : Node.t * 'a ThTermKind.t * 'a * 'b -> 'b event
     (** we want to register a class *)
     | EventReg      : Node.t *                  'b -> 'b event
     (** we want to register this class *)
@@ -40,7 +40,7 @@ module Fired : sig
     (** a new semantical term 'a appear *)
     | EventRegSem   : ThTerm.t *               'b -> 'b event
     (** a new value 'a appear *)
-    | EventRegValue : Values.t *             'b -> 'b event
+    | EventRegValue : Value.t *             'b -> 'b event
 
   val pp: 'b event Pp.pp
   val get_data: 'b event -> 'b
@@ -69,13 +69,13 @@ module Wait : sig
 
   type 'a translate = { translate : 'd. 'a -> 'd -> 'd Fired.event}
 
-  val translate_dom : (Node.t * 'a Dom.t) translate
-  val translate_value : (Node.t * 'a Value.t) translate
-  val translate_reg : Node.t translate
-  val translate_regnode : Node.t translate
-  val translate_change : Node.t translate
-  val translate_regsem : ThTerm.t translate
-  val translate_regvalue : Values.t translate
+  val translate_dom      : (Node.t * 'a Dom.t) translate
+  val translate_value    : (Node.t * 'a ValueKind.t) translate
+  val translate_reg      : Node.t translate
+  val translate_regnode  : Node.t translate
+  val translate_change   : Node.t translate
+  val translate_regsem   : ThTerm.t translate
+  val translate_regvalue : Value.t translate
 
   module type S = sig
     type delayed

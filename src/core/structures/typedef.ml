@@ -34,40 +34,30 @@ let debug_create = Debug.register_info_flag
   ~desc:"for the core solver class creation information"
   "index"
 
-module Sem = Keys.Make_key(struct end)
-module Value = Keys.Make_key(struct end)
+module ThTermKind = Keys.Make_key(struct end)
+module ValueKind  = Keys.Make_key(struct end)
 
-(** sem *)
-type 'a sem = 'a Sem.t
-
-module type Sem = sig
+module type ThTerm = sig
   include Stdlib.Datatype
-  val key: t sem
+  val key: t ThTermKind.t
 end
 
-module SemRegistry = Sem.Make_Registry(struct
-    type 'a data = (module Sem with type t = 'a)
-    let pp (type a) (sem: a data) =
-      let module Sem = (val sem) in
-      Sem.pp
-    let key (type a) (sem: a data) =
-      let module Sem = (val sem) in
-      Sem.key
+module ThTermRegistry = ThTermKind.Make_Registry(struct
+    type 'a data = (module ThTerm with type t = 'a)
+    let pp (type a) ((module ThTerm): a data) = ThTerm.pp
+    let key (type a) ((module ThTerm): a data) = ThTerm.key
   end)
 
-let check_sem_registered = SemRegistry.check_is_registered
-let print_sem = SemRegistry.print
-let get_sem = SemRegistry.get
-
-(** value *)
-type 'a value = 'a Value.t
+let check_thterm_registered = ThTermRegistry.check_is_registered
+let print_thterm = ThTermRegistry.print
+let get_thterm = ThTermRegistry.get
 
 module type Value = sig
   include Stdlib.Datatype
-  val key: t value
+  val key: t ValueKind.t
 end
 
-module ValueRegistry = Value.Make_Registry(struct
+module ValueRegistry = ValueKind.Make_Registry(struct
     type 'a data = (module Value with type t = 'a)
     let pp (type a) (value: a data) =
       let module Value = (val value) in
@@ -83,15 +73,15 @@ let get_value = ValueRegistry.get
 
 module Node = struct
   type 'a r =
-    | Sem  : int * Ty.t * 'a sem * 'a -> [>`Sem] r
-    | Value  : int * Ty.t * 'a value * 'a -> [>`Value] r
+    | ThTerm  : int * Ty.t * 'a ThTermKind.t * 'a -> [>`ThTerm] r
+    | Value  : int * Ty.t * 'a ValueKind.t * 'a -> [>`Value] r
 
-  type t' = [ `Sem | `Value] r
-  type thterm = [`Sem] r
+  type t' = [ `ThTerm | `Value] r
+  type thterm = [`ThTerm] r
   type nodevalue = [`Value] r
 
   let tag: t' -> int = function
-    | Sem(tag,_,_,_) -> tag
+    | ThTerm(tag,_,_,_) -> tag
     | Value(tag,_,_,_) -> tag
 
   let names = Simple_vector.create 100
@@ -118,19 +108,19 @@ module Node = struct
     Simple_vector.set names (tag node) s
 
   let ty = function
-    | Sem(_,ty,_,_) -> ty
+    | ThTerm(_,ty,_,_) -> ty
     | Value(_,ty,_,_) -> ty
 
-  module SemIndex = Sem.MkVector
+  module ThTermIndex = ThTermKind.MkVector
       (struct type ('a,'unedeed) t = 'a -> Ty.t -> thterm end)
 
-  let semindex : unit SemIndex.t = SemIndex.create 8
+  let semindex : unit ThTermIndex.t = ThTermIndex.create 8
 
   let thterm sem v ty : thterm =
-    SemRegistry.check_is_registered sem;
-    (SemIndex.get semindex sem) v ty
+    ThTermRegistry.check_is_registered sem;
+    (ThTermIndex.get semindex sem) v ty
 
-  module ValueIndex = Value.MkVector
+  module ValueIndex = ValueKind.MkVector
       (struct type ('a,'unedeed) t = 'a -> Ty.t -> nodevalue end)
 
   let valueindex : unit ValueIndex.t = ValueIndex.create 8
@@ -141,7 +131,7 @@ module Node = struct
 
   (** Just used for checking the typability *)
   let _of_thterm : thterm -> t = function
-    | Sem(tag,ty,sem,v) -> Sem(tag,ty,sem,v)
+    | ThTerm(tag,ty,sem,v) -> ThTerm(tag,ty,sem,v)
 
   (** IF the previous function is typable this one is correct:
       I'm not able to defined is without obj.magic
@@ -166,22 +156,22 @@ module ThTerm = struct
   include Stdlib.MakeMSH(struct
       type t = Node.thterm
       let tag: t -> int = function
-        | Node.Sem(tag,_,_,_) -> tag
+        | Node.ThTerm(tag,_,_,_) -> tag
       let pp fmt : t -> unit = function
-        | Node.Sem(_,_,sem,v) -> print_sem sem fmt v
+        | Node.ThTerm(_,_,sem,v) -> print_thterm sem fmt v
     end)
 
   let index = Node.thterm
   let node = Node.of_thterm
   let ty : t -> Ty.t = function
-    | Node.Sem(_,ty,_,_) -> ty
+    | Node.ThTerm(_,ty,_,_) -> ty
 
 
 end
 
-module type RegisteredSem = sig
+module type RegisteredThTerm = sig
   type s
-  val key: s sem
+  val key: s ThTermKind.t
   (** thterm *)
   include Datatype
 
@@ -206,7 +196,7 @@ end
 
 
 
-module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
+module RegisterThTerm (D:ThTerm) : RegisteredThTerm with type s = D.t = struct
 
   module HC = Hashcons.MakeTag(struct
       open Node
@@ -217,25 +207,25 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
 
       let equal: t -> t -> bool = fun a b ->
         match a, b with
-        | Sem(_,tya,sema,va), Sem(_,tyb,semb,vb) ->
-          match Sem.Eq.coerce_type sema D.key,
-                Sem.Eq.coerce_type semb D.key with
+        | ThTerm(_,tya,sema,va), ThTerm(_,tyb,semb,vb) ->
+          match ThTermKind.Eq.coerce_type sema D.key,
+                ThTermKind.Eq.coerce_type semb D.key with
           | Keys.Eq, Keys.Eq  ->
              Ty.equal tya tyb && D.equal va vb
 
       let hash: t -> int = fun a ->
         match a with
-        | Sem(_,tya,sema,va) ->
-          match Sem.Eq.coerce_type sema D.key with
+        | ThTerm(_,tya,sema,va) ->
+          match ThTermKind.Eq.coerce_type sema D.key with
           | Keys.Eq ->
             Hashcons.combine (Ty.hash tya) (D.hash va)
 
       let set_tag: int -> t -> t = fun tag x ->
         match x with
-        | Sem(_,ty,sem,v) -> Sem(tag,ty,sem,v)
+        | ThTerm(_,ty,sem,v) -> ThTerm(tag,ty,sem,v)
 
       let tag: t -> int = function
-        | Sem(tag,_,_,_) -> tag
+        | ThTerm(tag,_,_,_) -> tag
 
       let pp fmt x =
         Format.pp_print_char fmt '@';
@@ -248,19 +238,19 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
   let key = D.key
 
   let tag: t -> int = function
-    | Node.Sem(tag,_,_,_) -> tag
+    | Node.ThTerm(tag,_,_,_) -> tag
 
   let index v ty =
     let node =
       HC.hashcons3
-        (fun tag sem v ty -> Node.Sem(tag,ty,sem,v))
+        (fun tag sem v ty -> Node.ThTerm(tag,ty,sem,v))
         D.key v ty in
     let i = tag node in
     Simple_vector.inc_size (i+1) Node.names;
     begin
       if Simple_vector.is_uninitialized Node.names i then
         let s = Strings.find_new_name Node.used_names ""
-        (** TODO use Sem.pp or Sem.print_debug *) in
+        (** TODO use ThTerm.pp or Sem.print_debug *) in
         Debug.dprintf3 debug_create "[Egraph] @[@@%s is %a@]"
           s D.pp v;
         Simple_vector.set Node.names i s
@@ -270,8 +260,8 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
   let node = Node.of_thterm
 
   let sem : t -> D.t = function
-    | Node.Sem(_,_,sem,v) ->
-      match Sem.Eq.coerce_type sem D.key with
+    | Node.ThTerm(_,_,sem,v) ->
+      match ThTermKind.Eq.coerce_type sem D.key with
       | Keys.Eq -> v
 
   let ty = ThTerm.ty
@@ -279,19 +269,19 @@ module RegisterSem (D:Sem) : RegisteredSem with type s = D.t = struct
   let thterm: t -> ThTerm.t = fun x -> x
 
   let of_thterm: ThTerm.t -> t option = function
-    | Node.Sem(_,_,sem',_) as v when Sem.equal sem' D.key -> Some v
+    | Node.ThTerm(_,_,sem',_) as v when ThTermKind.equal sem' D.key -> Some v
     | _ -> None
 
   let coerce_thterm: ThTerm.t -> t = function
-    | Node.Sem(_,_,sem',_) as v -> assert (Sem.equal sem' D.key); v
+    | Node.ThTerm(_,_,sem',_) as v -> assert (ThTermKind.equal sem' D.key); v
 
   let () =
-    SemRegistry.register (module D: Sem with type t = D.t);
-    Node.SemIndex.set Node.semindex D.key (fun v ty -> index v ty)
+    ThTermRegistry.register (module D: ThTerm with type t = D.t);
+    Node.ThTermIndex.set Node.semindex D.key (fun v ty -> index v ty)
 
 end
 
-module Values = struct
+module Value = struct
   include Stdlib.MakeMSH(struct
       type t = Node.nodevalue
       let tag: t -> int = function
@@ -305,10 +295,10 @@ module Values = struct
   let ty : t -> Ty.t = function
     | Node.Value(_,ty,_,_) -> ty
 
-  let value : type a. a Value.t -> t -> a option = fun value t ->
+  let value : type a. a ValueKind.t -> t -> a option = fun value t ->
     match t with
     | Node.Value(_,_,value',v) ->
-      match Value.Eq.eq_type value value' with
+      match ValueKind.Eq.eq_type value value' with
       | None -> None
       | Some Keys.Eq -> Some v
 
@@ -317,7 +307,7 @@ end
 module type RegisteredValue = sig
   type s
   module V : Value with type t = s
-  val key: s value
+  val key: s ValueKind.t
   (** nodevalue *)
   include Datatype
 
@@ -333,15 +323,15 @@ module type RegisteredValue = sig
   val value: t -> s
   (** Return the value from a nodevalue *)
 
-  val nodevalue: t -> Values.t
-  val of_nodevalue: Values.t -> t option
+  val nodevalue: t -> Value.t
+  val of_nodevalue: Value.t -> t option
 
-  val coerce_nodevalue: Values.t -> t
+  val coerce_nodevalue: Value.t -> t
 
 end
 
 
-module RegisteredValueRegistry = Value.Make_Registry(struct
+module RegisteredValueRegistry = ValueKind.Make_Registry(struct
     type 'a data = (module RegisteredValue with type s = 'a)
     let pp (type a) (value: a data) =
       let module RegisteredValue = (val value) in
@@ -369,15 +359,15 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
       let equal: t -> t -> bool = fun a b ->
         match a, b with
         | Value(_,tya,valuea,va), Value(_,tyb,valueb,vb) ->
-          match Value.Eq.coerce_type valuea D.key,
-                Value.Eq.coerce_type valueb D.key with
+          match ValueKind.Eq.coerce_type valuea D.key,
+                ValueKind.Eq.coerce_type valueb D.key with
           | Keys.Eq, Keys.Eq  ->
              Ty.equal tya tyb && D.equal va vb
 
       let hash: t -> int = fun a ->
         match a with
         | Value(_,tya,valuea,va) ->
-          match Value.Eq.coerce_type valuea D.key with
+          match ValueKind.Eq.coerce_type valuea D.key with
           | Keys.Eq ->
             Hashcons.combine (Ty.hash tya) (D.hash va)
 
@@ -421,19 +411,19 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
 
   let value : t -> D.t = function
     | Node.Value(_,_,value,v) ->
-      match Value.Eq.coerce_type value D.key with
+      match ValueKind.Eq.coerce_type value D.key with
       | Keys.Eq -> v
 
-  let ty = Values.ty
+  let ty = Value.ty
 
-  let nodevalue: t -> Values.t = fun x -> x
+  let nodevalue: t -> Value.t = fun x -> x
 
-  let of_nodevalue: Values.t -> t option = function
-    | Node.Value(_,_,value',_) as v when Value.equal value' D.key -> Some v
+  let of_nodevalue: Value.t -> t option = function
+    | Node.Value(_,_,value',_) as v when ValueKind.equal value' D.key -> Some v
     | _ -> None
 
-  let coerce_nodevalue: Values.t -> t = function
-    | Node.Value(_,_,value',_) as v -> assert (Value.equal value' D.key); v
+  let coerce_nodevalue: Value.t -> t = function
+    | Node.Value(_,_,value',_) as v -> assert (ValueKind.equal value' D.key); v
 
   end
 
@@ -447,38 +437,38 @@ end
 
 module Only_for_solver = struct
   type sem_of_node =
-    | Sem: 'a sem * 'a  -> sem_of_node
+    | ThTerm: 'a ThTermKind.t * 'a  -> sem_of_node
 
   let thterm: Node.t -> ThTerm.t option = function
     | Node.Value _ -> None
-    | Node.Sem _ as x -> Some (Obj.magic x: ThTerm.t)
+    | Node.ThTerm _ as x -> Some (Obj.magic x: ThTerm.t)
 
   let sem_of_node: ThTerm.t -> sem_of_node = function
-    | Node.Sem (_,_,sem,v) -> Sem(sem,v)
+    | Node.ThTerm (_,_,sem,v) -> ThTerm(sem,v)
 
   type value_of_node =
-    | Value: 'a value * 'a  -> value_of_node
+    | Value: 'a ValueKind.t * 'a  -> value_of_node
 
-  let nodevalue: Node.t -> Values.t option = function
-    | Node.Sem _ -> None
-    | Node.Value _ as x -> Some (Obj.magic x: Values.t)
+  let nodevalue: Node.t -> Value.t option = function
+    | Node.ThTerm _ -> None
+    | Node.Value _ as x -> Some (Obj.magic x: Value.t)
 
-  let value_of_node: Values.t -> value_of_node = function
+  let value_of_node: Value.t -> value_of_node = function
     | Node.Value (_,_,value,v) -> Value(value,v)
 
   let node_of_thterm : ThTerm.t -> Node.t = ThTerm.node
-  let node_of_nodevalue : Values.t -> Node.t = Values.node
+  let node_of_nodevalue : Value.t -> Node.t = Value.node
 
   type opened_node =
-    | Sem  : ThTerm.t -> opened_node
-    | Value  : Values.t -> opened_node
+    | ThTerm : ThTerm.t -> opened_node
+    | Value  : Value.t -> opened_node
 
   let open_node : Node.t -> opened_node = function
-    | Node.Sem _ as x -> Sem (Obj.magic x: ThTerm.t)
-    | Node.Value _ as x -> Value (Obj.magic x: Values.t)
+    | Node.ThTerm _ as x -> ThTerm (Obj.magic x: ThTerm.t)
+    | Node.Value _ as x -> Value (Obj.magic x: Value.t)
 end
 
 
 let check_initialization () =
-  SemRegistry.is_well_initialized () &&
+  ThTermRegistry.is_well_initialized () &&
   ValueRegistry.is_well_initialized ()

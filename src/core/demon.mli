@@ -28,15 +28,15 @@ module Create : sig
     (** the domain dom of the class is watched *)
     | EventDom      : Node.t * 'a Dom.t  * 'b -> 'b event
     (** the value of the class is watched *)
-    | EventValue    : Node.t * 'a Value.t  * 'b -> 'b event
+    | EventValue    : Node.t * 'a ValueKind.t  * 'b -> 'b event
     (** we want to register this class *)
-    | EventRegCl  : Node.t           * 'b -> 'b event
+    | EventRegCl    : Node.t           * 'b -> 'b event
     (** Warn when the class is not the representant of its eq-class anymore *)
     | EventChange   : Node.t           * 'b -> 'b event
     (** a new theory term 'a appear *)
-    | EventRegSem :        'a Sem.t  * 'b -> 'b event
+    | EventRegSem   :        'a ThTermKind.t  * 'b -> 'b event
     (** a new value 'a appear *)
-    | EventRegValue :      'a Value.t  * 'b -> 'b event
+    | EventRegValue :      'a ValueKind.t  * 'b -> 'b event
 
 
   val pp: 'b event Pp.pp
@@ -130,7 +130,7 @@ module Fast: sig
     name:string ->
     ?immediate:bool ->
     ?throttle:int ->
-    (module RegisteredSem with type t = 'a) ->
+    (module RegisteredThTerm with type t = 'a) ->
     (Egraph.Delayed.t -> 'a -> unit) ->
     Egraph.Delayed.t ->
     unit

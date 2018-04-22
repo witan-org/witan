@@ -166,13 +166,13 @@ let pexp_fact = Pexp.Pexp(Age.bef,exp_fact,())
 
 type exp_same_sem =
 | ExpSameSem   : Pexp.t * Node.t * ThTerm.t -> exp_same_sem
-| ExpSameValue : Pexp.t * Node.t * Values.t -> exp_same_sem
+| ExpSameValue : Pexp.t * Node.t * Value.t -> exp_same_sem
 
 let exp_same_sem : exp_same_sem Exp.t =
   Exp.create_key "Egraph.exp_same_sem"
 
 (** TODO choose an appropriate data *)
-let exp_diff_value : (Values.t * Node.t * Node.t * Values.t * Pexp.t) Exp.t =
+let exp_diff_value : (Value.t * Node.t * Node.t * Value.t * Pexp.t) Exp.t =
   Exp.create_key "Egraph.exp_diff_value"
 
 

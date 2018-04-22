@@ -35,7 +35,7 @@ let debug = Debug.register_info_flag
 type t = Node.S.t
 (** Is there two elements equal *)
 
-let sem : t Sem.t = Sem.create_key "Eq"
+let sem : t ThTermKind.t = ThTermKind.create_key "Eq"
 
 module Th = struct
 
@@ -77,7 +77,7 @@ module Th = struct
 
 end
 
-module ThE = Sem.Register(Th)
+module ThE = ThTermKind.Register(Th)
 
 (** {2 disequality domains} *)
 
@@ -117,7 +117,7 @@ end
 let dom : Dis.t Dom.t = Dom.create_key "dis"
 
 (** For each value key give the value *)
-module MValues = Value.MkMap(struct type ('a, _) t = 'a end)
+module MValues = ValueKind.MkMap(struct type ('a, _) t = 'a end)
 
 type exp =
   | Merge of Trail.Pexp.t * Node.t * Node.t * Dis.elt * Trail.Age.t
@@ -204,8 +204,8 @@ let find_not_disequal d s =
      | Some dis1, Some dis2 when not (Dis.disjoint dis1 dis2) -> true
      | _ -> false) ||
     (try
-       let fold2_inter (type a) (k:a Value.t) v1 v2 () =
-         let module V = (val Value.get k) in
+       let fold2_inter (type a) (k:a ValueKind.t) v1 v2 () =
+         let module V = (val ValueKind.get k) in
             if not (V.equal v1 v2) then raise Exit
         in
         MValues.fold2_inter {fold2_inter} values1 values2 ();
@@ -214,7 +214,7 @@ let find_not_disequal d s =
   in
   let get_dis_and_values cl =
     Delayed.get_dom d dom cl,
-    Value.fold {fold=(fun k acc ->
+    ValueKind.fold {fold=(fun k acc ->
         match Delayed.get_value d k cl with
         | None -> acc
         | Some v -> MValues.add k v acc)}
@@ -517,8 +517,8 @@ module Exp = struct
       let al = CCList.diagonal al in
       let fold lhyp ((e1,(dis1,val1)),(e2,(dis2,val2))) =
         let diff_value () = (** different values *)
-          let fold2_inter (type a) (k:a Value.t) v1 v2 acc =
-            let module V = (val Value.get k) in
+          let fold2_inter (type a) (k:a ValueKind.t) v1 v2 acc =
+            let (module V) = ValueKind.get k in
             if not (V.equal v1 v2) then
               (EqHyp.create_eq e1 (Node.index_value k v1 (Node.ty e1))) @
               (EqHyp.create_eq e2 (Node.index_value k v2 (Node.ty e2))) @
@@ -620,11 +620,11 @@ module ITE = struct
   include TITE
   include MkDatatype(TITE)
 
-  let key = Sem.create_key "ite"
+  let key = ThTermKind.create_key "ite"
 
 end
 
-module EITE = Sem.Register(ITE)
+module EITE = ThTermKind.Register(ITE)
 
 let ite cond then_ else_ =
   let ty1 = Node.ty then_ in
@@ -652,7 +652,7 @@ module DaemonPropaITE = struct
   let throttle = 100
   let wakeup d = function
     | Events.Fired.EventValue(cond,dom,clsem) ->
-      assert (Value.equal dom Bool.dom);
+      assert (ValueKind.equal dom Bool.dom);
       let v = EITE.sem clsem in
       assert (Delayed.is_equal d cond v.cond);
       begin match Bool.is d v.cond with
@@ -753,10 +753,10 @@ let iter_on_value_different
 (** Give for a value the nodes that are different *)
 let init_diff_to_value (type a) (type b)
     ?(already_registered=([]: b list))
-    d0 (value: (module Witan_core_structures.Typedef.RegisteredValue with type s = a and type t = b))
+    d0
+    ((module Val): (module Witan_core_structures.Typedef.RegisteredValue with type s = a and type t = b))
     ~(they_are_different:(Delayed.t -> Trail.Pexp.t -> Node.t -> a -> unit)) =
 
-  let module Val = (val value) in
   let propagate_diff d v =
     let own = Val.node v in
     let dis = Opt.get_def Dis.empty (Egraph.Delayed.get_dom d dom own) in
@@ -771,7 +771,7 @@ let init_diff_to_value (type a) (type b)
     in
     Dis.iter iter dis
   in
-  let key = Demon.Fast.create (Format.asprintf "DiffToValue.%a" Value.pp Val.key)
+  let key = Demon.Fast.create (Format.asprintf "DiffToValue.%a" ValueKind.pp Val.key)
   in
   let module D = Demon.Fast.Register(struct
       module Data = Val
@@ -792,7 +792,7 @@ let init_diff_to_value (type a) (type b)
   in
   D.init d0;
   Demon.Fast.register_init_daemon_value
-    ~name:(Format.asprintf "DiffToValue.Init.%a" Value.pp Val.key)
+    ~name:(Format.asprintf "DiffToValue.Init.%a" ValueKind.pp Val.key)
     (module Val)
     init
     d0;
@@ -814,8 +814,8 @@ let bool_init_diff_to_value d =
 let () =
   let interp ~interp t =
     try
-      let fold acc e = Values.S.add_new Exit (interp e) acc in
-      let _ = Node.S.fold_left fold Values.S.empty t in
+      let fold acc e = Value.S.add_new Exit (interp e) acc in
+      let _ = Node.S.fold_left fold Value.S.empty t in
       Bool.values_false
     with Exit ->
       Bool.values_true
@@ -836,12 +836,12 @@ let () =
       let (!>) n = Bool.BoolValue.value (Bool.BoolValue.coerce_nodevalue n) in
       let (!<) b = Some (if b then Bool.values_true else Bool.values_false) in
       match args with
-      | [a;b] when is equal_id || is equiv_id -> !< (Values.equal a b)
+      | [a;b] when is equal_id || is equiv_id -> !< (Value.equal a b)
       | [c;a;b] when is ite_id -> Some (if (!> c) then a else b)
       | _   when is_distinct_id id -> begin
           try
-            let fold acc v = Values.S.add_new Exit v acc in
-            let _ = List.fold_left fold Values.S.empty args in
+            let fold acc v = Value.S.add_new Exit v acc in
+            let _ = List.fold_left fold Value.S.empty args in
             Some Bool.values_false
           with Exit ->
             Some Bool.values_true

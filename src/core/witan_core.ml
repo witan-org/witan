@@ -33,22 +33,22 @@ module Node = struct
   include Typedef.Node
 end
 
-module Sem = struct
-  include Typedef.Sem
-  let print = Typedef.print_sem
+module ThTermKind = struct
+  include Typedef.ThTermKind
+  let print = Typedef.print_thterm
 
-  module type Sem = Typedef.Sem
-  module type Registered = Typedef.RegisteredSem
+  module type ThTerm = Typedef.ThTerm
+  module type Registered = Typedef.RegisteredThTerm
 
-  module Register = Typedef.RegisterSem
+  module Register = Typedef.RegisterThTerm
 end
 
 module ThTerm = Typedef.ThTerm
 
 module SynTerm = SynTerm
 
-module Value = struct
-  include Typedef.Value
+module ValueKind = struct
+  include Typedef.ValueKind
   let print = Typedef.print_value
 
   module type Value = Typedef.Value
@@ -60,7 +60,7 @@ module Value = struct
   let get_registered = Typedef.get_registered_value
 end
 
-module Values = Typedef.Values
+module Value = Typedef.Value
 
 module Interp = Interp
 

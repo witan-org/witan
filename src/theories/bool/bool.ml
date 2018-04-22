@@ -33,9 +33,9 @@ let debug = Debug.register_info_flag
   "bool"
 
 let ty = Term._Prop
-let dom : bool Value.t = Value.create_key "bool"
+let dom : bool ValueKind.t = ValueKind.create_key "bool"
 
-module BoolValue = Value.Register(struct
+module BoolValue = ValueKind.Register(struct
     include DBool
     let key = dom
   end)
@@ -67,7 +67,7 @@ type t =
     lits: (Node.t * bool) IArray.t;
   }
 
-let sem : t Sem.t = Sem.create_key "Prop"
+let sem : t ThTermKind.t = ThTermKind.create_key "Prop"
 
 (* let iter f x = IArray.iter f x.lits *)
 
@@ -162,7 +162,7 @@ module Th = struct
 
 end
 
-module ThE = Sem.Register(Th)
+module ThE = ThTermKind.Register(Th)
 
 (** At least all the leaves except one are known and can be discarded *)
 type bcpkind =
@@ -193,7 +193,7 @@ module DaemonPropaNot = struct
   let wakeup d =
     function
     | Events.Fired.EventValue(_,dom',((_,node,ncl) as x)) ->
-      assert (Value.equal dom dom');
+      assert (ValueKind.equal dom dom');
       begin match Delayed.get_value d dom node with
         | None -> raise Impossible
         | Some b ->
@@ -332,10 +332,10 @@ module DaemonPropa = struct
 
   let wakeup d = function
     | Events.Fired.EventValue(_,dom',Lit(thterm,watched,next)) ->
-      assert( Value.equal dom dom' );
+      assert( ValueKind.equal dom dom' );
       ignore (wakeup_lit ~first:false d thterm watched next)
     | Events.Fired.EventValue(_ownr,dom',All thterm) ->
-      assert( Value.equal dom dom' );
+      assert( ValueKind.equal dom dom' );
       (** use this own because the other is the representant *)
       ignore (wakeup_own ~first:false d thterm)
     | _ -> raise UnwaitedEvent
