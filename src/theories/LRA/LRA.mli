@@ -31,7 +31,7 @@ val mult_cst : Q.t -> Node.t -> Node.t
 
 val mult : Node.t -> Node.t -> Node.t
 
-val th_register : Egraph.d -> unit
+val th_register : Egraph.Delayed.t -> unit
 val zero: Node.t
 
 val gt_zero: Node.t -> Node.t

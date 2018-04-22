@@ -63,7 +63,7 @@ module type Ro = sig
   include Getter with type t := t
 
   val register : t -> Node.t -> unit
-  (** Add a new class to register *)
+  (** Add a new node to register *)
 
   val is_current_env: t -> bool
 
@@ -82,9 +82,10 @@ module Delayed : sig
   val unset_dom  : t -> 'a Dom.t -> Node.t -> unit
   (** remove the dom of the equivalence class *)
 
+  
   (** {3 Delayed modifications} *)
   val set_sem  : t -> Trail.Pexp.t -> Node.t -> ThTerm.t -> unit
-  (** attach a sem to an equivalence class *)
+  (** attach a theory term to an equivalence class *)
 
   val set_nodevalue: t -> Trail.Pexp.t -> Node.t -> Value.t -> unit
   (** attach value to an equivalence class *)
@@ -95,9 +96,9 @@ module Delayed : sig
   val set_values: t -> Trail.Pexp.t -> Node.t -> Value.t -> unit
   (** attach value to an equivalence class *)
 
-  (** {3 Delayed modifications} *)
   val merge    : t -> Trail.Pexp.t -> Node.t -> Node.t -> unit
 
+  
   (** {3 Attach Event} *)
   val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) Events.Dem.t -> 'event -> unit
     (** wakeup when the dom change *)
@@ -129,8 +130,6 @@ module Delayed : sig
       Should be used only during wakeup of not immediate daemon
   *)
 end
-
-type d = Delayed.t
 
 module Wait : Events.Wait.S with type delayed = Delayed.t and type delayed_ro = Ro.t
 

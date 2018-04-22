@@ -85,12 +85,12 @@ module Key: sig
   val attach: Egraph.Delayed.t -> ('k,'d,'i) t -> 'k -> 'd Create.t -> unit
   (** raise AlreadyDead if this key is already dead *)
 
-  val is_attached: Egraph.d -> ('k,'d,'i) t -> 'k -> ('k,'i) state
+  val is_attached: Egraph.Delayed.t -> ('k,'d,'i) t -> 'k -> ('k,'i) state
 
-  val set_info: Egraph.d -> ('k, 'd, 'i) t -> 'k -> 'i -> unit
+  val set_info: Egraph.Delayed.t -> ('k, 'd, 'i) t -> 'k -> 'i -> unit
 
   exception CantBeKilled
-  val kill : Egraph.d -> ('a, 'b,'c) t -> 'a -> unit
+  val kill : Egraph.Delayed.t -> ('a, 'b,'c) t -> 'a -> unit
 
 
 end

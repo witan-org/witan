@@ -1062,8 +1062,6 @@ module type Ro = sig
 
 end
 
-type d = Delayed.t
-
 module Ro : Ro with type t = Delayed.t = Delayed
 
 let check_initialization () =

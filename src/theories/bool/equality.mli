@@ -24,8 +24,8 @@
 val equality    : Node.t list -> Node.t
 val disequality : Node.t list -> Node.t
 
-val is_equal    : Egraph.d -> Node.t -> Node.t -> bool
-val is_disequal : Egraph.d -> Node.t -> Node.t -> bool
+val is_equal    : Egraph.Delayed.t -> Node.t -> Node.t -> bool
+val is_disequal : Egraph.Delayed.t -> Node.t -> Node.t -> bool
 
 val ite : Node.t -> Node.t -> Node.t -> Node.t
 
@@ -35,4 +35,4 @@ val iter_on_value_different:
   Egraph.Delayed.t -> Node.t -> unit
 
 
-val th_register : Egraph.d -> unit
+val th_register : Egraph.Delayed.t -> unit
