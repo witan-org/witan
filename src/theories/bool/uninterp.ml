@@ -211,13 +211,13 @@ module ExpSubst = struct
       Format.fprintf fmt "Subst(%a,%a -> %a,%a)"
         Node.pp f Node.pp g Node.pp f' Node.pp g'
 
-  let analyse t {from;to_} pcon =
+  let analyse t {from;to_} phyp =
     match ThE.sem from, ThE.sem to_ with
     | App(f,g), App(f',g') ->
-      let lcon = Conflict.split t pcon (ThE.node from) (ThE.node to_) in
-      let lcon' = if Node.equal f f' then [] else EqCon.create_eq f f' in
-      let lcon'' = if Node.equal g g' then [] else EqCon.create_eq g g' in
-      lcon'@lcon''@lcon
+      let lhyp = Conflict.split t phyp (ThE.node from) (ThE.node to_) in
+      let lhyp' = if Node.equal f f' then [] else EqHyp.create_eq f f' in
+      let lhyp'' = if Node.equal g g' then [] else EqHyp.create_eq g g' in
+      lhyp'@lhyp''@lhyp
 
   let from_contradiction _ _ = raise Impossible
 

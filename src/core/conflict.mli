@@ -65,16 +65,16 @@ module Conflict : sig
   val age_merge_opt: t -> Node.t -> Node.t -> Trail.Age.t option
   (** Give the age at which the given node merged *)
 
-  val analyse  : t -> Trail.Pexp.t -> Trail.Pcon.t -> Trail.Pcon.t list
+  val analyse  : t -> Trail.Pexp.t -> Trail.Phyp.t -> Trail.Phyp.t list
 
-  val split: t -> Trail.Pcon.t -> Node.t -> Node.t -> Trail.Pcon.t list
+  val split: t -> Trail.Phyp.t -> Node.t -> Node.t -> Trail.Phyp.t list
 
   val getter: t -> Egraph.Getter.t
 
 end
 
 module Exp = Trail.Exp
-module Con = Trail.Con
+module Hyp = Trail.Hyp
 
 module type Exp = sig
 
@@ -85,11 +85,11 @@ module type Exp = sig
   val key: t Trail.Exp.t
 
   val from_contradiction:
-    Conflict.t (* -> Trail.Age.t *) -> t -> Trail.Pcon.t list
+    Conflict.t (* -> Trail.Age.t *) -> t -> Trail.Phyp.t list
     (** First step of the analysis done on the trail. *)
 
   val analyse  :
-    Conflict.t (* -> Trail.Age.t *) -> t -> Trail.Pcon.t -> Trail.Pcon.t list
+    Conflict.t (* -> Trail.Age.t *) -> t -> Trail.Phyp.t -> Trail.Phyp.t list
     (** One step of the analysis done on the trail. This function is
        called on the explanation that correspond to last_level of the
         conflict *)
@@ -118,13 +118,13 @@ end
 type parity = | Neg | Pos
 val neg_parity : parity -> parity
 
-module type Con = sig
+module type Hyp = sig
 
   type t
 
   val pp: t Pp.pp
 
-  val key: t Trail.Con.t
+  val key: t Trail.Hyp.t
 
   val apply_learnt: t -> Typedef.Node.t * parity
   (** Build the constraint that correspond to the conflict learnt.
@@ -137,13 +137,13 @@ module type Con = sig
   val useful_nodes: t -> Node.t Bag.t
   (** used at the end to know which node are useful for decision heuristics *)
 
-  val split: Conflict.t -> t -> Node.t -> Node.t -> Trail.Pcon.t list
+  val split: Conflict.t -> t -> Node.t -> Node.t -> Trail.Phyp.t list
   (** split the conflict with the given equality *)
 end
 
-val register_con: (module Con) -> unit
+val register_hyp: (module Hyp) -> unit
 
-val pp_pcon: Trail.Pcon.t Pp.pp
+val pp_phyp: Trail.Phyp.t Pp.pp
 
 (** {2 Conflict analysis} *)
 
@@ -158,7 +158,7 @@ val learnt_is_already_true: Egraph.Delayed.t -> Learnt.t -> bool
 
 (** {2 Generic conflict} *)
 
-module EqCon : sig
+module EqHyp : sig
 
   type t = {
     l: Node.t;
@@ -167,7 +167,7 @@ module EqCon : sig
 
   val pp: t Witan_popop_lib.Pp.pp
 
-  val key : t Con.t
+  val key : t Hyp.t
 
   val register_apply_learnt: Ty.t -> (t -> Node.t * parity) -> unit
 
@@ -178,7 +178,7 @@ module EqCon : sig
   val orient_split: Conflict.t -> t -> Node.t -> Node.t -> Node.t * Node.t
   (** orient the given node (a,b), l=a=b=r or l=b=a=r, in order to have l=fst=snd=r *)
 
-  val create_eq: ?dec:unit -> Node.t -> Node.t -> Trail.Pcon.t list
+  val create_eq: ?dec:unit -> Node.t -> Node.t -> Trail.Phyp.t list
 
   val apply_learnt: t -> Typedef.Node.t * parity
 end

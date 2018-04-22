@@ -61,15 +61,15 @@ module Pexp : sig
 
 end
 
-module Con: Keys.Key
+module Hyp: Keys.Key
 
-module Pcon : sig
+module Phyp : sig
   type t =
-    | Pcon: 'a Con.t * 'a * [`Dec | `NoDec]-> t
+    | Phyp: 'a Hyp.t * 'a * [`Dec | `NoDec]-> t
 
-  val pcon: ?dec:unit -> 'a Con.t -> 'a -> t
+  val phyp: ?dec:unit -> 'a Hyp.t -> 'a -> t
 
-  val map: 'a Con.t -> 'a list -> t list
+  val map: 'a Hyp.t -> 'a list -> t list
 
 end
 
@@ -142,21 +142,6 @@ module Cho: Keys.Key
 (** Generic decision *)
 type chogen =
   | GCho: Node.t * 'k Cho.t * 'k -> chogen
-
-
-(** {2 Trail for domains, currently not used } *)
-
-val add_pexp_dom:
-  t -> Pexp.t -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit
-(** A domain has been modified *)
-
-val add_pexp_dom_premerge:
-  t -> 'b Dom.t ->
-  nodeto:Node.t ->
-  nodefrom:Node.t ->
-  nodefrom0:Node.t ->
-  unit
-(** A domain has been modified during the merge of classes *)
 
 val add_pexp: t -> Pexp.t -> unit
 (** generic *)

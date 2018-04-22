@@ -71,16 +71,16 @@ end
 
 let _pp_pexp = Pexp._pp_pexp
 
-module Con = Keys.Make_key(struct end)
+module Hyp = Keys.Make_key(struct end)
 
-module Pcon = struct
+module Phyp = struct
   type t =
-    | Pcon: 'a Con.t * 'a * [`Dec | `NoDec]-> t
+    | Phyp: 'a Hyp.t * 'a * [`Dec | `NoDec]-> t
 
   (** `Dec indiquate the conflict come from the explanation of a
      decision and then should not be explained further *)
-  let pcon ?(dec:unit option) c v = Pcon(c,v,if dec=None then `NoDec else `Dec)
-  let map c l = List.map (pcon c) l
+  let phyp ?(dec:unit option) c v = Phyp(c,v,if dec=None then `NoDec else `Dec)
+  let map c l = List.map (phyp c) l
 end
 
 (** Indicate when a node stopped to be the representative, and what it becomes.
@@ -160,21 +160,6 @@ let add_merge_finish:
     add_pexp t pexp;
     let old_repr = if Node.equal node1_repr new_repr then node2_repr else node1_repr in
     t.nodehist <- Node.M.add old_repr (t.age,new_repr) t.nodehist
-
-let add_pexp_dom:
-  t -> Pexp.t -> 'b Dom.t -> node:Node.t -> node0:Node.t -> unit =
-  fun _t _pexp _dom ~node:_ ~node0:_ ->
-    ()
-
-let add_pexp_dom_premerge:
-  t -> 'b Dom.t ->
-  nodeto:Node.t ->
-  nodefrom:Node.t ->
-  nodefrom0:Node.t ->
-  unit =
-  fun _t _dom ~nodeto:_ ~nodefrom:_ ~nodefrom0:_ ->
-    ()
-
 
 let exp_fact : unit Exp.t = Exp.create_key "Trail.fact"
 let pexp_fact = Pexp.Pexp(Age.bef,exp_fact,())
