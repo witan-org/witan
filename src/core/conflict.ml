@@ -22,7 +22,7 @@
 (*************************************************************************)
 
 open Witan_core_structures
-open Typedef
+open Nodes
 
 module Age = Trail.Age
 
@@ -496,7 +496,6 @@ module EqHyp = struct
     | Some f -> f c
 
   let split t c a b =
-    let open Typedef in
     if Node.equal c.l a
     then None, Some b
     else if Node.equal c.l b

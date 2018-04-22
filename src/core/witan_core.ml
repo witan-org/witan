@@ -30,37 +30,37 @@ module Ty = Ty
 module Keys = Keys
 
 module Node = struct
-  include Typedef.Node
+  include Nodes.Node
 end
 
 module ThTermKind = struct
-  include Typedef.ThTermKind
-  let print = Typedef.print_thterm
+  include Nodes.ThTermKind
+  let print = Nodes.print_thterm
 
-  module type ThTerm = Typedef.ThTerm
-  module type Registered = Typedef.RegisteredThTerm
+  module type ThTerm = Nodes.ThTerm
+  module type Registered = Nodes.RegisteredThTerm
 
-  module Register = Typedef.RegisterThTerm
+  module Register = Nodes.RegisterThTerm
 end
 
-module ThTerm = Typedef.ThTerm
+module ThTerm = Nodes.ThTerm
 
 module SynTerm = SynTerm
 
 module ValueKind = struct
-  include Typedef.ValueKind
-  let print = Typedef.print_value
+  include Nodes.ValueKind
+  let print = Nodes.print_value
 
-  module type Value = Typedef.Value
-  module type Registered = Typedef.RegisteredValue
+  module type Value = Nodes.Value
+  module type Registered = Nodes.RegisteredValue
 
-  module Register = Typedef.RegisterValue
+  module Register = Nodes.RegisterValue
 
-  let get = Typedef.get_value
-  let get_registered = Typedef.get_registered_value
+  let get = Nodes.get_value
+  let get_registered = Nodes.get_registered_value
 end
 
-module Value = Typedef.Value
+module Value = Nodes.Value
 
 module Interp = Interp
 
@@ -93,6 +93,6 @@ module Demon  = Demon
 
 module Conflict = Conflict
 
-exception UnwaitedEvent = Typedef.UnwaitedEvent
+exception UnwaitedEvent = Nodes.UnwaitedEvent
 (** Can be raised by daemon when receiving an event that they don't
     waited for. It is the sign of a bug in the core solver *)

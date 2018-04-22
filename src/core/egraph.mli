@@ -28,7 +28,7 @@
     happened. *)
 
 open Trail
-open Typedef
+open Nodes
 
 exception NotRegistered
 

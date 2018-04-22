@@ -23,7 +23,7 @@
 
 (** Keep track of the explanation, conflict and choice *)
 
-open Typedef
+open Nodes
 
 (** {2 Age: position in the trail } *)
 

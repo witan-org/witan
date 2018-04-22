@@ -23,18 +23,18 @@
 
 
 module Register: sig
-  val id: (Term.id -> Typedef.Value.t list -> Typedef.Value.t option) -> unit
+  val id: (Term.id -> Nodes.Value.t list -> Nodes.Value.t option) -> unit
 
-  val thterm: 'a Typedef.ThTermKind.t -> (interp:(Typedef.Node.t -> Typedef.Value.t) -> 'a -> Typedef.Value.t) -> unit
+  val thterm: 'a Nodes.ThTermKind.t -> (interp:(Nodes.Node.t -> Nodes.Value.t) -> 'a -> Nodes.Value.t) -> unit
 
-  val model: Ty.t -> (Egraph.Delayed.t -> Typedef.Node.t -> Typedef.Value.t) -> unit
+  val model: Ty.t -> (Egraph.Delayed.t -> Nodes.Node.t -> Nodes.Value.t) -> unit
 
 end
 
-type leaf = Term.t -> Typedef.Value.t option
+type leaf = Term.t -> Nodes.Value.t option
 
-val term   : ?leaf:leaf -> Term.t -> Typedef.Value.t
-val thterm : ?leaf:leaf -> Typedef.ThTerm.t -> Typedef.Value.t
-val node   : ?leaf:leaf -> Typedef.Node.t -> Typedef.Value.t
+val term   : ?leaf:leaf -> Term.t -> Nodes.Value.t
+val thterm : ?leaf:leaf -> Nodes.ThTerm.t -> Nodes.Value.t
+val node   : ?leaf:leaf -> Nodes.Node.t -> Nodes.Value.t
 
-val model : Egraph.Delayed.t -> Typedef.Node.t -> Typedef.Value.t
+val model : Egraph.Delayed.t -> Nodes.Node.t -> Nodes.Value.t

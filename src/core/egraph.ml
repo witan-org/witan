@@ -22,7 +22,7 @@
 (*************************************************************************)
 
 open Stdlib
-open Typedef
+open Nodes
 
 exception Contradiction of Trail.Pexp.t
 
@@ -176,12 +176,12 @@ let get_table_dom t k =
       events = Node.M.empty }
 
 let get_table_sem t k =
-  Typedef.check_thterm_registered k;
+  Nodes.check_thterm_registered k;
   VSemTable.inc_size k t.sem;
   ThTermKind.Vector.get_def t.sem k []
 
 let get_table_value t k =
-  Typedef.check_value_registered k;
+  Nodes.check_value_registered k;
   VValueTable.inc_size k t.value;
   VValueTable.get_def t.value k
     { table = Node.M.empty;
@@ -591,9 +591,9 @@ module Delayed = struct
     let node  = find t node0 in
     let node' = find t node0'  in
     let iteri (type a) (value:a ValueKind.t) (valuetable:a valuetable) =
-      let old_s = Node.M.find_opt node valuetable.table in
-      let old_s'  = Node.M.find_opt node'  valuetable.table in
-      let (module V) = Typedef.get_value value in
+      let old_s   = Node.M.find_opt node  valuetable.table in
+      let old_s'  = Node.M.find_opt node' valuetable.table in
+      let (module V) = Nodes.get_value value in
       Debug.dprintf12 debug
         "[Egraph] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
         Node.pp node Node.pp node0

@@ -23,31 +23,31 @@
 
 module Register = struct
 
-  let ids : (Term.id -> Typedef.Value.t list -> Typedef.Value.t option) list ref = ref []
+  let ids : (Term.id -> Nodes.Value.t list -> Nodes.Value.t option) list ref = ref []
   let id f = ids := f::!ids
 
-  module ThInterp = Typedef.ThTermKind.MkVector(struct
-      type ('a,_) t = (interp:(Typedef.Node.t -> Typedef.Value.t) -> 'a -> Typedef.Value.t)
+  module ThInterp = Nodes.ThTermKind.MkVector(struct
+      type ('a,_) t = (interp:(Nodes.Node.t -> Nodes.Value.t) -> 'a -> Nodes.Value.t)
     end)
 
   let thterms = ThInterp.create 10
   let thterm sem f =
     if not (ThInterp.is_uninitialized thterms sem)
-    then invalid_arg (Format.asprintf "Interpretation for semantic value %a already done" Typedef.ThTermKind.pp sem);
+    then invalid_arg (Format.asprintf "Interpretation for semantic value %a already done" Nodes.ThTermKind.pp sem);
     ThInterp.inc_size sem thterms;
     ThInterp.set thterms sem f
 
   let models = Ty.H.create 16
-  let model ty (f:Egraph.Delayed.t -> Typedef.Node.t -> Typedef.Value.t) =
+  let model ty (f:Egraph.Delayed.t -> Nodes.Node.t -> Nodes.Value.t) =
     Ty.H.add models ty f
 
 end
 
 exception NoInterpretation of Term.id
 exception CantInterpretTerm of Term.t
-exception CantInterpretThTerm of Typedef.ThTerm.t
+exception CantInterpretThTerm of Nodes.ThTerm.t
 
-type leaf = Term.t -> Typedef.Value.t option
+type leaf = Term.t -> Nodes.Value.t option
 
 (** No cache currently because there is no guaranty
     that the variable in the let is unique *)
@@ -81,15 +81,15 @@ let term ?(leaf=(fun _ -> None)) t =
   interp leaf t
 
 let rec node ?(leaf=(fun _ -> None)) n =
-  match Typedef.Only_for_solver.open_node n with
-  | Typedef.Only_for_solver.ThTerm t -> thterm ~leaf t
-  | Typedef.Only_for_solver.Value v -> v
+  match Nodes.Only_for_solver.open_node n with
+  | Nodes.Only_for_solver.ThTerm t -> thterm ~leaf t
+  | Nodes.Only_for_solver.Value v -> v
 
 and thterm  ?(leaf=(fun _ -> None)) t =
-  match Typedef.Only_for_solver.sem_of_node t with
-  | Typedef.Only_for_solver.ThTerm (sem,v) ->
+  match Nodes.Only_for_solver.sem_of_node t with
+  | Nodes.Only_for_solver.ThTerm (sem,v) ->
     (** check if it is not a synterm *)
-    match Typedef.ThTermKind.Eq.eq_type sem SynTerm.key with
+    match Nodes.ThTermKind.Eq.eq_type sem SynTerm.key with
     | Some Keys.Eq ->
       term ~leaf (v:Term.t)
     | None ->
@@ -98,7 +98,7 @@ and thterm  ?(leaf=(fun _ -> None)) t =
       (Register.ThInterp.get Register.thterms sem) ~interp:(node ~leaf) v
 
 let model d n =
-  match Ty.H.find_opt Register.models (Typedef.Node.ty n) with
+  match Ty.H.find_opt Register.models (Nodes.Node.ty n) with
   | None -> invalid_arg "Uninterpreted type"
   | Some f -> f d n
 
@@ -112,6 +112,6 @@ let () = Exn_printer.register (fun fmt exn ->
         Term.pp t
     | CantInterpretThTerm th ->
       Format.fprintf fmt "Can't interpret the thterm %a."
-        Typedef.ThTerm.pp th
+        Nodes.ThTerm.pp th
     | exn -> raise exn
   )

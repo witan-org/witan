@@ -22,7 +22,7 @@
 (*************************************************************************)
 
 open Witan_core_structures
-open Typedef
+open Nodes
 
 (** Decision, Conflict and Learning *)
 
@@ -126,7 +126,7 @@ module type Hyp = sig
 
   val key: t Trail.Hyp.t
 
-  val apply_learnt: t -> Typedef.Node.t * parity
+  val apply_learnt: t -> Nodes.Node.t * parity
   (** Build the constraint that correspond to the conflict learnt.
       parity indicates if the constraint must be negated or not.
   *)
@@ -180,7 +180,7 @@ module EqHyp : sig
 
   val create_eq: ?dec:unit -> Node.t -> Node.t -> Trail.Phyp.t list
 
-  val apply_learnt: t -> Typedef.Node.t * parity
+  val apply_learnt: t -> Nodes.Node.t * parity
 end
 
 val check_initialization: unit -> bool

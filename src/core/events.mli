@@ -21,7 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-open Typedef
+open Nodes
 
 module Fired : sig
   type 'b event =

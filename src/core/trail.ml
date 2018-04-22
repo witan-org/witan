@@ -22,7 +22,7 @@
 (*************************************************************************)
 
 open Stdlib
-open Typedef
+open Nodes
 
 let debugage = Debug.register_info_flag
     ~desc:"for@ the@ age in the trail."

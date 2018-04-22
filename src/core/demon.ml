@@ -21,7 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-open Typedef
+open Nodes
 
 let debug = Debug.register_info_flag
   ~desc:"for the specialized demons"
@@ -478,7 +478,7 @@ module Fast = struct
     ~name
     ?(immediate=false)
     ?(throttle=100)
-    (thterm: (module Typedef.RegisteredThTerm with type t = a) )
+    (thterm: (module Nodes.RegisteredThTerm with type t = a) )
     (f:Egraph.Delayed.t -> a -> unit)
     (init_d:Egraph.Delayed.t)
     =
@@ -503,7 +503,7 @@ module Fast = struct
     ~name
     ?(immediate=false)
     ?(throttle=100)
-    (value: (module Typedef.RegisteredValue with type t = a) )
+    (value: (module Nodes.RegisteredValue with type t = a) )
     (f:Egraph.Delayed.t -> a -> unit)
     (init_d:Egraph.Delayed.t)
     =

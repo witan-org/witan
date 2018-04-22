@@ -57,7 +57,7 @@ val chobool: Node.t Trail.Cho.t
 
 val ty: Ty.t
 
-module BoolValue : Typedef.RegisteredValue with type s = bool
+module BoolValue : ValueKind.Registered with type s = bool
 
 val value_true : BoolValue.t
 val value_false: BoolValue.t

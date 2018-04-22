@@ -730,11 +730,10 @@ let () = Conflict.register_exp(module ExpITE)
 let iter_on_value_different
     (type a)
     (type b)
-    (value: (module Witan_core_structures.Typedef.RegisteredValue with type s = a and type t = b))
+    ((module Val): (module Witan_core.ValueKind.Registered with type s = a and type t = b))
     ~they_are_different
     (d:Delayed.t)
     (own:Node.t) =
-  let module Val = (val value) in
   let dis = Opt.get_def Dis.empty (Egraph.Delayed.get_dom d dom own) in
   let iter elt age =
     let iter n =
@@ -754,7 +753,7 @@ let iter_on_value_different
 let init_diff_to_value (type a) (type b)
     ?(already_registered=([]: b list))
     d0
-    ((module Val): (module Witan_core_structures.Typedef.RegisteredValue with type s = a and type t = b))
+    ((module Val): (module Witan_core.ValueKind.Registered with type s = a and type t = b))
     ~(they_are_different:(Delayed.t -> Trail.Pexp.t -> Node.t -> a -> unit)) =
 
   let propagate_diff d v =
