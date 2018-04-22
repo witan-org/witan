@@ -47,7 +47,7 @@ let cmdline_split s =
         for i = 0 to pred n do
           Bytes.set s i (Queue.take cur_arg)
         done;
-        argv := s :: !argv;
+        argv := (Bytes.to_string s) :: !argv;
         cstate := Blank
     | c -> Queue.add c cur_arg
   in

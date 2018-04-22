@@ -147,7 +147,7 @@ let simplify_max_int = big_int_of_string "2147483646"
 
 let remove_minus e =
   if e.[0] = '-' then
-    (let e' = Bytes.copy e in Bytes.set  e' 0 'm'; e')
+    (let e' = Bytes.of_string e in Bytes.set  e' 0 'm'; Bytes.to_string e')
   else e
 
 let print_dec_int support fmt i =
