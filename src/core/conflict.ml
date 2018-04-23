@@ -581,22 +581,23 @@ module Specific = struct
           (ExpRegistry.print exp) e
 
       let analyse _ _ _ = raise Std.Impossible (** used only for contradiction *)
-      let from_contradiction t (v1,n1,n2,v2,Trail.Pexp.Pexp(_,exp,e)) =
-        let f (type a) (exp:a Exp.t) e =
-          let module Exp = (val (ExpRegistry.get exp)) in
-          Debug.dprintf10 debug "[Conflict] @[Intermediary conflict diff value %a=%a=%a=%a: %a@]"
-            Value.pp v1 Node.pp n1 Node.pp n2 Value.pp v2 Exp.pp e;
-          Exp.analyse t e (Trail.Phyp.phyp EqHyp.key {l=n1;r=n2})
-        in
-        (** splitting of the equality v1 = v2 *)
-        let phyp1 = (Trail.Phyp.phyp EqHyp.key {l=Value.node v1;r=n1}) in
-        let phyp2 = (Trail.Phyp.phyp EqHyp.key {l=n2;r=Value.node v2}) in
-        (* if Trail.before_last_dec t (Trail.age_merge t (Value.node v1) n1) &&
-         *    Trail.before_last_dec t (Trail.age_merge t (Value.node v2) n2)
-         * then (\** An inverse propagation not powerful enough *\)
-         *   pcon1::pcon2::(EqCon.create_eq n1 n2)
-         * else *)
-          phyp1::phyp2::(f exp e)
+      let from_contradiction t (v1,n1,n2,v2,pexp) =
+        Debug.dprintf10 debug "[Conflict] @[Intermediary conflict diff value %a=%a=%a=%a: %a@]"
+          Value.pp v1 Node.pp n1 Node.pp n2 Value.pp v2 pp_pexp pexp;
+        if false
+        then
+          (** splitting of the equality v1 = v2 *)
+          let phyp1 = (Trail.Phyp.phyp EqHyp.key {l=Value.node v1;r=n1}) in
+          let phyp2 = (Trail.Phyp.phyp EqHyp.key {l=n2;r=Value.node v2}) in
+          (* if Trail.before_last_dec t (Trail.age_merge t (Values.node v1) n1) &&
+           *    Trail.before_last_dec t (Trail.age_merge t (Values.node v2) n2)
+           * then (\** An inverse propagation not powerful enough *\)
+           *   pcon1::pcon2::(EqCon.create_eq n1 n2)
+           * else *)
+          phyp1::phyp2::(Conflict.analyse t pexp (Trail.Phyp.phyp EqHyp.key {l=n1;r=n2}))
+        else
+          (** without splitting *)
+          (Conflict.analyse t pexp (Trail.Phyp.phyp EqHyp.key {l=Value.node v1;r=Value.node v2}))
     end)
 
   let () = register_exp (module struct
