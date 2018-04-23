@@ -24,7 +24,6 @@
 open Stdlib
 open Std
 open Witan_core
-open Egraph
 
 let debug = Debug.register_info_flag
   ~desc:"for the uninterpreted function theory"
@@ -149,11 +148,11 @@ module DaemonPropa = struct
     | App(f,g) as v ->
       Debug.dprintf4 debug "[Uninterp] @[wakeup own %a v:%a@]"
         Node.pp (ThE.node nodesem) Th.pp v;
-      let v' = App(Delayed.find d f, Delayed.find d g) in
+      let v' = App(Egraph.find d f, Egraph.find d g) in
       assert (not (Th.equal v v'));
       let nodesem' = ThE.index v' (ThE.ty nodesem) in
-      let pexp = Delayed.mk_pexp d expsubst {from=nodesem;to_=nodesem'} in
-      Delayed.set_sem d pexp (ThE.node nodesem) (ThE.thterm nodesem');
+      let pexp = Egraph.mk_pexp d expsubst {from=nodesem;to_=nodesem'} in
+      Egraph.set_thterm d pexp (ThE.node nodesem) (ThE.thterm nodesem');
       Demon.AliveRedirected nodesem'
 end
 
@@ -179,16 +178,16 @@ module DaemonInit = struct
           if DaemonPropa.is_unborn d nodesem then
           match v with
           | App(f,g) ->
-            Delayed.register d f; Delayed.register d g;
-            let f' = Delayed.find d f in
-            let g' = Delayed.find d g in
+            Egraph.register d f; Egraph.register d g;
+            let f' = Egraph.find d f in
+            let g' = Egraph.find d g in
             if Node.equal f' f && Node.equal g' g then
               DaemonPropa.attach d f g nodesem
             else
               let v' = App(f',g') in
               let nodesem' = ThE.index v' (Node.ty own) in
-              let pexp = Delayed.mk_pexp d expsubst {from=nodesem;to_=nodesem'} in
-              Delayed.set_sem d pexp own (ThE.thterm nodesem')
+              let pexp = Egraph.mk_pexp d expsubst {from=nodesem;to_=nodesem'} in
+              Egraph.set_thterm d pexp own (ThE.thterm nodesem')
         end
       | _ -> raise UnwaitedEvent
       ) ev;
@@ -229,7 +228,7 @@ let () = Conflict.register_exp(module ExpSubst)
 let converter d f l =
   let of_term t =
     let n = SynTerm.node_of_term t in
-    Egraph.Delayed.register d n;
+    Egraph.register d n;
     n
   in
   let node = match f with

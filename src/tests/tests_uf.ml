@@ -333,7 +333,7 @@ let check_file filename =
                let t = Dolmen.Normalize.smtlib t in
                let cl = map t in
                clauses := cl::!clauses;
-               Egraph.Delayed.register d cl;
+               Egraph.register d cl;
                Bool.set_true d Trail.pexp_fact cl
              | _ -> invalid_arg (Format.asprintf "Unimplemented command: %a" Dolmen.Statement.print stmt))
            statements) in

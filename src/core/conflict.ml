@@ -130,7 +130,7 @@ module type Cho = sig
   module OnWhat  : Stdlib.Datatype
 
   val choose_decision:
-    Egraph.Delayed.t -> OnWhat.t -> (Egraph.Delayed.t -> unit) decdone
+    Egraph.t -> OnWhat.t -> (Egraph.t -> unit) decdone
 
   val key: OnWhat.t Cho.t
 
@@ -333,11 +333,11 @@ let _is_true = ref (fun _ _ -> assert false)
 let _equality = ref (fun _ _ -> assert false)
 
 let apply_learnt d n =
-  Egraph.Delayed.register d n;
+  Egraph.register d n;
   !_set_true d Trail.pexp_fact n
 
 let learnt_is_already_true d n =
-  Egraph.Delayed.is_registered d n &&
+  Egraph.is_registered d n &&
   !_is_true d n
 
 module Learnt = Node

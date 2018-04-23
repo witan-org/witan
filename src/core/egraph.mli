@@ -34,6 +34,8 @@ exception NotRegistered
 
 exception UninitializedEnv of Env.K.t
 
+exception Contradiction of Trail.Pexp.t
+
 module type Getter = sig
   type t
 
@@ -71,122 +73,117 @@ end
 
 module Ro : Ro
 
-module Delayed : sig
-  type t = private Ro.t
-  include Ro with type t := t
+type t = private Ro.t
+include Ro with type t := t
 
-  (** {3 Immediate modifications} *)
-  val set_dom  : t -> 'a Dom.t -> Node.t -> 'a -> unit
-  (** change the dom of the equivalence class *)
+(** {3 Immediate modifications} *)
+val set_dom  : t -> 'a Dom.t -> Node.t -> 'a -> unit
+(** change the dom of the equivalence class *)
 
-  val unset_dom  : t -> 'a Dom.t -> Node.t -> unit
-  (** remove the dom of the equivalence class *)
+val unset_dom  : t -> 'a Dom.t -> Node.t -> unit
+(** remove the dom of the equivalence class *)
 
-  
-  (** {3 Delayed modifications} *)
-  val set_sem  : t -> Trail.Pexp.t -> Node.t -> ThTerm.t -> unit
-  (** attach a theory term to an equivalence class *)
 
-  val set_nodevalue: t -> Trail.Pexp.t -> Node.t -> Value.t -> unit
-  (** attach value to an equivalence class *)
+(** {3 Delayed modifications} *)
+val set_thterm  : t -> Trail.Pexp.t -> Node.t -> ThTerm.t -> unit
+(** attach a theory term to an equivalence class *)
 
-  val set_value: t -> Trail.Pexp.t -> 'a ValueKind.t -> Node.t -> 'a -> unit
-  (** attach value to an equivalence class *)
+val set_value: t -> Trail.Pexp.t -> Node.t -> Value.t -> unit
+(** attach value to an equivalence class *)
 
-  val set_values: t -> Trail.Pexp.t -> Node.t -> Value.t -> unit
-  (** attach value to an equivalence class *)
+val merge    : t -> Trail.Pexp.t -> Node.t -> Node.t -> unit
 
-  val merge    : t -> Trail.Pexp.t -> Node.t -> Node.t -> unit
 
-  
-  (** {3 Attach Event} *)
-  val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) Events.Dem.t -> 'event -> unit
-    (** wakeup when the dom change *)
-  val attach_value: t -> Node.t -> 'a ValueKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
-    (** wakeup when a value is attached to this equivalence class *)
-  val attach_reg_node: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
-    (** wakeup when this node is registered *)
-  val attach_reg_sem: t -> 'a ThTermKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
-    (** wakeup when a new semantical class is registered *)
-  val attach_reg_value: t -> 'a ValueKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
-    (** wakeup when a new value is registered *)
-  val attach_node: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
-    (** wakeup when it is not anymore the representative class *)
+(** {3 Attach Event} *)
+val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+(** wakeup when the dom change *)
+val attach_value: t -> Node.t -> 'a ValueKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+(** wakeup when a value is attached to this equivalence class *)
+val attach_reg_node: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+(** wakeup when this node is registered *)
+val attach_reg_sem: t -> 'a ThTermKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+(** wakeup when a new semantical class is registered *)
+val attach_reg_value: t -> 'a ValueKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+(** wakeup when a new value is registered *)
+val attach_node: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+(** wakeup when it is not anymore the representative class *)
 
-  val register_decision: t -> Trail.chogen -> unit
-  (** register a decision that would be scheduled later. The
-      [choose_decision] of the [Cho] will be called at that time to know
-      if the decision is still needed. *)
+val register_decision: t -> Trail.chogen -> unit
+(** register a decision that would be scheduled later. The
+    [choose_decision] of the [Cho] will be called at that time to know
+    if the decision is still needed. *)
 
-  (** {3 Trails} *)
-  val mk_pexp: t -> ?age:age -> 'a Exp.t -> 'a -> Trail.Pexp.t
-  val current_age: t -> age
-  val add_pexp: t -> Trail.Pexp.t -> unit
-  val contradiction: t -> Trail.Pexp.t -> 'b
+(** {3 Trails} *)
+val mk_pexp: t -> ?age:age -> 'a Exp.t -> 'a -> Trail.Pexp.t
+val current_age: t -> age
+val add_pexp: t -> Trail.Pexp.t -> unit
+val contradiction: t -> Trail.Pexp.t -> 'b
 
-  (** {3 Low level} *)
-  val flush: t -> unit
-  (** Apply all the modifications and direct consequences.
-      Should be used only during wakeup of not immediate daemon
-  *)
-end
+(** {3 Low level} *)
+val flush_internal: t -> unit
+(** Apply all the modifications and direct consequences.
+    Should be used only during wakeup of not immediate daemon
+*)
 
-module Wait : Events.Wait.S with type delayed = Delayed.t and type delayed_ro = Ro.t
+module Wait : Events.Wait.S with type delayed = t and type delayed_ro = Ro.t
+
 
 (** {2 Domains and Semantic Values key creation} *)
 
-module type Dom = Dom.Dom_partial with type delayed := Delayed.t and type pexp := Trail.Pexp.t
+module type Dom = Dom.Dom_partial with type delayed := t and type pexp := Trail.Pexp.t
 
 val register_dom : (module Dom with type t = 'a) -> unit
-
-(** {2 External use of the solver} *)
-include Getter
-
-val new_t    : unit -> t
-
-val new_delayed :
-  sched_daemon:(Events.Wait.daemon_key -> unit) ->
-  sched_decision:(chogen -> unit) ->
-  t -> Delayed.t
-(** The solver shouldn't be used anymore before
-    calling flush. (flushd doesn't count)
-*)
-
-exception Contradiction of Trail.Pexp.t
-
-val run_daemon: Delayed.t -> Events.Wait.daemon_key -> unit
-(** schedule the run of a deamon *)
-
-val delayed_stop: Delayed.t -> unit
-(** Apply all the modifications and direct consequences.
-    The argument shouldn't be used anymore *)
-
-val flush: Delayed.t -> unit
-(** Apply all the modifications and direct consequences.
-    The argument can be used after that *)
-
-
-
-(* val make_decisions : Delayed.t -> attached_daemons -> unit *)
-
-val get_trail : t -> Trail.t
-val get_getter : t -> Getter.t
-val new_dec : t -> Trail.dec
-val current_age : t -> Trail.Age.t
-val current_nbdec : t -> int
-
-(** {2 Implementation Specifics } *)
-(** Because this module is implemented with persistent datastructure *)
-
-val new_handle: t -> t
-(** Modification in one of the environnement doesn't modify the other *)
-
-(** Debug *)
-val draw_graph: ?force:bool -> t -> unit
-val output_graph : string -> t -> unit
 
 val check_initialization: unit -> bool
 (** Check if the initialization of all the dom, sem and dem have been done *)
 
 val print_dom: 'a Dom.t -> 'a Pp.pp
 val print_dom_opt: 'a Dom.t -> 'a option Pp.pp
+
+
+(** {2 External use of the solver} *)
+module Backtrackable: sig
+  type delayed = t
+  include Getter
+
+  val new_t    : unit -> t
+
+  val new_delayed :
+    sched_daemon:(Events.Wait.daemon_key -> unit) ->
+    sched_decision:(chogen -> unit) ->
+    t -> delayed
+  (** The solver shouldn't be used anymore before
+      calling flush. (flushd doesn't count)
+  *)
+
+  val run_daemon: delayed -> Events.Wait.daemon_key -> unit
+  (** schedule the run of a deamon *)
+
+  val delayed_stop: delayed -> unit
+  (** Apply all the modifications and direct consequences.
+      The argument shouldn't be used anymore *)
+
+  val flush: delayed -> unit
+  (** Apply all the modifications and direct consequences.
+      The argument can be used after that *)
+
+
+
+  (* val make_decisions : delayed -> attached_daemons -> unit *)
+
+  val get_trail : t -> Trail.t
+  val get_getter : t -> Getter.t
+  val new_dec : t -> Trail.dec
+  val current_age : t -> Trail.Age.t
+  val current_nbdec : t -> int
+
+  (** {2 Implementation Specifics } *)
+  (** Because this module is implemented with persistent datastructure *)
+
+  val new_handle: t -> t
+  (** Modification in one of the environnement doesn't modify the other *)
+
+  (** Debug *)
+  val draw_graph: ?force:bool -> t -> unit
+  val output_graph : string -> t -> unit
+end

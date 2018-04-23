@@ -33,31 +33,31 @@ let fresh ty s = SynTerm.node_of_term (Term.const (Id.mk s ty))
 let (&:) s l = s >::: (List.map (fun f -> TestCase f) l)
 
 let register d cl =
-  Egraph.Delayed.register d cl;
-  Egraph.Delayed.flush d
+  Egraph.register d cl;
+  Egraph.Backtrackable.flush d
 
 let merge d cl1 cl2 =
-  Egraph.Delayed.merge d Trail.pexp_fact cl1 cl2;
-  Egraph.Delayed.flush d
+  Egraph.merge d Trail.pexp_fact cl1 cl2;
+  Egraph.Backtrackable.flush d
 
-let is_equal = Egraph.Delayed.is_equal
+let is_equal = Egraph.is_equal
 
 (** without decisions *)
 type t =
   { wakeup_daemons    : Events.Wait.daemon_key Queue.t;
-    solver_state      : Egraph.t;
+    solver_state      : Egraph.Backtrackable.t;
   }
 
 
 let new_solver () = {
   wakeup_daemons = Queue.create ();
-  solver_state = Egraph.new_t ();
+  solver_state = Egraph.Backtrackable.new_t ();
 }
 
 let new_delayed t =
   let sched_daemon dem = Queue.push dem t.wakeup_daemons in
   let sched_decision _ = () in
-  Egraph.new_delayed ~sched_daemon ~sched_decision t.solver_state
+  Egraph.Backtrackable.new_delayed ~sched_daemon ~sched_decision t.solver_state
 
 exception ReachStepLimit
 exception Contradiction

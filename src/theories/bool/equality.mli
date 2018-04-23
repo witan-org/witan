@@ -24,15 +24,15 @@
 val equality    : Node.t list -> Node.t
 val disequality : Node.t list -> Node.t
 
-val is_equal    : Egraph.Delayed.t -> Node.t -> Node.t -> bool
-val is_disequal : Egraph.Delayed.t -> Node.t -> Node.t -> bool
+val is_equal    : Egraph.t -> Node.t -> Node.t -> bool
+val is_disequal : Egraph.t -> Node.t -> Node.t -> bool
 
 val ite : Node.t -> Node.t -> Node.t -> Node.t
 
 val iter_on_value_different:
   (module ValueKind.Registered with type s = 'a and type t = 'b) ->
   they_are_different:(Trail.Pexp.t -> Node.t -> 'a -> unit) ->
-  Egraph.Delayed.t -> Node.t -> unit
+  Egraph.t -> Node.t -> unit
 
 
-val th_register : Egraph.Delayed.t -> unit
+val th_register : Egraph.t -> unit

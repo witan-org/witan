@@ -38,7 +38,7 @@ module Register = struct
     ThInterp.set thterms sem f
 
   let models = Ty.H.create 16
-  let model ty (f:Egraph.Delayed.t -> Nodes.Node.t -> Nodes.Value.t) =
+  let model ty (f:Egraph.t -> Nodes.Node.t -> Nodes.Value.t) =
     Ty.H.add models ty f
 
 end

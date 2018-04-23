@@ -74,7 +74,7 @@ module Prio = Leftistheap.Make(Att)
 type pre =
   { pre_wakeup_daemons    : Prio.t;
     pre_prev_scheduler_state : pre option;
-    pre_solver_state              : S.t;
+    pre_solver_state              : S.Backtrackable.t;
     pre_learnt : Conflict.Learnt.t Bag.t;
     pre_lastdec : Trail.chogen;
   }
@@ -82,8 +82,8 @@ type pre =
 type t =
   { mutable wakeup_daemons    : Prio.t;
     mutable prev_scheduler_state : pre option;
-    mutable solver_state      : S.t;
-    mutable delayed           : S.Delayed.t option;
+    mutable solver_state      : S.Backtrackable.t;
+    mutable delayed           : S.t option;
     mutable learnt : Conflict.Learnt.t Bag.t;
     (* global *)
     decprio : Att.db;
@@ -98,14 +98,14 @@ let print_level fmt t =
     Prio.fold (fun acc x _ -> match x with Att.Decision _ -> acc + 1 | _ -> acc)
       0 t.wakeup_daemons in
   Format.fprintf fmt "%a (level:%i, dec waiting:%i)"
-    Trail.Age.pp (S.current_age t.solver_state)
-    (S.current_nbdec t.solver_state) nb_dec
+    Trail.Age.pp (S.Backtrackable.current_age t.solver_state)
+    (S.Backtrackable.current_nbdec t.solver_state) nb_dec
 
 let new_handler t =
   if t.delayed <> None then raise NeedStopDelayed;
   {wakeup_daemons    = t.wakeup_daemons;
    prev_scheduler_state = t.prev_scheduler_state;
-   solver_state      = S.new_handle t.solver_state;
+   solver_state      = S.Backtrackable.new_handle t.solver_state;
    learnt = t.learnt;
    delayed           = None;
    decprio = t.decprio;
@@ -115,23 +115,23 @@ let new_handler t =
 let new_t t =
   { wakeup_daemons = Prio.empty;
     prev_scheduler_state = None;
-    solver_state = S.new_handle t;
+    solver_state = S.Backtrackable.new_handle t;
     learnt = Bag.empty;
     delayed    = None;
     decprio = Node.H.create 100;
     var_inc = ref 1.;
   }
 
-let new_solver () = new_t (S.new_t ())
+let new_solver () = new_t (S.Backtrackable.new_t ())
 
 let push t chogen =
   if Debug.test_flag debug_dotgui then
-    S.draw_graph ~force:true t.solver_state;
+    S.Backtrackable.draw_graph ~force:true t.solver_state;
   Debug.dprintf0 debug_pushpop "[Scheduler] push";
   let prev =
     { pre_wakeup_daemons    = t.wakeup_daemons;
       pre_prev_scheduler_state = t.prev_scheduler_state;
-      pre_solver_state      = S.new_handle t.solver_state;
+      pre_solver_state      = S.Backtrackable.new_handle t.solver_state;
       pre_learnt = t.learnt;
       pre_lastdec = chogen;
     } in
@@ -160,7 +160,7 @@ let new_delayed =
         !dec_count;
       t.wakeup_daemons <- Prio.insert t.decprio (Att.Decision (!dec_count,dec))
           t.wakeup_daemons in
-    S.new_delayed ~sched_daemon ~sched_decision t.solver_state
+    S.Backtrackable.new_delayed ~sched_daemon ~sched_decision t.solver_state
 
 (*
   let rec apply_learnt llearnt t d =
@@ -187,7 +187,7 @@ let rec apply_learnt learntdec llearnt t d =
       Debug.dprintf2 debug "[Scheduler] @[Apply %a@]"
         Conflict.Learnt.pp n;
       Conflict.apply_learnt d n;
-      S.flush d in
+      S.Backtrackable.flush d in
     Bag.iter iter_learnt llearnt;
     if Conflict.learnt_is_already_true d learntdec
     then assert false; (** absurd: If it is already true it should not be this conflict *)
@@ -208,7 +208,7 @@ and pop_to t prev =
   t.solver_state <- prev.pre_solver_state;
   t.learnt <- prev.pre_learnt;
   let d = new_delayed t in
-  Egraph.draw_graph t.solver_state;
+  Egraph.Backtrackable.draw_graph t.solver_state;
   Debug.dprintf2 debug_pushpop "[Scheduler] pop to %a"
     print_level t;
   d
@@ -240,17 +240,17 @@ and pop_to t prev =
 
 and conflict_analysis t pexp =
   if Debug.test_flag debug_dotgui then
-    S.draw_graph ~force:true t.solver_state;
+    S.Backtrackable.draw_graph ~force:true t.solver_state;
   Debug.incr stats_con;
-  if Egraph.current_nbdec t.solver_state = 0 then begin
+  if Egraph.Backtrackable.current_nbdec t.solver_state = 0 then begin
     Debug.dprintf0 debug "[Scheduler] contradiction at level 0";
     raise Contradiction
   end
   else
     let backlevel, learnt, useful =
       Conflict.learn
-        (Egraph.get_getter t.solver_state)
-        (Egraph.get_trail t.solver_state)
+        (Egraph.Backtrackable.get_getter t.solver_state)
+        (Egraph.Backtrackable.get_trail t.solver_state)
         pexp
     in
     t.var_inc := !(t.var_inc) *. var_decay;
@@ -263,7 +263,7 @@ and conflict_analysis t pexp =
         raise Contradiction
       | Some prev ->
         let llearnt_all = Bag.concat llearnt prev.pre_learnt in
-        let lastdec = Trail.last_dec (S.get_trail prev.pre_solver_state) in
+        let lastdec = Trail.last_dec (S.Backtrackable.get_trail prev.pre_solver_state) in
         if Trail.Age.(backlevel < lastdec) then
           rewind t learnt llearnt_all prev.pre_prev_scheduler_state
         else
@@ -277,8 +277,7 @@ and conflict_analysis t pexp =
     apply_learnt learntdec llearnt t d
 
 and try_run_dec:
-  t -> S.Delayed.t -> Prio.t -> Trail.chogen ->
-  S.Delayed.t = fun t d prio chogen ->
+  t -> S.t -> Prio.t -> Trail.chogen -> S.t = fun t d prio chogen ->
     (** First we verify its the decision is at this point needed *)
     try
       match Conflict.choose_decision d chogen with
@@ -287,18 +286,18 @@ and try_run_dec:
         d (** d can be precised by choose_decision *)
       | Conflict.DecTodo todo ->
         Debug.incr stats_dec;
-        S.delayed_stop d;
+        S.Backtrackable.delayed_stop d;
         (** The registered state keep the old prio *)
         push t chogen;
         (** We use the priority list without the decision only in the
             branch where the decision is made *)
         t.wakeup_daemons <- prio;
-        let declevel = S.new_dec t.solver_state in
+        let declevel = S.Backtrackable.new_dec t.solver_state in
         Debug.dprintf4 debug_pushpop
           "[Scheduler] Make decision: decision %a level %a"
           Trail.print_dec declevel
           print_level t;
-        assert (Egraph.current_nbdec t.solver_state > 0);
+        assert (Egraph.Backtrackable.current_nbdec t.solver_state > 0);
         let d = new_delayed t in
         todo d;
         d
@@ -313,8 +312,8 @@ and run_until_dec t d =
       let _, prio = Prio.extract_min t.wakeup_daemons in
       Debug.incr stats_propa;
       t.wakeup_daemons <- prio;
-      S.run_daemon d att;
-      S.flush d;
+      S.Backtrackable.run_daemon d att;
+      S.Backtrackable.flush d;
       run_until_dec t d
     end
   | Some (Att.Decision (_,_)) | None -> ()
@@ -327,7 +326,7 @@ let run_one_step t d =
       Debug.incr stats_propa;
       t.wakeup_daemons <- prio;
       try
-        S.run_daemon d att; d
+        S.Backtrackable.run_daemon d att; d
       with S.Contradiction pexp ->
         Debug.dprintf0 debug "[Scheduler] Contradiction";
         conflict_analysis t pexp
@@ -336,7 +335,7 @@ let run_one_step t d =
 
 let rec flush t d =
   try
-    S.flush d; d
+    S.Backtrackable.flush d; d
   with S.Contradiction pexp ->
     Debug.dprintf0 debug "[Scheduler] Contradiction";
     let d = conflict_analysis t pexp in
@@ -358,7 +357,7 @@ let rec run_inf_step ?limit ~nodec t d =
     let d = run_one_step t d in
     run_inf_step ?limit:(Opt.map pred limit) ~nodec t d
   else begin
-    S.delayed_stop d
+    S.Backtrackable.delayed_stop d
   end
 
 let run_inf_step ?limit ?(nodec=false) t =
@@ -390,7 +389,7 @@ let stop_delayed t =
   | None -> ()
   | Some d ->
     let d = flush t d in
-    S.delayed_stop d;
+    S.Backtrackable.delayed_stop d;
     t.delayed <- None
 
 let run_exn ?nodec ?limit ~theories f =
@@ -398,7 +397,7 @@ let run_exn ?nodec ?limit ~theories f =
   begin try
       let d = get_delayed t in
       List.iter (fun f -> f d) (SynTerm.init::theories);
-      Egraph.flush d;
+      Egraph.Backtrackable.flush d;
       f d
     with S.Contradiction _ ->
       Debug.dprintf0 debug

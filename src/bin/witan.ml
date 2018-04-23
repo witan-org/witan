@@ -102,7 +102,7 @@ let () =
                let l = Witan_stdlib.Shuffle.shufflel l in
                let cl = Witan_theories_bool.Bool._or l in
                clauses := cl::!clauses;
-               Egraph.Delayed.register d cl;
+               Egraph.register d cl;
                Witan_theories_bool.Bool.set_true d Trail.pexp_fact cl
              | Antecedent t ->
                let map t =
@@ -119,7 +119,7 @@ let () =
                let t = Dolmen.Normalize.smtlib t in
                let cl = map t in
                clauses := cl::!clauses;
-               Egraph.Delayed.register d cl;
+               Egraph.register d cl;
                Witan_theories_bool.Bool.set_true d Trail.pexp_fact cl
              | _ -> invalid_arg (Format.asprintf "Unimplemented command: %a" Dolmen.Statement.print stmt))
            statements) in

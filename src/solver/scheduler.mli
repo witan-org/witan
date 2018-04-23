@@ -25,15 +25,15 @@
 val run_exn:
   ?nodec:unit ->
   ?limit:int ->
-  theories:(Egraph.Delayed.t -> unit) list ->
-  (Egraph.Delayed.t -> unit) ->
-  Egraph.Delayed.t
+  theories:(Egraph.t -> unit) list ->
+  (Egraph.t -> unit) ->
+  Egraph.t
 
 val run:
   ?nodec:unit ->
   ?limit:int ->
-  theories:(Egraph.Delayed.t -> unit) list ->
-  (Egraph.Delayed.t -> unit) ->
+  theories:(Egraph.t -> unit) list ->
+  (Egraph.t -> unit) ->
   [> `Contradiction
-  | `Done of Egraph.Delayed.t
+  | `Done of Egraph.t
   ]
