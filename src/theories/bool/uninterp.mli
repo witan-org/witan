@@ -48,4 +48,4 @@ val sem: t ThTermKind.t
 
 (* val app_fun: Node.t -> Node.t list -> Node.t *)
 
-val th_register : Egraph.Delayed.t -> unit
+val th_register : Egraph.t -> unit

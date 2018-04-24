@@ -34,7 +34,7 @@ let node_of_term x = ThTerm.node (ThTerm.index x (x.Term.ty))
 
 
 type env = {
-  converters: (Egraph.Delayed.t -> Term.t -> Term.t list -> Node.t option) list;
+  converters: (Egraph.t -> Term.t -> Term.t list -> Node.t option) list;
   decvars: (Node.t -> Trail.chogen option) list;
 }
 
@@ -44,12 +44,12 @@ let converters = Env.create_key (module struct
   end)
 
 let register_converter env r =
-  let e = Egraph.Delayed.get_env env converters in
-  Egraph.Delayed.set_env env converters {e with converters = r::e.converters}
+  let e = Egraph.get_env env converters in
+  Egraph.set_env env converters {e with converters = r::e.converters}
 
 let register_decvars env r =
-  let e = Egraph.Delayed.get_env env converters in
-  Egraph.Delayed.set_env env converters {e with decvars = r::e.decvars}
+  let e = Egraph.get_env env converters in
+  Egraph.set_env env converters {e with decvars = r::e.decvars}
 
 let () = Env.register (fun _ _ -> ()) converters
 
@@ -90,7 +90,7 @@ module DaemonConvertTerm = struct
   let wakeup d = function
     | Events.Fired.EventRegSem(thterm,()) ->
       begin try begin
-        let e = Egraph.Delayed.get_env d converters in
+        let e = Egraph.get_env d converters in
         let thterm = ThTerm.coerce_thterm thterm in
         let v = ThTerm.sem thterm in
         let f, l = uncurry_app v in
@@ -99,7 +99,7 @@ module DaemonConvertTerm = struct
             let n = ThTerm.node thterm in
             List.iter (fun f ->
                 Opt.iter
-                  (Egraph.Delayed.register_decision d)
+                  (Egraph.register_decision d)
                   (f n)
               ) e.decvars
           | _ -> ()
@@ -108,8 +108,8 @@ module DaemonConvertTerm = struct
           match conv d f l with
           | None -> ()
           | Some node ->
-            Egraph.Delayed.register d node;
-            Egraph.Delayed.merge d Trail.pexp_fact (ThTerm.node thterm) node
+            Egraph.register d node;
+            Egraph.merge d Trail.pexp_fact (ThTerm.node thterm) node
         in
         List.iter iter e.converters
       end with Exit -> () end
@@ -120,7 +120,7 @@ end
 module RDaemonConvertTerm = Demon.Fast.Register(DaemonConvertTerm)
 
 let init env =
-  Egraph.Delayed.set_env env converters {converters=[]; decvars = []};
+  Egraph.set_env env converters {converters=[]; decvars = []};
   RDaemonConvertTerm.init env;
   Demon.Fast.attach env
     DaemonConvertTerm.key [Demon.Create.EventRegSem(ThTerm.key,())];

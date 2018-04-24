@@ -24,7 +24,6 @@
 open Stdlib
 open Std
 open Witan_core
-open Egraph
 
 let debug = Debug.register_info_flag
   ~desc:"for the equality and disequality predicate"
@@ -142,15 +141,15 @@ module D = struct
     match s1, s2 with
     | None, None -> raise Impossible
     | Some s, None ->
-      Delayed.set_dom d dom cl2 s
+      Egraph.set_dom d dom cl2 s
     | None, Some s ->
-      Delayed.set_dom d dom cl1 s
+      Egraph.set_dom d dom cl1 s
     | Some s1, Some s2 ->
       let s = Dis.test_disjoint (fun i age ->
-          let pexp = Delayed.mk_pexp d exp (Merge(pexp,cl1,cl2,i,age)) in
-          Delayed.contradiction d pexp) s1 s2 in
-      Delayed.set_dom d dom cl1 s;
-      Delayed.set_dom d dom cl2 s
+          let pexp = Egraph.mk_pexp d exp (Merge(pexp,cl1,cl2,i,age)) in
+          Egraph.contradiction d pexp) s1 s2 in
+      Egraph.set_dom d dom cl1 s;
+      Egraph.set_dom d dom cl2 s
 
 
   let pp fmt s = Dis.pp fmt s
@@ -160,11 +159,11 @@ end
 let () = Dom.register(module D)
 
 let set_dom d _pexp cl s =
-  let s = match Delayed.get_dom d dom cl with
+  let s = match Egraph.get_dom d dom cl with
     | Some s' ->
       Dis.test_disjoint (fun _ -> assert false) s' s
     | None -> s in
-  Delayed.set_dom d dom cl s
+  Egraph.set_dom d dom cl s
 
 let check_sem v cl =
   let own = ThE.node (ThE.index v Bool.ty) in
@@ -182,11 +181,11 @@ let equality cll =
 
 let disequality cll = Bool._not (equality cll)
 
-let is_equal t cl1 cl2 = Delayed.is_equal t cl1 cl2
+let is_equal t cl1 cl2 = Egraph.is_equal t cl1 cl2
 let is_disequal t cl1 cl2 =
-  not (Delayed.is_equal t cl1 cl2) &&
-  let dom1 = Delayed.get_dom t dom cl1 in
-  let dom2 = Delayed.get_dom t dom cl2 in
+  not (Egraph.is_equal t cl1 cl2) &&
+  let dom1 = Egraph.get_dom t dom cl1 in
+  let dom2 = Egraph.get_dom t dom cl2 in
   match dom1, dom2 with
   | Some s1, Some s2 -> not (Dis.disjoint s1 s2)
   | _ -> false
@@ -212,9 +211,9 @@ let find_not_disequal d s =
      with Exit -> true)
   in
   let get_dis_and_values cl =
-    Delayed.get_dom d dom cl,
+    Egraph.get_dom d dom cl,
     ValueKind.fold {fold=(fun k acc ->
-        match Delayed.get_value d k cl with
+        match Egraph.get_value d k cl with
         | None -> acc
         | Some v -> MValues.add k v acc)}
       MValues.empty
@@ -249,7 +248,7 @@ let norm_set d the =
   let own = ThE.node the in
   try
     ignore (Node.S.fold_left (fun acc e0 ->
-        let e = Delayed.find_def d e0 in
+        let e = Egraph.find_def d e0 in
         Node.M.add_change (fun _ -> e0)
             (fun e0 e0' -> raise (Found(e0',e0)))
             e e0 acc)
@@ -257,7 +256,7 @@ let norm_set d the =
     false
   with Found (e1,e2) ->
     (** TODO remove that and choose what to do. ex: int real *)
-    let pexp = Delayed.mk_pexp d exp (SubstUpTrue (the,e1,e2,own)) in
+    let pexp = Egraph.mk_pexp d exp (SubstUpTrue (the,e1,e2,own)) in
     Bool.set_true d pexp own;
     true
 
@@ -272,10 +271,10 @@ module ChoEquals = struct
     Debug.dprintf6 print_decision
       "[Equality] @[decide on merge of %a and %a in %a@]"
       Node.pp cl1 Node.pp cl2 ThE.pp the;
-    let pexp = Delayed.mk_pexp d exp (Dec(cl1,cl2)) in
-    Delayed.register d cl1;
-    Delayed.register d cl2;
-    Delayed.merge d pexp cl1 cl2
+    let pexp = Egraph.mk_pexp d exp (Dec(cl1,cl2)) in
+    Egraph.register d cl1;
+    Egraph.register d cl2;
+    Egraph.merge d pexp cl1 cl2
 
   let choose_decision d the =
     let v = ThE.sem the in
@@ -287,7 +286,7 @@ module ChoEquals = struct
       else
         match find_not_disequal d v with
         | `AllDiff al ->
-          let pexp = Delayed.mk_pexp d exp (SubstUpFalse(the,al)) in
+          let pexp = Egraph.mk_pexp d exp (SubstUpFalse(the,al)) in
           Bool.set_false d pexp own;
           DecNo
         | `Found (cl1,cl2) ->
@@ -307,22 +306,22 @@ let norm_dom d the =
       Node.pp own Th.pp v;
     match Bool.is d own with
     | Some false ->
-      let age = Trail.Age.succ (Egraph.Delayed.current_age d) in
+      let age = Trail.Age.succ (Egraph.current_age d) in
       let dis, stag = new_tag the age in
       let pexp =
-        Delayed.mk_pexp d exp (SubstDownFalse(the,dis)) in
-      Egraph.Delayed.add_pexp d pexp;
+        Egraph.mk_pexp d exp (SubstDownFalse(the,dis)) in
+      Egraph.add_pexp d pexp;
       Node.S.iter (fun cl -> set_dom d pexp cl (stag ())) v;
       Demon.AliveStopped
     | Some true ->
       begin match Th.only_two v with
         | Some (cl1,cl2) ->
-          let pexp = Delayed.mk_pexp d exp (SubstDownTrue(the)) in
-          Delayed.merge d pexp cl1 cl2; Demon.AliveStopped
+          let pexp = Egraph.mk_pexp d exp (SubstDownTrue(the)) in
+          Egraph.merge d pexp cl1 cl2; Demon.AliveStopped
         | None ->
           match find_not_disequal d v with
           | `AllDiff al ->
-            let pexp = Delayed.mk_pexp d exp (SubstUpFalse(the,al)) in
+            let pexp = Egraph.mk_pexp d exp (SubstUpFalse(the,al)) in
             Bool.set_false d pexp own; (** contradiction *)
             raise Impossible
           | `Found _ ->
@@ -331,7 +330,7 @@ let norm_dom d the =
     | None ->
       match find_not_disequal d v with
       | `AllDiff al ->
-        let pexp = Delayed.mk_pexp d exp (SubstUpFalse(the,al)) in
+        let pexp = Egraph.mk_pexp d exp (SubstUpFalse(the,al)) in
         Bool.set_false d pexp own;
         Demon.AliveStopped
       | `Found _ -> (** they are still not proved disequal *)
@@ -370,7 +369,7 @@ module DaemonInit = struct
           let clsem = ThE.coerce_thterm clsem in
           let v = ThE.sem clsem in
           let own = ThE.node clsem in
-          Node.S.iter (Delayed.register d) v;
+          Node.S.iter (Egraph.register d) v;
           let r = norm_dom d clsem in
           begin match r with
           | Demon.AliveReattached ->
@@ -383,7 +382,7 @@ module DaemonInit = struct
             if true (* GenEquality.dodec (Th.get_ty v) *) then begin
               Debug.dprintf4 debug "[Equality] @[ask_dec on %a for %a@]"
                 Node.pp own Th.pp v;
-              Delayed.register_decision d (Trail.GCho(own,ChoEquals.key,clsem));
+              Egraph.register_decision d (Trail.GCho(own,ChoEquals.key,clsem));
             end
           | _ -> ()
           end
@@ -643,9 +642,9 @@ module DaemonPropaITE = struct
     let v = EITE.sem the in
     let own = EITE.node the in
     let branch = if b then v.then_ else v.else_ in
-    let pexp = Delayed.mk_pexp d expite (the,b) in
-    Delayed.register d branch;
-    Delayed.merge d pexp own branch
+    let pexp = Egraph.mk_pexp d expite (the,b) in
+    Egraph.register d branch;
+    Egraph.merge d pexp own branch
 
   let immediate = false
   let throttle = 100
@@ -653,7 +652,7 @@ module DaemonPropaITE = struct
     | Events.Fired.EventValue(cond,dom,clsem) ->
       assert (ValueKind.equal dom Bool.dom);
       let v = EITE.sem clsem in
-      assert (Delayed.is_equal d cond v.cond);
+      assert (Egraph.is_equal d cond v.cond);
       begin match Bool.is d v.cond with
         | None -> assert false
         | Some b -> simplify d clsem b
@@ -684,10 +683,10 @@ module DaemonInitITE = struct
         | None ->
           let clsem = EITE.index v (Node.ty own) in
           assert (Node.equal (EITE.node clsem) own);
-          Delayed.register d v.cond;
-          Delayed.register d v.then_;
-          Delayed.register d v.else_;
-          Delayed.register_decision d (Trail.GCho(v.cond,Bool.chobool,v.cond));
+          Egraph.register d v.cond;
+          Egraph.register d v.then_;
+          Egraph.register d v.else_;
+          Egraph.register_decision d (Trail.GCho(v.cond,Bool.chobool,v.cond));
           let events = [Demon.Create.EventValue(v.cond,Bool.dom,clsem)] in
           Demon.Fast.attach d DaemonPropaITE.key events
     end
@@ -731,17 +730,17 @@ let iter_on_value_different
     (type b)
     ((module Val): (module Witan_core.ValueKind.Registered with type s = a and type t = b))
     ~they_are_different
-    (d:Delayed.t)
+    (d:Egraph.t)
     (own:Node.t) =
-  let dis = Opt.get_def Dis.empty (Egraph.Delayed.get_dom d dom own) in
+  let dis = Opt.get_def Dis.empty (Egraph.get_dom d dom own) in
   let iter elt age =
     let iter n =
-      if not (Delayed.is_equal d own n) then
-        match Delayed.get_value d Val.key n with
+      if not (Egraph.is_equal d own n) then
+        match Egraph.get_value d Val.key n with
         | None -> ()
         | Some v ->
         let pexp =
-          Delayed.mk_pexp d exp (Merge(Trail.pexp_fact,own,n,elt,age)) in
+          Egraph.mk_pexp d exp (Merge(Trail.pexp_fact,own,n,elt,age)) in
         they_are_different pexp n v
     in
     Node.S.iter iter (ThE.sem (Dis.to_node elt))
@@ -753,16 +752,16 @@ let init_diff_to_value (type a) (type b)
     ?(already_registered=([]: b list))
     d0
     ((module Val): (module Witan_core.ValueKind.Registered with type s = a and type t = b))
-    ~(they_are_different:(Delayed.t -> Trail.Pexp.t -> Node.t -> a -> unit)) =
+    ~(they_are_different:(Egraph.t -> Trail.Pexp.t -> Node.t -> a -> unit)) =
 
   let propagate_diff d v =
     let own = Val.node v in
-    let dis = Opt.get_def Dis.empty (Egraph.Delayed.get_dom d dom own) in
+    let dis = Opt.get_def Dis.empty (Egraph.get_dom d dom own) in
     let iter elt age =
       let iter n =
-        if not (Delayed.is_equal d own n) then
+        if not (Egraph.is_equal d own n) then
           let pexp =
-            Delayed.mk_pexp d exp (Merge(Trail.pexp_fact,n,Val.node v,elt,age)) in
+            Egraph.mk_pexp d exp (Merge(Trail.pexp_fact,n,Val.node v,elt,age)) in
           they_are_different d pexp n (Val.value v)
       in
       Node.S.iter iter (ThE.sem (Dis.to_node elt))
@@ -851,7 +850,7 @@ let () =
 let converter d f l =
   let of_term t =
     let n = SynTerm.node_of_term t in
-    Egraph.Delayed.register d n;
+    Egraph.register d n;
     n
   in
   let node = match f, l with

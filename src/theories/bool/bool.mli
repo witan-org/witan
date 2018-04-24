@@ -37,19 +37,19 @@ val gen   : bool -> (Node.t * bool) list -> Node.t
     not_b0 (or (not_b1 cl1,not_b2 cl2)) with not_x f = if x then not f else f
 *)
 
-val set_true  : Egraph.Delayed.t -> Trail.Pexp.t -> Node.t -> unit
-val set_false : Egraph.Delayed.t -> Trail.Pexp.t -> Node.t -> unit
+val set_true  : Egraph.t -> Trail.Pexp.t -> Node.t -> unit
+val set_false : Egraph.t -> Trail.Pexp.t -> Node.t -> unit
 
-val is       : Egraph.Delayed.t -> Node.t -> bool option
-val is_true  : Egraph.Delayed.t -> Node.t -> bool
-val is_false : Egraph.Delayed.t -> Node.t -> bool
+val is       : Egraph.t -> Node.t -> bool option
+val is_true  : Egraph.t -> Node.t -> bool
+val is_false : Egraph.t -> Node.t -> bool
 (** is_true t node = false means the value is not constrained by the
     current constraints or due to incompletness *)
-val is_unknown : Egraph.Delayed.t -> Node.t -> bool
+val is_unknown : Egraph.t -> Node.t -> bool
 
 (* val true_is_false : Egraph.d -> Node.t -> Trail.Pexp.t -> 'a *)
 
-val th_register: Egraph.Delayed.t -> unit
+val th_register: Egraph.t -> unit
 
 val chobool: Node.t Trail.Cho.t
 

@@ -24,7 +24,6 @@
 open Stdlib
 open Std
 open Witan_core
-open Egraph
 
 let lazy_propagation = false
 
@@ -53,13 +52,13 @@ let union_disjoint m1 m2 =
 
 let index sem v = Node.index_sem sem v ty
 
-let is env node = Egraph.Delayed.get_value env dom node
+let is env node = Egraph.get_value env dom node
 let is_true  env node = Node.equal node node_true || is env node = Some true
 let is_false env node = Node.equal node node_false || is env node = Some false
 let is_unknown env node = is env node = None
 
 let set_bool env pexp node b =
-  Delayed.merge env pexp node
+  Egraph.merge env pexp node
     (if b then node_true else node_false)
 
 type t =
@@ -141,7 +140,7 @@ module Th = struct
   exception Found of Node.t * bool
   let find_not_known d l =
     IArray.iter (fun (node,b) ->
-      match Delayed.get_value d dom node with
+      match Egraph.get_value d dom node with
       | Some _ -> ()
       | None -> raise (Found (node,b))
     ) l
@@ -149,7 +148,7 @@ module Th = struct
   let _bcp d l absorbent =
     try
       let res = IArray.fold (fun acc node ->
-        match Delayed.get_value d dom node, acc with
+        match Egraph.get_value d dom node, acc with
         | Some b, _ when b = absorbent -> raise (TopKnown absorbent)
         | Some _, _ -> acc
         | None, Some _ -> raise Exit
@@ -194,10 +193,10 @@ module DaemonPropaNot = struct
     function
     | Events.Fired.EventValue(_,dom',((_,node,ncl) as x)) ->
       assert (ValueKind.equal dom dom');
-      begin match Delayed.get_value d dom node with
+      begin match Egraph.get_value d dom node with
         | None -> raise Impossible
         | Some b ->
-          let pexp = Delayed.mk_pexp d expprop (ExpNot(x,not b)) in
+          let pexp = Egraph.mk_pexp d expprop (ExpNot(x,not b)) in
           set_bool d pexp ncl (not b)
       end;
     | _ -> raise UnwaitedEvent
@@ -207,12 +206,12 @@ module DaemonPropaNot = struct
     let own = ThE.node thterm in
     match is d own with
     | Some b ->
-      let pexp = Delayed.mk_pexp d expprop (ExpNot((v,own,node),not b)) in
+      let pexp = Egraph.mk_pexp d expprop (ExpNot((v,own,node),not b)) in
       set_bool d pexp node (not b)
     | None ->
       match is d node with
       | Some b ->
-        let pexp = Delayed.mk_pexp d expprop
+        let pexp = Egraph.mk_pexp d expprop
             (ExpNot((v,node,own),not b)) in
         set_bool d pexp own (not b)
       | None ->
@@ -246,15 +245,15 @@ module DaemonPropa = struct
   let wakeup_lit ~first d thterm watched next =
     let v = ThE.sem thterm in
     let own = ThE.node thterm in
-    let pexp exp = Delayed.mk_pexp d expprop exp in
+    let pexp exp = Egraph.mk_pexp d expprop exp in
     let set_dom_up_true d own leaf _ =
       let b = (not v.topnot) in
-      match Delayed.get_value d dom own with
+      match Egraph.get_value d dom own with
       | Some b' when b' == b -> ()
       | _ -> set_bool d (pexp (ExpUp(thterm,leaf))) own b in
     let merge_bcp node sign =
       Debug.dprintf2 debug "[Bool] @[merge_bcp %a@]" Node.pp node;
-      match Delayed.get_value d dom own with
+      match Egraph.get_value d dom own with
       | Some b' ->
         let pexp = if (mulbool b' v.topnot)
           then pexp (ExpBCP(thterm,node,BCPOwnKnown))
@@ -263,7 +262,7 @@ module DaemonPropa = struct
         let b = mulbool sign (mulbool b' v.topnot) in
         set_bool d pexp node b
       | None -> (** merge *)
-        match Delayed.get_value d dom node with
+        match Egraph.get_value d dom node with
         | Some b' ->
           let pexp = if (mulbool b' sign)
             then pexp (ExpUp(thterm,node))
@@ -274,7 +273,7 @@ module DaemonPropa = struct
         | None -> (** merge *)
           if mulbool v.topnot sign
           then DaemonPropaNot.init d thterm node
-          else Delayed.merge d (pexp (ExpBCP(thterm,node,BCP))) own node in
+          else Egraph.merge d (pexp (ExpBCP(thterm,node,BCP))) own node in
     let rec find_watch dir pos bound =
       assert (dir == 1 || dir == -1);
       if pos == bound
@@ -283,7 +282,7 @@ module DaemonPropa = struct
         (merge_bcp node sign; raise Exit)
       else
         let node,sign = IArray.get v.lits pos in
-        match Delayed.get_value d dom node with
+        match Egraph.get_value d dom node with
         | None -> node,pos
         | Some b when mulbool b sign (** true absorbent of or *) ->
           set_dom_up_true d own node b; raise Exit
@@ -308,8 +307,8 @@ module DaemonPropa = struct
   let wakeup_own ~first d thterm =
     let v = ThE.sem thterm in
     let own = ThE.node thterm in
-    let pexp exp = Delayed.mk_pexp d expprop exp in
-    begin match Delayed.get_value d dom own with
+    let pexp exp = Egraph.mk_pexp d expprop exp in
+    begin match Egraph.get_value d dom own with
     | None -> assert (first);
       Demon.Fast.attach d key
         [Demon.Create.EventValue(own, dom, All thterm)];
@@ -359,13 +358,13 @@ module DaemonInit = struct
           let v = ThE.sem thterm in
           match isnot v with
           | Some node ->
-            Delayed.register d node;
+            Egraph.register d node;
             DaemonPropaNot.init d thterm node
           | None ->
             assert (not lazy_propagation);
-            IArray.iter (fun (node,_) -> Delayed.register d node) v.lits;
+            IArray.iter (fun (node,_) -> Egraph.register d node) v.lits;
             if DaemonPropa.init d thterm then ()
-        (* Delayed.ask_decision d (dec v) *)
+        (* Egraph.ask_decision d (dec v) *)
         with Exit -> ()
       end
     | _ -> raise UnwaitedEvent
@@ -445,7 +444,7 @@ let make_dec node = Trail.GCho(node,chobool,node)
 let converter d f l =
   let of_term t =
     let n = SynTerm.node_of_term t in
-    Egraph.Delayed.register d n;
+    Egraph.register d n;
     n
   in
   let node = match f, l with
@@ -475,8 +474,8 @@ let th_register env =
   RDaemonInit.init env;
   Demon.Fast.attach env
     DaemonInit.key [Demon.Create.EventRegSem(sem,())];
-  Delayed.register env node_true;
-  Delayed.register env node_false;
+  Egraph.register env node_true;
+  Egraph.register env node_false;
   SynTerm.register_converter env converter;
   SynTerm.register_decvars env decvars;
   ()
@@ -491,11 +490,11 @@ module ChoBool = struct
 
   let make_decision env node b =
     Debug.dprintf3 print_decision "[Bool] decide %b on %a" b Node.pp node;
-    let pexp = Egraph.Delayed.mk_pexp env expprop (ExpDec(node,b)) in
+    let pexp = Egraph.mk_pexp env expprop (ExpDec(node,b)) in
     set_bool env pexp node b
 
   let choose_decision env node =
-    match Egraph.Delayed.get_value env dom node with
+    match Egraph.get_value env dom node with
     | Some _ -> DecNo
     | None -> DecTodo (fun env -> make_decision env node true) (** why not true? *)
 
@@ -679,7 +678,7 @@ let default_value = true
 
 let () =
   Interp.Register.model ty (fun d n ->
-      let v = Egraph.Delayed.get_value d dom n in
+      let v = Egraph.get_value d dom n in
       let v = Witan_popop_lib.Opt.get_def default_value v in
       let v = if v then values_true else values_false in
       v)

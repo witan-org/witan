@@ -66,13 +66,13 @@ module Key: sig
 
     val immediate: bool
     val wakeup:
-      Egraph.Delayed.t -> Key.t -> Data.t Events.Fired.t ->
+      Egraph.t -> Key.t -> Data.t Events.Fired.t ->
       info -> Key.t alive
       (** the Events.t in wakeup is a subset of the one given in watch *)
   end
 
   module Register (D:S): sig
-    val init: Egraph.Delayed.t -> unit
+    val init: Egraph.t -> unit
     (** to run for each new delayed *)
   end
 
@@ -82,15 +82,15 @@ module Key: sig
   | SDead
   | SRedirected of 'k
 
-  val attach: Egraph.Delayed.t -> ('k,'d,'i) t -> 'k -> 'd Create.t -> unit
+  val attach: Egraph.t -> ('k,'d,'i) t -> 'k -> 'd Create.t -> unit
   (** raise AlreadyDead if this key is already dead *)
 
-  val is_attached: Egraph.Delayed.t -> ('k,'d,'i) t -> 'k -> ('k,'i) state
+  val is_attached: Egraph.t -> ('k,'d,'i) t -> 'k -> ('k,'i) state
 
-  val set_info: Egraph.Delayed.t -> ('k, 'd, 'i) t -> 'k -> 'i -> unit
+  val set_info: Egraph.t -> ('k, 'd, 'i) t -> 'k -> 'i -> unit
 
   exception CantBeKilled
-  val kill : Egraph.Delayed.t -> ('a, 'b,'c) t -> 'a -> unit
+  val kill : Egraph.t -> ('a, 'b,'c) t -> 'a -> unit
 
 
 end
@@ -114,16 +114,16 @@ module Fast: sig
     val immediate: bool
     val throttle: int (** todo int ref? *)
     (** number of time run in a row *)
-    val wakeup: Egraph.Delayed.t -> Data.t Events.Fired.event -> unit
+    val wakeup: Egraph.t -> Data.t Events.Fired.event -> unit
 
   end
 
   module Register (D:S): sig
-    val init: Egraph.Delayed.t -> unit
+    val init: Egraph.t -> unit
     (** to run for each new delayed *)
   end
 
-  val attach: Egraph.Delayed.t -> 'd t -> 'd Create.t -> unit
+  val attach: Egraph.t -> 'd t -> 'd Create.t -> unit
 
   (** helper *)
   val register_init_daemon:
@@ -131,8 +131,8 @@ module Fast: sig
     ?immediate:bool ->
     ?throttle:int ->
     (module RegisteredThTerm with type t = 'a) ->
-    (Egraph.Delayed.t -> 'a -> unit) ->
-    Egraph.Delayed.t ->
+    (Egraph.t -> 'a -> unit) ->
+    Egraph.t ->
     unit
     (** *)
 
@@ -142,8 +142,8 @@ module Fast: sig
     ?immediate:bool ->
     ?throttle:int ->
     (module RegisteredValue with type t = 'a) ->
-    (Egraph.Delayed.t -> 'a -> unit) ->
-    Egraph.Delayed.t ->
+    (Egraph.t -> 'a -> unit) ->
+    Egraph.t ->
     unit
     (** *)
 end

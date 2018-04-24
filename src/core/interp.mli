@@ -27,7 +27,7 @@ module Register: sig
 
   val thterm: 'a Nodes.ThTermKind.t -> (interp:(Nodes.Node.t -> Nodes.Value.t) -> 'a -> Nodes.Value.t) -> unit
 
-  val model: Ty.t -> (Egraph.Delayed.t -> Nodes.Node.t -> Nodes.Value.t) -> unit
+  val model: Ty.t -> (Egraph.t -> Nodes.Node.t -> Nodes.Value.t) -> unit
 
 end
 
@@ -37,4 +37,4 @@ val term   : ?leaf:leaf -> Term.t -> Nodes.Value.t
 val thterm : ?leaf:leaf -> Nodes.ThTerm.t -> Nodes.Value.t
 val node   : ?leaf:leaf -> Nodes.Node.t -> Nodes.Value.t
 
-val model : Egraph.Delayed.t -> Nodes.Node.t -> Nodes.Value.t
+val model : Egraph.t -> Nodes.Node.t -> Nodes.Value.t

@@ -40,7 +40,7 @@ module type Cho = sig
   module OnWhat  : Stdlib.Datatype
 
   val choose_decision:
-    Egraph.Delayed.t -> OnWhat.t -> (Egraph.Delayed.t -> unit) decdone
+    Egraph.t -> OnWhat.t -> (Egraph.t -> unit) decdone
   (** Answer the question: Is the decision still needed? *)
 
   val key: OnWhat.t Cho.t
@@ -49,7 +49,7 @@ end
 
 val register_cho: (module Cho with type OnWhat.t = 'a) -> unit
 
-val choose_decision: Egraph.Delayed.t -> Trail.chogen -> (Egraph.Delayed.t -> unit) decdone
+val choose_decision: Egraph.t -> Trail.chogen -> (Egraph.t -> unit) decdone
 
 module ChoGenH : Stdlib.XHashtbl.S with type key = Trail.chogen
 
@@ -152,8 +152,8 @@ module Learnt: Stdlib.Datatype
 val learn: Egraph.Getter.t -> Trail.t -> Trail.Pexp.t -> Trail.Age.t * Learnt.t * Node.t Bag.t
 (** Return the backtracking age, the constraint learnt and the useful nodes *)
 
-val apply_learnt: Egraph.Delayed.t -> Learnt.t -> unit
-val learnt_is_already_true: Egraph.Delayed.t -> Learnt.t -> bool
+val apply_learnt: Egraph.t -> Learnt.t -> unit
+val learnt_is_already_true: Egraph.t -> Learnt.t -> bool
 
 
 (** {2 Generic conflict} *)
@@ -188,5 +188,5 @@ val check_initialization: unit -> bool
 (** {2 From boolean theory } *)
 val _or: ((Node.t * parity) list -> Node.t) ref
 val _equality: (Node.t -> Node.t -> Node.t) ref
-val _set_true: (Egraph.Delayed.t -> Trail.Pexp.t -> Node.t -> unit) ref
-val _is_true: (Egraph.Delayed.t -> Node.t -> bool) ref
+val _set_true: (Egraph.t -> Trail.Pexp.t -> Node.t -> unit) ref
+val _is_true: (Egraph.t -> Node.t -> bool) ref

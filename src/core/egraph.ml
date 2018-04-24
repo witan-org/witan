@@ -103,9 +103,7 @@ and action_ext =
 | ExtDem         : Events.Wait.daemon_key  -> action_ext
 
 end
-
-include Def
-
+open Def
 (** {2 Define events} *)
 
 module WaitDef = struct
@@ -136,35 +134,6 @@ let mk_dumb_delayed () = { env = Obj.magic 0;
 
 let dumb_delayed = mk_dumb_delayed ()
 let unsat_delayed = mk_dumb_delayed ()
-
-
-let new_t () = {
-  repr = Node.M.empty;
-  event = Node.M.empty;
-  event_reg = Node.M.empty;
-  event_any_reg = [];
-  dom = VDomTable.create 5;
-  sem = VSemTable.create 5;
-  value = VValueTable.create 5;
-  envs = Env.VectorH.create 5;
-  trail = Trail.create ();
-  current_delayed = dumb_delayed;
-  }
-
-let new_handle t =
-  assert (t.current_delayed == dumb_delayed);
-  {
-  repr  = t.repr;
-  event = t.event;
-  event_reg = t.event_reg;
-  event_any_reg = t.event_any_reg;
-  dom = VDomTable.copy t.dom;
-  sem = VSemTable.copy t.sem;
-  value = VValueTable.copy t.value;
-  envs = Env.VectorH.copy t.envs;
-  trail = Trail.new_handle t.trail;
-  current_delayed = t.current_delayed;
-}
 
 (** {2 Table access in the environment } *)
 
@@ -216,42 +185,42 @@ module T = struct
     let node1 = find_def t node1 in
     let node2 = find_def t node2 in
     Node.equal node1 node2
+
+  let get_direct_dom (type a) t (dom : a Dom.t) node =
+    Node.M.find_opt node (get_table_dom t dom).table
+
+  let get_dom t dom node =
+    let node = find_def t node in
+    get_direct_dom t dom node
+
+  let get_direct_value t value node =
+    Node.M.find_opt node (get_table_value t value).table
+
+  let get_value t value node =
+    let node = find_def t node in
+    get_direct_value t value node
+
+  let get_env : type a. t -> a Env.t -> a
+    = fun t k ->
+      Env.check_is_registered k;
+      (* Env.VectorH.inc_size k t.envs; *)
+      if Env.VectorH.is_uninitialized t.envs k then
+        raise (UninitializedEnv (Env.key k :> Env.K.t))
+      else
+        Env.VectorH.get t.envs k
+
+  let set_env : type a. t -> a Env.t -> a -> unit
+    = fun t k ->
+      Env.check_is_registered k;
+      (* Env.VectorH.inc_size k t.envs; *)
+      Env.VectorH.set t.envs k
+
+  let is_registered t node =
+    Node.M.mem node t.repr
+
+
 end
 open T
-
-let get_direct_dom (type a) t (dom : a Dom.t) node =
-  Node.M.find_opt node (get_table_dom t dom).table
-
-let get_dom t dom node =
-  let node = find_def t node in
-  get_direct_dom t dom node
-
-let get_direct_value t value node =
-  Node.M.find_opt node (get_table_value t value).table
-
-let get_value t value node =
-  let node = find_def t node in
-  get_direct_value t value node
-
-let get_env : type a. t -> a Env.t -> a
-  = fun t k ->
-    Env.check_is_registered k;
-    (* Env.VectorH.inc_size k t.envs; *)
-    if Env.VectorH.is_uninitialized t.envs k then
-      raise (UninitializedEnv (Env.key k :> Env.K.t))
-    else
-      Env.VectorH.get t.envs k
-
-let set_env : type a. t -> a Env.t -> a -> unit
-  = fun t k ->
-    Env.check_is_registered k;
-    (* Env.VectorH.inc_size k t.envs; *)
-    Env.VectorH.set t.envs k
-
-
-let is_registered t node =
-  Node.M.mem node t.repr
-
 
 (** {2 For debugging and display} *)
 let _print_env fmt t =
@@ -771,7 +740,7 @@ module Delayed = struct
     else
       Debug.dprintf0 debug "[Egraph] Nothing to do"
 
-  and flush d =
+  and flush_internal d =
     assert (d.env.current_delayed == d);
     Debug.dprintf0 debug "[Egraph] @[flush delayed@]";
     try
@@ -779,10 +748,12 @@ module Delayed = struct
         let saved_ext_action = Queue.create () in
         Queue.transfer d.todo_ext_action saved_ext_action;
         do_pending d;
+        assert (nothing_todo d);
         Queue.transfer saved_ext_action d.todo_ext_action;
-      else
+      else begin
         do_pending d;
-      assert (nothing_todo d);
+        assert (nothing_todo d);
+      end;
       Debug.dprintf0 debug "[Egraph] @[flush delayed end@]"
     with e when Debug.test_flag debug &&
                 not (Debug.test_flag Debug.stack_trace) ->
@@ -801,27 +772,18 @@ module Delayed = struct
     assert (d.env.current_delayed == d);
     assert (is_registered d node)
 
-  let set_sem  d pexp node thterm =
-    Debug.dprintf4 debug "[Egraph] @[add_pending_set_sem for %a and %a@]"
+  let set_thterm  d pexp node thterm =
+    Debug.dprintf4 debug "[Egraph] @[add_pending_set_thterm for %a and %a@]"
       Node.pp node ThTerm.pp thterm;
     check d node;
     set_sem_pending d pexp node thterm
 
-  let set_nodevalue  d pexp node nodevalue =
-    Debug.dprintf4 debug "[Egraph] @[add_pending_set_nodevalue for %a and %a@]"
-      Node.pp node Value.pp nodevalue;
-    check d node;
-    set_value_pending d pexp node nodevalue
-
-  let set_values d pexp node nodevalue =
+  let set_value d pexp node nodevalue =
     Debug.dprintf4 debug_few
       "[Egraph] @[set_value for %a with %a@]"
       Node.pp node Value.pp nodevalue;
+    check d node;
     set_value_pending d pexp node nodevalue
-
-  let set_value (type a)  d pexp (value : a ValueKind.t) node v =
-    let nodevalue = Value.index value v (Node.ty node) in
-    set_values d pexp node nodevalue
 
   let set_dom d dom node v =
     Debug.dprintf4 debug_few
@@ -941,90 +903,130 @@ module Delayed = struct
 
 end
 
-let new_delayed ~sched_daemon ~sched_decision t =
-  assert (t.current_delayed == dumb_delayed);
-  let d =  { env = t;
-             todo_immediate_dem = Queue.create ();
-             todo_merge_dom = Queue.create ();
-             todo_delayed_merge = None;
-             todo_merge = Queue.create ();
-             todo_ext_action = Queue.create ();
-             sched_daemon; sched_decision;
-           } in
-  t.current_delayed <- d;
-  d
+include Delayed
 
-let delayed_stop d =
-  assert (d.env.current_delayed == d);
-  assert (Delayed.nothing_todo d);
-  d.env.current_delayed <- dumb_delayed
+module Backtrackable = struct
+  type delayed = t
+  type t = Def.t
 
-let flush d =
-  assert (d.env.current_delayed == d);
-  Delayed.do_pending d;
-  assert (Delayed.nothing_todo d)
+  let new_t () = {
+    repr = Node.M.empty;
+    event = Node.M.empty;
+    event_reg = Node.M.empty;
+    event_any_reg = [];
+    dom = VDomTable.create 5;
+    sem = VSemTable.create 5;
+    value = VValueTable.create 5;
+    envs = Env.VectorH.create 5;
+    trail = Trail.create ();
+    current_delayed = dumb_delayed;
+  }
 
-let run_daemon d dem =
-  Queue.push (ExtDem dem) d.todo_ext_action
+  let new_handle t =
+    assert (t.current_delayed == dumb_delayed);
+    {
+      repr  = t.repr;
+      event = t.event;
+      event_reg = t.event_reg;
+      event_any_reg = t.event_any_reg;
+      dom = VDomTable.copy t.dom;
+      sem = VSemTable.copy t.sem;
+      value = VValueTable.copy t.value;
+      envs = Env.VectorH.copy t.envs;
+      trail = Trail.new_handle t.trail;
+      current_delayed = t.current_delayed;
+    }
 
-let is_equal t node1 node2 =
-  assert (t.current_delayed == dumb_delayed);
-  let node1,node2 = Shuffle.shuffle2 (node1,node2) in
-  Debug.dprintf4 debug "[Egraph] @[is_equal %a %a@]"
-    Node.pp node1 Node.pp node2;
-  draw_graph t;
-  is_equal t node1 node2
+  let new_delayed ~sched_daemon ~sched_decision t =
+    assert (t.current_delayed == dumb_delayed);
+    let d =  { env = t;
+               todo_immediate_dem = Queue.create ();
+               todo_merge_dom = Queue.create ();
+               todo_delayed_merge = None;
+               todo_merge = Queue.create ();
+               todo_ext_action = Queue.create ();
+               sched_daemon; sched_decision;
+             } in
+    t.current_delayed <- d;
+    d
 
-let find t node =
-  assert (t.current_delayed == dumb_delayed);
-  find t node
+  let delayed_stop d =
+    assert (d.env.current_delayed == d);
+    assert (Delayed.nothing_todo d);
+    d.env.current_delayed <- dumb_delayed
 
-let get_dom t dom node =
-  assert (t.current_delayed == dumb_delayed);
-  get_dom t dom node
+  let flush d =
+    assert (d.env.current_delayed == d);
+    Delayed.do_pending d;
+    assert (Delayed.nothing_todo d)
 
-let get_value t value node =
-  assert (t.current_delayed == dumb_delayed);
-  get_value t value node
+  let run_daemon d dem =
+    Queue.push (ExtDem dem) d.todo_ext_action
 
-let get_env t env =
-  assert (t.current_delayed == dumb_delayed);
-  get_env t env
+  let is_registered t node =
+    T.is_registered t node
 
-let set_env t env v =
-  assert (t.current_delayed == dumb_delayed);
-  set_env t env v
+  let is_equal t node1 node2 =
+    assert (t.current_delayed == dumb_delayed);
+    let node1,node2 = Shuffle.shuffle2 (node1,node2) in
+    Debug.dprintf4 debug "[Egraph] @[is_equal %a %a@]"
+      Node.pp node1 Node.pp node2;
+    draw_graph t;
+    T.is_equal t node1 node2
 
-let is_repr t node =
-  assert (t.current_delayed == dumb_delayed);
-  is_repr t node
+  let find t node =
+    assert (t.current_delayed == dumb_delayed);
+    T.find t node
 
-let find_def t node =
-  assert (t.current_delayed == dumb_delayed);
-  find_def t node
+  let get_dom t dom node =
+    assert (t.current_delayed == dumb_delayed);
+    T.get_dom t dom node
 
-let get_trail t =
-  (* assert (t.current_delayed == dumb_delayed ||
-   *         t.current_delayed == unsat_delayed); *)
-  t.trail
+  let get_value t value node =
+    assert (t.current_delayed == dumb_delayed);
+    T.get_value t value node
 
-let get_getter t =
-  (* assert (t.current_delayed == dumb_delayed); *)
-  t.current_delayed
+  let get_env t env =
+    assert (t.current_delayed == dumb_delayed);
+    T.get_env t env
+
+  let set_env t env v =
+    assert (t.current_delayed == dumb_delayed);
+    T.set_env t env v
+
+  let is_repr t node =
+    assert (t.current_delayed == dumb_delayed);
+    T.is_repr t node
+
+  let find_def t node =
+    assert (t.current_delayed == dumb_delayed);
+    T.find_def t node
+
+  let get_trail t =
+    (* assert (t.current_delayed == dumb_delayed ||
+     *         t.current_delayed == unsat_delayed); *)
+    t.trail
+
+  let get_getter t =
+    (* assert (t.current_delayed == dumb_delayed); *)
+    t.current_delayed
 
 
-let new_dec t =
-  assert (t.current_delayed == dumb_delayed);
-  Trail.new_dec t.trail
+  let new_dec t =
+    assert (t.current_delayed == dumb_delayed);
+    Trail.new_dec t.trail
 
-let current_age (t:t) = Trail.current_age t.trail
-let current_nbdec (t:t) = Trail.nbdec t.trail
+  let current_age (t:t) = Trail.current_age t.trail
+  let current_nbdec (t:t) = Trail.nbdec t.trail
 
-let get_direct_dom t dom node =
-  assert (t.current_delayed == dumb_delayed ||
-          t.current_delayed == unsat_delayed);
-  get_direct_dom t dom node
+  let get_direct_dom t dom node =
+    assert (t.current_delayed == dumb_delayed ||
+            t.current_delayed == unsat_delayed);
+    get_direct_dom t dom node
 
+  let draw_graph = draw_graph
+  let output_graph = output_graph
+end
 
 module type Getter = sig
   type t

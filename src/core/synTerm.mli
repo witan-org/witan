@@ -29,17 +29,17 @@ include RegisteredThTerm with type s = Term.t
 
 val node_of_term : Term.t -> Node.t
 
-val init: Egraph.Delayed.t -> unit
+val init: Egraph.t -> unit
 
 val register_converter:
-  Egraph.Delayed.t ->
-  (Egraph.Delayed.t -> Term.t -> Term.t list -> Node.t option) ->
+  Egraph.t ->
+  (Egraph.t -> Term.t -> Term.t list -> Node.t option) ->
   unit
 (** register converters between syntactic terms *)
 
 
 val register_decvars:
-  Egraph.Delayed.t ->
+  Egraph.t ->
   (Node.t -> Trail.chogen option) ->
   unit
 (** register decision adder on variables *)

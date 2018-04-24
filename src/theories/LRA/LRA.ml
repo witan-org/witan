@@ -23,7 +23,6 @@
 
 (** This module use one domain and two semantic values. *)
 open Witan_core
-open Egraph
 open Witan_stdlib.Std
 
 let debug = Debug.register_info_flag
@@ -109,11 +108,11 @@ let set_dom d pexp node v b =
   match D.is_singleton v with
   | Some q ->
     let cst = RealValue.index q Term._Real in
-    let pexp = Delayed.mk_pexp d exp (ExpIsSingleton(pexp,node,b,cst)) in
-    Delayed.set_value d pexp real node q
+    let pexp = Egraph.mk_pexp d exp (ExpIsSingleton(pexp,node,b,cst)) in
+    Egraph.set_value d pexp node (RealValue.nodevalue cst)
   | None ->
     (** the pexp must be in the dom *)
-    Delayed.set_dom d dom node v
+    Egraph.set_dom d dom node v
 
 let minus_or_one inv =
   if inv then Q.minus_one else Q.one
@@ -130,21 +129,21 @@ let () = Dom.register(module struct
       | _ -> false
 
     let merge d pexp (i1,cl1) (i2,cl2) _ =
-      assert (not (Delayed.is_equal d cl1 cl2));
+      assert (not (Egraph.is_equal d cl1 cl2));
       match i1, cl1, i2, cl2 with
       | Some i1,_, Some i2,_ ->
         begin match D.inter i1 i2 with
           | None ->
-            let pexp = Delayed.mk_pexp d exp (ExpEmptyDomMerge(pexp,cl1,cl2)) in
-            Delayed.contradiction d pexp
+            let pexp = Egraph.mk_pexp d exp (ExpEmptyDomMerge(pexp,cl1,cl2)) in
+            Egraph.contradiction d pexp
           | Some i ->
             if not (D.equal i i1) then
-              Delayed.set_dom d dom cl1 i;
+              Egraph.set_dom d dom cl1 i;
             if not (D.equal i i2) then
-              Delayed.set_dom d dom cl2 i
+              Egraph.set_dom d dom cl2 i
         end
       | Some i1, _, _, cl2 | _, cl2, Some i1, _ ->
-        Delayed.set_dom d dom cl2 i1
+        Egraph.set_dom d dom cl2 i1
       | None,_,None,_ -> raise Impossible
   end)
 
@@ -161,33 +160,33 @@ module DaemonPropa = struct
   let lt_zero = D.lt Q.zero
   let le_zero = D.le Q.zero
 
-  let get_dom del node = Opt.get_def D.reals (Delayed.get_dom del dom node)
+  let get_dom del node = Opt.get_def D.reals (Egraph.get_dom del dom node)
 
   let upd del node d d' pexp =
     match D.inter d d' with
     | None ->
-      let pexp = Delayed.mk_pexp del exp pexp in
-      let pexp = Delayed.mk_pexp del exp (ExpEmptyDomInter(pexp,node)) in
+      let pexp = Egraph.mk_pexp del exp pexp in
+      let pexp = Egraph.mk_pexp del exp (ExpEmptyDomInter(pexp,node)) in
       Debug.dprintf6 debug "[LRA] upd node = %a d = %a d' = %a"
         Node.pp node D.pp d D.pp d';
-      Delayed.contradiction del pexp
+      Egraph.contradiction del pexp
     | Some d' ->
       if not (D.equal d d')
-      then set_dom del (Delayed.mk_pexp del exp pexp) node d'
+      then set_dom del (Egraph.mk_pexp del exp pexp) node d'
           (D.is_singleton d' = None)
 
   let propagate del s =
     match SE.sem s with
     (* | S.Cst q ->
-     *   let pexp = Delayed.mk_pexp del exp (ExpCst(SE.node s,q)) in
-     *   Delayed.set_dom del pexp dom (SE.node s) (D.singleton q) *)
+     *   let pexp = Egraph.mk_pexp del exp (ExpCst(SE.node s,q)) in
+     *   Egraph.set_dom del pexp dom (SE.node s) (D.singleton q) *)
     | S.Add(q1,cl1,q2,cl2) ->
       let cl0 = SE.node s in
       let d0 = get_dom del cl0 in
       if Q.equal q1 Q.one && Q.equal q2 Q.minus_one &&
          D.equal d0 D.zero then
-        let pexp = Delayed.mk_pexp del exp (ExpDistIsZero(s)) in
-        Delayed.merge del pexp cl1 cl2
+        let pexp = Egraph.mk_pexp del exp (ExpDistIsZero(s)) in
+        Egraph.merge del pexp cl1 cl2
       else
         let d1 = get_dom del cl1 in
         let d2 = get_dom del cl2 in
@@ -212,22 +211,22 @@ module DaemonPropa = struct
         let dzero_false = if b=Strict then le_zero else lt_zero in
         if D.is_included d dzero_true
         then begin
-          let pexp = Delayed.mk_pexp del exp (ExpGZeroUp(s,true)) in
+          let pexp = Egraph.mk_pexp del exp (ExpGZeroUp(s,true)) in
           Bool.set_true del pexp cl0
         end
         else if D.is_included d dzero_false
         then
-          let pexp = Delayed.mk_pexp del exp (ExpGZeroUp(s,false)) in
+          let pexp = Egraph.mk_pexp del exp (ExpGZeroUp(s,false)) in
           Bool.set_false del pexp cl0
       end
     | S.Conflict(p) ->
       (** Choose representative of the equivalence class among the
             present classes, not the current representative *)
       let repr = Polynome.fold (fun acc node _ ->
-          Node.M.add (Delayed.find del node) node acc)
+          Node.M.add (Egraph.find del node) node acc)
           Node.M.empty p in
       let p' = Polynome.fold (fun acc node q ->
-          let node = Delayed.find del node in
+          let node = Egraph.find del node in
           let node = Node.M.find_exn Impossible node repr in
           Polynome.add acc (Polynome.monome q node)
         )
@@ -262,14 +261,14 @@ module DaemonPropa = struct
   let init del s =
     begin match SE.sem s with
       | S.Add (_,cl1,_,cl2) ->
-        Delayed.register del cl1; Delayed.register del cl2;
+        Egraph.register del cl1; Egraph.register del cl2;
         Demon.Fast.attach del key
           [Demon.Create.EventDom(SE.node s, dom, s);
            Demon.Create.EventDom(cl1, dom, s);
            Demon.Create.EventDom(cl2, dom, s);
           ]
       | GZero (node,_) ->
-        Delayed.register del node;
+        Egraph.register del node;
         Demon.Fast.attach del key
           [Demon.Create.EventValue(SE.node s, Bool.dom, s);
            Demon.Create.EventDom(node, dom, s)]
@@ -277,7 +276,7 @@ module DaemonPropa = struct
         Demon.Fast.attach del key
           [Demon.Create.EventDom(SE.node s, dom, s)];
         Polynome.iter (fun node _ ->
-            Delayed.register del node;
+            Egraph.register del node;
             Demon.Fast.attach del key
               [Demon.Create.EventDom(node, dom, s);
                Demon.Create.EventChange(node, s);
@@ -365,7 +364,7 @@ let pp_conpair fmt = function
 
 let interp_conpoly d p =
   let acc = Node.M.fold_left (fun acc node q ->
-      let v = Opt.get_def D.reals (Delayed.get_dom d dom node) in
+      let v = Opt.get_def D.reals (Egraph.get_dom d dom node) in
       D.add (D.mult_cst q v) acc
     ) D.zero p.imp.Polynome.poly in
   let acc = D.add_cst p.imp.cst acc in
@@ -912,11 +911,11 @@ module ChoLRA = struct
   let make_decision node b env =
     Debug.dprintf4 print_decision
       "[LRA] decide %a on %a" Q.pp b Node.pp node;
-    let pexp = Egraph.Delayed.mk_pexp env exp (ExpDec(node,b)) in
+    let pexp = Egraph.mk_pexp env exp (ExpDec(node,b)) in
     set_dom env pexp node (D.singleton b) false
 
   let choose_decision env node =
-    let v = Opt.get_def D.reals (Delayed.get_dom env dom node) in
+    let v = Opt.get_def D.reals (Egraph.get_dom env dom node) in
     match D.is_singleton v with
     | Some _ -> DecNo
     | None -> DecTodo (make_decision node (D.choose v))
@@ -964,7 +963,7 @@ let ge cl1 cl2 = le cl2 cl1
 let converter d f l =
   let of_term t =
     let n = SynTerm.node_of_term t in
-    Egraph.Delayed.register d n;
+    Egraph.register d n;
     n
   in
   let node = match f, l with
@@ -1016,9 +1015,9 @@ let th_register env =
     (fun d value ->
        let v = RealValue.value value in
        let s = D.singleton v in
-       let _pexp = Delayed.mk_pexp d exp (ExpCst value) in
+       let _pexp = Egraph.mk_pexp d exp (ExpCst value) in
        (** something must be done with the pexp *)
-       Delayed.set_dom d dom (RealValue.node value) s
+       Egraph.set_dom d dom (RealValue.node value) s
     ) env;
   ()
 
@@ -1043,7 +1042,7 @@ let default_value = Q.zero
 
 let () =
   Interp.Register.model Term._Real (fun d n ->
-      let v = Egraph.Delayed.get_value d real n in
+      let v = Egraph.get_value d real n in
       let v = Witan_popop_lib.Opt.get_def default_value v in
       let v = RealValue.nodevalue (RealValue.index v Term._Real) in
       v)

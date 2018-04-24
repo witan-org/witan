@@ -74,21 +74,21 @@ let true_is_true () =
 
 let not_true_is_false () =
   let not_true = Bool._not Bool._true in
-  let env = run $$ fun env -> Egraph.Delayed.register env not_true in
+  let env = run $$ fun env -> Egraph.register env not_true in
   assert_bool "" (Bool.is_false env not_true);
   assert_bool "" (not (Bool.is_true env not_true))
 
 let and_true_is_true () =
   let _t = Bool._true in
   let _and = Bool._and [_t;_t;_t] in
-  let env = run $$ fun env -> Egraph.Delayed.register env _and in
+  let env = run $$ fun env -> Egraph.register env _and in
   assert_bool "" (Bool.is_true env _and);
   assert_bool "" (not (Bool.is_false env _and))
 
 let or_not_true_is_false () =
   let _f = (Bool._not Bool._true) in
   let _or = Bool._and [_f;_f;_f] in
-  let env = run $$ fun env -> Egraph.Delayed.register env _or in
+  let env = run $$ fun env -> Egraph.register env _or in
   assert_bool "" (Bool.is_false env _or);
   assert_bool "" (not (Bool.is_true env _or))
 
@@ -99,8 +99,8 @@ let merge_true () =
   let d  = fresh Bool.ty "d" in
   let _and = Bool._and [a;b;c] in
   let env = run $$ fun env ->
-      Egraph.Delayed.register env _and;
-      List.iter (Egraph.Delayed.register env) [a;b;c;d];
+      Egraph.register env _and;
+      List.iter (Egraph.register env) [a;b;c;d];
       Shuffle.seql
         [(fun () -> merge env a b);
          (fun () -> merge env a c);
@@ -118,9 +118,9 @@ let imply_implies () =
   let bn = SynTerm.node_of_term b in
   let tn = SynTerm.node_of_term t in
   let env = run $$ fun env ->
-      Egraph.Delayed.register env tn;
+      Egraph.register env tn;
       Bool.set_true env Trail.pexp_fact tn;
-      Egraph.Delayed.register env an;
+      Egraph.register env an;
       Bool.set_true env Trail.pexp_fact an;
   in
   assert_bool "" (Bool.is_true env bn)
@@ -170,7 +170,7 @@ let check_file filename =
                let l = Shuffle.shufflel l in
                let cl = Bool._or l in
                clauses := cl::!clauses;
-               Egraph.Delayed.register d cl;
+               Egraph.register d cl;
                Bool.set_true d Trail.pexp_fact cl
              | _ -> ())
            statements) in
