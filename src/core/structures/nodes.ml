@@ -59,12 +59,8 @@ end
 
 module ValueRegistry = ValueKind.Make_Registry(struct
     type 'a data = (module Value with type t = 'a)
-    let pp (type a) (value: a data) =
-      let module Value = (val value) in
-      Value.pp
-    let key (type a) (value: a data) =
-      let module Value = (val value) in
-      Value.key
+    let pp (type a) ((module V): a data) = V.pp
+    let key (type a) ((module V): a data) = V.key
   end)
 
 let check_value_registered = ValueRegistry.check_is_registered
@@ -112,13 +108,13 @@ module Node = struct
     | Value(_,ty,_,_) -> ty
 
   module ThTermIndex = ThTermKind.MkVector
-      (struct type ('a,'unedeed) t = 'a -> Ty.t -> thterm end)
+      (struct type ('a,_) t = 'a -> Ty.t -> thterm end)
 
   let semindex : unit ThTermIndex.t = ThTermIndex.create 8
 
   let thterm sem v ty : thterm =
     ThTermRegistry.check_is_registered sem;
-    (ThTermIndex.get semindex sem) v ty
+    ThTermIndex.get semindex sem v ty
 
   module ValueIndex = ValueKind.MkVector
       (struct type ('a,'unedeed) t = 'a -> Ty.t -> nodevalue end)
@@ -127,7 +123,7 @@ module Node = struct
 
   let nodevalue value v ty : nodevalue =
     ValueRegistry.check_is_registered value;
-    (ValueIndex.get valueindex value) v ty
+    ValueIndex.get valueindex value v ty
 
   (** Just used for checking the typability *)
   let _of_thterm : thterm -> t = function

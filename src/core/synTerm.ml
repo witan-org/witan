@@ -23,7 +23,7 @@
 
 open Nodes
 
-let synsem = ThTermKind.create_key "syntax"
+let synsem = ThTermKind.create_key (module struct type t = Term.t let name = "syntax" end)
 
 module ThTerm = RegisterThTerm(struct
     let key = synsem
@@ -38,7 +38,10 @@ type env = {
   decvars: (Node.t -> Trail.chogen option) list;
 }
 
-let converters = Env.create_key "Synsem.converters"
+let converters = Env.create_key (module struct
+    type t = env
+    let name = "Synsem.converters"
+  end)
 
 let register_converter env r =
   let e = Egraph.Delayed.get_env env converters in

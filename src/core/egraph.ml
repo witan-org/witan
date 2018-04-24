@@ -170,24 +170,23 @@ let new_handle t =
 
 let get_table_dom t k =
   VDom.check_is_registered k;
-  VDomTable.inc_size k t.dom;
+  (* VDomTable.inc_size k t.dom; *)
   VDomTable.get_def t.dom k
     { table = Node.M.empty;
       events = Node.M.empty }
 
 let get_table_sem t k =
   Nodes.check_thterm_registered k;
-  VSemTable.inc_size k t.sem;
+  (* VSemTable.inc_size k t.sem; *)
   ThTermKind.Vector.get_def t.sem k []
 
 let get_table_value t k =
   Nodes.check_value_registered k;
-  VValueTable.inc_size k t.value;
+  (* VValueTable.inc_size k t.value; *)
   VValueTable.get_def t.value k
     { table = Node.M.empty;
       events = Node.M.empty;
-      reg_events = [];
-    }
+      reg_events = [] }
 
 exception UninitializedEnv of Env.K.t
 
@@ -237,16 +236,16 @@ let get_value t value node =
 let get_env : type a. t -> a Env.t -> a
   = fun t k ->
     Env.check_is_registered k;
-    Env.VectorH.inc_size k t.envs;
+    (* Env.VectorH.inc_size k t.envs; *)
     if Env.VectorH.is_uninitialized t.envs k then
-      raise (UninitializedEnv (k :> Env.K.t))
+      raise (UninitializedEnv (Env.key k :> Env.K.t))
     else
       Env.VectorH.get t.envs k
 
 let set_env : type a. t -> a Env.t -> a -> unit
   = fun t k ->
     Env.check_is_registered k;
-    Env.VectorH.inc_size k t.envs;
+    (* Env.VectorH.inc_size k t.envs; *)
     Env.VectorH.set t.envs k
 
 
@@ -285,14 +284,14 @@ let output_graph filename t =
     let pp fmt node =
       let iter_dom dom fmt (domtable: _ domtable) =
         try
-          let s   = Node.M.find node domtable.table in
+          let s = Node.M.find node domtable.table in
           Format.fprintf fmt "| {%a | %s}"
             Dom.pp dom (escape_for_dot (VDom.print_dom dom) s);
         with Not_found -> ()
       in
       let iter_value value fmt (valuetable: _ valuetable) =
         try
-          let s   = Node.M.find node valuetable.table in
+          let s = Node.M.find node valuetable.table in
           Format.fprintf fmt "| {%a | %s}"
             ValueKind.pp value (escape_for_dot (print_value value) s);
         with Not_found -> ()

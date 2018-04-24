@@ -33,7 +33,7 @@ let debug = Debug.register_info_flag
   "bool"
 
 let ty = Term._Prop
-let dom : bool ValueKind.t = ValueKind.create_key "bool"
+let dom = ValueKind.create_key (module struct type t = bool let name = "bool" end)
 
 module BoolValue = ValueKind.Register(struct
     include DBool
@@ -67,7 +67,7 @@ type t =
     lits: (Node.t * bool) IArray.t;
   }
 
-let sem : t ThTermKind.t = ThTermKind.create_key "Prop"
+let sem = ThTermKind.create_key (module struct type nonrec t = t let name = "Prop" end)
 
 (* let iter f x = IArray.iter f x.lits *)
 
@@ -177,7 +177,7 @@ type expprop =
 | ExpNot  of (Th.t * Node.t * Node.t) * bool (* what have been propagated *)
 | ExpDec  of Node.t * bool
 
-let expprop : expprop Exp.t = Exp.create_key "Bool.prop"
+let expprop = Exp.create_key (module struct type t = expprop let name = "Bool.prop" end)
 
 module DaemonPropaNot = struct
 
@@ -439,7 +439,7 @@ let () =
 
 let set_false env pexp node = set_bool env pexp node false
 
-let chobool = Trail.Cho.create_key "Bool.cho"
+let chobool = Trail.Cho.create_key (module struct type t = Node.t let name = "Bool.cho" end)
 let make_dec node = Trail.GCho(node,chobool,node)
 
 let converter d f l =
@@ -517,7 +517,7 @@ module HypProp = struct
     then Format.fprintf fmt "¬%a" Node.pp n
     else Node.pp fmt n
 
-  let key : t Trail.Hyp.t = Trail.Hyp.create_key "hypprop"
+  let key = Trail.Hyp.create_key (module struct type nonrec t = t let name = "hypprop" end)
 
   let apply_learnt (n,b) = (n,if b then Conflict.Neg else Conflict.Pos)
 

@@ -474,7 +474,7 @@ module EqHyp = struct
       "%a =@, %a"
       Node.pp c.l Node.pp c.r
 
-  let key : t Hyp.t = Hyp.create_key "eq"
+  let key : t Hyp.t = Hyp.create_key (module struct type nonrec t = t let name = "eq" end)
 
   let reg_apply_learnt = Ty.H.create 16
 

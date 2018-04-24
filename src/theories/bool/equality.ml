@@ -35,7 +35,7 @@ let debug = Debug.register_info_flag
 type t = Node.S.t
 (** Is there two elements equal *)
 
-let sem : t ThTermKind.t = ThTermKind.create_key "Eq"
+let sem = ThTermKind.create_key (module struct type nonrec t = t let name = "Eq" end)
 
 module Th = struct
 
@@ -114,7 +114,7 @@ end = struct
   let iter = ThE.M.iter
 end
 
-let dom : Dis.t Dom.t = Dom.create_key "dis"
+let dom = Dom.create_key (module struct type t = Dis.t let name = "dis" end)
 
 (** For each value key give the value *)
 module MValues = ValueKind.MkMap(struct type ('a, _) t = 'a end)
@@ -127,8 +127,7 @@ type exp =
   | SubstDownFalse of ThE.t * Dis.elt
   | Dec of Node.t * Node.t
 
-let exp : exp Trail.Exp.t =
-  Trail.Exp.create_key "Equality"
+let exp = Trail.Exp.create_key (module struct type t = exp let name = "Equality" end)
 
 module D = struct
   type t = Dis.t

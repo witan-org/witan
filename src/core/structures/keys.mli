@@ -56,17 +56,23 @@ module type Registry = sig
 
 end
 
+module type NamedType = sig
+  type t
+  val name : string
+end
+
 module type Key = sig
   (** Key with arity 1 *)
 
   module K: Datatype
-  type 'a t = private K.t
+  type 'a t (* = private K.t *)
 
   val pp: 'a t Pp.pp
   val compare: 'a t -> 'b t -> int
   val equal: 'a t -> 'b t -> bool
   val hash : 'a t -> int
   val tag: 'a t -> int
+  val key: 'a t -> K.t
 
   type iter = {iter : 'a. 'a t -> unit}
   val iter : iter -> unit
@@ -86,22 +92,22 @@ module type Key = sig
 
     val coerce : 'a t -> 'b t -> 'a -> 'b
     (** If the two arguments are physically identical then covnert the
-        argument otherwise taise BadCoercion *)
+        argument otherwise raise BadCoercion *)
 
   end
-  val create_key: string -> 'a t
+  val create_key: (module NamedType with type t = 'a) -> 'a t
 
   module MkVector(D:sig type ('a,'b) t end)
-    : Vector_hetero.S1 with
-                         type 'a key = 'a t and type ('a,'b) data = ('a,'b) D.t
+    : Vector_hetero.S1 with type 'a key = 'a t
+                        and type ('a,'b) data = ('a,'b) D.t
 
   module MkMap(D:sig type ('a,'b) t end)
-    : Intmap_hetero.S1 with
-                         type 'a key = 'a t and type ('a,'b) data = ('a,'b) D.t
+    : Intmap_hetero.S1 with type _ key = K.t
+                        and type ('a,'b) data = ('a,'b) D.t
 
   module Vector  : Vector_hetero.R1 with type 'a key = 'a t
   module VectorH : Vector_hetero.T1 with type 'a key = 'a t
-  module M : Intmap_hetero.R1 with type 'a key = 'a t
+  module M       : Intmap_hetero.R1 with type _ key = K.t
   module Make_Registry(S:sig
       type 'a data
       val pp: 'a data -> 'a Pp.pp

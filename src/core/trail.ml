@@ -161,19 +161,25 @@ let add_merge_finish:
     let old_repr = if Node.equal node1_repr new_repr then node2_repr else node1_repr in
     t.nodehist <- Node.M.add old_repr (t.age,new_repr) t.nodehist
 
-let exp_fact : unit Exp.t = Exp.create_key "Trail.fact"
+let exp_fact = Exp.create_key (module struct type t = unit let name = "Trail.fact" end)
 let pexp_fact = Pexp.Pexp(Age.bef,exp_fact,())
 
 type exp_same_sem =
 | ExpSameSem   : Pexp.t * Node.t * ThTerm.t -> exp_same_sem
 | ExpSameValue : Pexp.t * Node.t * Value.t -> exp_same_sem
 
-let exp_same_sem : exp_same_sem Exp.t =
-  Exp.create_key "Egraph.exp_same_sem"
+let exp_same_sem =
+  Exp.create_key (module struct
+    type t = exp_same_sem
+    let name = "Egraph.exp_same_sem"
+  end)
 
 (** TODO choose an appropriate data *)
-let exp_diff_value : (Value.t * Node.t * Node.t * Value.t * Pexp.t) Exp.t =
-  Exp.create_key "Egraph.exp_diff_value"
+let exp_diff_value =
+  Exp.create_key (module struct
+    type t = Value.t * Node.t * Node.t * Value.t * Pexp.t
+    let name = "Egraph.exp_diff_value"
+  end)
 
 
 let age_merge_opt t n1 n2 =

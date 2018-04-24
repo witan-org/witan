@@ -32,7 +32,7 @@ let debug = Debug.register_info_flag
 
 type t = App of Node.t * Node.t
 
-let sem : t ThTermKind.t = ThTermKind.create_key "UF"
+let sem = ThTermKind.create_key (module struct type nonrec t = t let name = "UF" end)
 
 module Th = struct
   module T = struct
@@ -120,8 +120,7 @@ let appl f l =
 
 
 type expsubst = {from:ThE.t; to_:ThE.t}
-let expsubst : expsubst Trail.Exp.t =
-  Trail.Exp.create_key "Uninterp"
+let expsubst = Trail.Exp.create_key (module struct type t = expsubst let name = "Uninterp" end)
 
 module DaemonPropa = struct
   type k = ThE.t
