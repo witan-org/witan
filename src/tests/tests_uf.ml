@@ -284,66 +284,16 @@ let check_file filename =
       ~dir:(Filename.dirname filename)
       (Filename.basename filename)
   in
-  let env = Witan_solver.Notypecheck.create_env () in
-  let clauses = ref [] in
-  let res =
-    Witan_solver.Scheduler.run
-      ~theories
-      ~limit:1000
-      (fun d ->
-         Gen.iter (fun stmt ->
-             let open Dolmen.Statement in
-             match stmt.descr with
-             | Set_logic _ -> ()
-             | Set_info _ -> ()
-             | Prove -> ()
-             | Dolmen.Statement.Exit -> ()
-             | Decl (id,t) ->
-               let t = Dolmen.Normalize.smtlib t in
-               let ty =
-                 match Witan_solver.Notypecheck.parse_formula env Witan_solver.Notypecheck.MId.empty t with
-                 | exception (Witan_solver.Notypecheck.Typing_error (msg, _, t)) ->
-                   assert_failure
-                     (Format.asprintf
-                        "%a:@\n%s:@ %a"
-                        Dolmen.ParseLocation.fmt (Witan_solver.Notypecheck.get_loc t) msg
-                        Dolmen.Term.print t
-                     );
-                 | t ->
-                   t
-               in
-               let t' =
-                 let s = Format.asprintf "%a" Dolmen.Id.print id in
-                 Witan_core.Id.mk s ty
-               in
-               Witan_solver.Notypecheck.R.add_new Witan_stdlib.Std.Impossible env id t';
-             | Antecedent t ->
-               let map t =
-                 match Witan_solver.Notypecheck.parse_formula env Witan_solver.Notypecheck.MId.empty t with
-                 | exception (Witan_solver.Notypecheck.Typing_error (msg, _, t)) ->
-                   assert_failure
-                     (Format.asprintf
-                        "%a:@\n%s:@ %a"
-                        Dolmen.ParseLocation.fmt (Witan_solver.Notypecheck.get_loc t) msg
-                        Dolmen.Term.print t
-                     );
-                 | t ->
-                   SynTerm.node_of_term t
-               in
-               let t = Dolmen.Normalize.smtlib t in
-               let cl = map t in
-               clauses := cl::!clauses;
-               Egraph.register d cl;
-               Bool.set_true d Trail.pexp_fact cl
-             | _ -> invalid_arg (Format.asprintf "Unimplemented command: %a" Dolmen.Statement.print stmt))
-           statements) in
-  match res with
-  | `Contradiction -> `Unsat
-  | `Done _ ->
-    (* let model = Witan_solver.Notypecheck.get_model env d in
-     * let iter c = (assert_bool "check_model" (Witan_solver.Notypecheck.check_model model Bool.values_true c)) in
-     * List.iter iter !clauses; *)
-    `Sat
+  try
+    Witan_solver.Notypecheck.run ~theories ~limit:1000 statements
+  with
+  | Witan_solver.Notypecheck.Typing_error (msg, _, t) ->
+    assert_failure
+      (Format.asprintf
+         "%a:@\n%s:@ %a"
+         Dolmen.ParseLocation.fmt (Witan_solver.Notypecheck.get_loc t) msg
+         Dolmen.Term.print t
+      )
 
 let tests_smt2 expected dir =
   let files = Sys.readdir dir in

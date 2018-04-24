@@ -245,3 +245,78 @@ let interp_model model n =
 
 let check_model model expected n =
  Value.equal (interp_model model n) expected
+
+let run ?limit ~theories statements =
+  let env = create_env () in
+  let clauses = ref [] in
+  let open Witan_core in
+  let res =
+    Scheduler.run
+      ~theories
+      ?limit
+      (fun d ->
+         Gen.iter (fun stmt ->
+             let open Dolmen.Statement in
+             match stmt.descr with
+             | Set_logic _ -> ()
+             | Set_info _ -> ()
+             | Prove -> ()
+             | Dolmen.Statement.Exit -> ()
+             | Decl (id,t) ->
+               let t = Dolmen.Normalize.smtlib t in
+               let ty = parse_formula env MId.empty t in
+               let t' =
+                 let s = Format.asprintf "%a" Dolmen.Id.print id in
+                 Witan_core.Id.mk s ty
+               in
+               R.add_new Witan_stdlib.Std.Impossible env id t';
+             | Clause l ->
+               let map t = SynTerm.node_of_term (parse_formula env MId.empty t), Witan_core.Conflict.Pos in
+               let l = Witan_stdlib.Shuffle.shufflel l in
+               let l = List.map map l in
+               let l = Witan_stdlib.Shuffle.shufflel l in
+               let cl = !Witan_core.Conflict._or l in
+               clauses := cl::!clauses;
+               Egraph.register d cl;
+               !Witan_core.Conflict._set_true d Trail.pexp_fact cl
+             | Antecedent t ->
+               let map t =
+                 match parse_formula env MId.empty t with
+                 | exception (Typing_error (msg, _, t)) ->
+                   Format.eprintf
+                     "%a:@\n%s:@ %a"
+                     Dolmen.ParseLocation.fmt (get_loc t) msg
+                     Dolmen.Term.print t;
+                   Pervasives.exit 2
+                 | t ->
+                   SynTerm.node_of_term t
+               in
+               let t = Dolmen.Normalize.smtlib t in
+               let cl = map t in
+               clauses := cl::!clauses;
+               Egraph.register d cl;
+               !Witan_core.Conflict._set_true d Trail.pexp_fact cl
+             | _ -> invalid_arg (Format.asprintf "Unimplemented command: %a" Dolmen.Statement.print stmt))
+           statements) in
+  match res with
+  | `Contradiction -> `Unsat
+  | `Done _d ->
+    (* let model = get_model env d in
+     * Format.printf "(%a)@."
+     *   Witan_popop_lib.Pp.(iter22 Witan_core.Term.H.iter space
+     *                         (fun fmt t v -> Format.fprintf fmt "(%a %a)"
+     *                             Witan_core.Term.pp t Witan_core.Values.pp v))
+     *   model *)
+    `Sat
+
+
+
+let () = Exn_printer.register (fun fmt exn ->
+    match exn with
+    | Typing_error (msg, _, t) ->
+      Format.fprintf fmt
+        "%a:@\n%s:@ %a"
+        Dolmen.ParseLocation.fmt (get_loc t) msg
+        Dolmen.Term.print t;
+    | exn -> raise exn
+  )
