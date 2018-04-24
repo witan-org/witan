@@ -30,32 +30,18 @@ let () =
     exit 1
 
 
-let () =
-  (* Parse command line options *)
-  let opts = match Cmdliner.Term.eval (Options.all, Options.info) with
-    | `Version | `Help -> exit 0
-    | `Error `Parse
-    | `Error `Term
-    | `Error `Exn -> exit 1
-    | `Ok opts -> opts
-  in
-  List.iter (fun f -> Witan_popop_lib.Debug.set_flag f) opts.Options.debug_flags;
-  Witan_popop_lib.Debug.(if test_flag stack_trace then Printexc.record_backtrace true);
-  begin match opts.Options.seed_shuffle with
-    | None   -> Witan_stdlib.Shuffle.set_shuffle None;
-    | Some i ->  Witan_stdlib.Shuffle.set_shuffle (Some [|i|]);
-  end;
+let one_file opts file =
   (* Parse input *)
   let statements = Witan_solver.Input.read
       ?language:Options.(opts.input.language)
       ~dir:Options.(opts.input.dir)
-      Options.(opts.input.file)
+      file
   in
   if opts.Options.type_only then exit 0;
   let env = Witan_solver.Notypecheck.create_env () in
   let clauses = ref [] in
   let open Witan_core in
-    let res =
+  let res =
     Witan_solver.Scheduler.run
       ~theories
       ?limit:(if opts.Options.step_limit < 0 then None else Some opts.Options.step_limit)
@@ -134,3 +120,21 @@ let () =
      *                             Witan_core.Term.pp t Witan_core.Values.pp v))
      *   model *)
     ()
+
+
+let () =
+  (* Parse command line options *)
+  let opts = match Cmdliner.Term.eval (Options.all, Options.info) with
+    | `Version | `Help -> exit 0
+    | `Error `Parse
+    | `Error `Term
+    | `Error `Exn -> exit 1
+    | `Ok opts -> opts
+  in
+  List.iter (fun f -> Witan_popop_lib.Debug.set_flag f) opts.Options.debug_flags;
+  Witan_popop_lib.Debug.(if test_flag stack_trace then Printexc.record_backtrace true);
+  begin match opts.Options.seed_shuffle with
+    | None   -> Witan_stdlib.Shuffle.set_shuffle None;
+    | Some i ->  Witan_stdlib.Shuffle.set_shuffle (Some [|i|]);
+  end;
+  one_file opts Options.(opts.input.file)

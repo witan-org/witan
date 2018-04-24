@@ -65,6 +65,7 @@ module VValueTable = ValueKind.MkVector (struct type ('a,'unit) t = 'a valuetabl
 module Def = struct
 type t = {
   mutable repr  : Node.t Node.M.t;
+  mutable rang  : int Node.M.t;
   mutable event : Events.Wait.t Bag.t Node.M.t;
   mutable event_reg : Events.Wait.t list Node.M.t;
   mutable event_any_reg : Events.Wait.t list;
@@ -514,7 +515,32 @@ module Delayed = struct
     let events = Node.M.find_opt node domtable.events in
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (node0,dom)
 
-  let choose_repr a b = Shuffle.shuffle2 (a,b)
+  let flag_choose_repr_no_value =
+    Debug.register_flag
+      ~desc:"Accept to use value as representative"
+      "choose_repr_no_value"
+  let choose_repr t ((_,a) as pa) ((_,b) as pb) =
+    let heuristic () =
+      if Shuffle.is_shuffle () then
+        Shuffle.shuffle2 (pa,pb)
+      else
+        let ra = Node.M.find_def 0 a t.rang in
+        let rb = Node.M.find_def 0 b t.rang in
+        if ra = rb then begin
+          t.rang <- Node.M.add a (ra+1) t.rang;
+          (pa,pb)
+        end else
+        if ra < rb then (pb,pa)
+        else (pa,pb)
+    in
+    if Debug.test_noflag flag_choose_repr_no_value then
+      let va = Nodes.Only_for_solver.is_value a in
+      let vb = Nodes.Only_for_solver.is_value b in
+      if va && not vb then (pb,pa)
+      else if va && not vb then (pa,pb)
+      else heuristic ()
+    else
+      heuristic ()
 
   let merge_dom_pending (type a) t pexp (dom : a Dom.t) node1_0 node2_0 inv =
     let node1 = find t node1_0 in
@@ -665,7 +691,7 @@ module Delayed = struct
     let node2 = find t node2_0 in
     if not (Node.equal node1 node2) then begin
       let ((other_node0,_),(_,repr_node)) =
-        choose_repr (node1_0,node1) (node2_0,node2) in
+        choose_repr t.env (node1_0,node1) (node2_0,node2) in
       let inv = not (Node.equal node1_0 other_node0) in
       Trail.add_merge_start t.env.trail pexp
         ~node1:node1_0 ~node2:node2_0
@@ -913,6 +939,7 @@ module Backtrackable = struct
 
   let new_t () = {
     repr = Node.M.empty;
+    rang = Node.M.empty;
     event = Node.M.empty;
     event_reg = Node.M.empty;
     event_any_reg = [];
@@ -928,6 +955,7 @@ module Backtrackable = struct
     assert (t.current_delayed == dumb_delayed);
     {
       repr  = t.repr;
+      rang  = t.rang;
       event = t.event;
       event_reg = t.event_reg;
       event_any_reg = t.event_any_reg;

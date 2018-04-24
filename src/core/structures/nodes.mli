@@ -228,5 +228,6 @@ module Only_for_solver: sig
     | Value  : Value.t -> opened_node
 
   val open_node: Node.t -> opened_node
+  val is_value: Node.t -> bool
 
 end

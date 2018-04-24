@@ -466,6 +466,10 @@ module Only_for_solver = struct
   let open_node : Node.t -> opened_node = function
     | Node.ThTerm _ as x -> ThTerm (Obj.magic x: ThTerm.t)
     | Node.Value _ as x -> Value (Obj.magic x: Value.t)
+
+  let is_value : Node.t -> bool = function
+    | Node.ThTerm _ -> false
+    | Node.Value _ -> true
 end
 
 
