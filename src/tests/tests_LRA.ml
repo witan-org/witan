@@ -232,13 +232,50 @@ let basic = "LRA.Basic" &:
  *             ]
  * 
  * let altergo = TestList (List.map Tests_lib.test_split files)
- * 
- * let smtlib2sat =
- *   "smtlib2-lra-sat" >:::
- *     tests_smt2 Popop_of_smtlib2.Sat "tests/smtlib2/lra/sat/"
- * 
- * let smtlib2unsat =
- *   "smtlib2-lra-unsat" >:::
- *     tests_smt2 Popop_of_smtlib2.Unsat "tests/smtlib2/lra/unsat/" *)
+*)
 
-let tests = TestList [basic;(* (\* mult;*\)altergo; smtlib2sat; smtlib2unsat *)]
+
+let check_file filename =
+  let statements = Witan_solver.Input.read
+      ~language:Witan_solver.Input.Smtlib
+      ~dir:(Filename.dirname filename)
+      (Filename.basename filename)
+  in
+  try
+    Witan_solver.Notypecheck.run ~theories ~limit:1000 statements
+  with
+  | Witan_solver.Notypecheck.Typing_error (msg, t) ->
+    assert_failure
+      (Format.asprintf
+         "%a:@\n%s:@ %a"
+         Dolmen.ParseLocation.fmt (Witan_solver.Notypecheck.get_loc t) msg
+         Dolmen.Term.print t
+      )
+
+let tests_smt2 expected dir =
+  if Sys.file_exists dir then
+    let files = Sys.readdir dir in
+    Array.sort String.compare files;
+    let files = Array.to_list files in
+    List.map
+      (fun s ->
+         s >: TestCase (fun () ->
+             let res = check_file (Filename.concat dir s) in
+             begin match res with
+               | `Sat ->   Witan_popop_lib.Debug.dprintf1 Tests_lib.debug "@[%s: Sat@]" s
+               | `Unsat -> Witan_popop_lib.Debug.dprintf1 Tests_lib.debug "@[%s: Unsat@]" s
+             end;
+             assert_bool s (res = expected);
+           )) files
+  else
+    []
+
+let smtlib2sat =
+  "smtlib2-lra-sat" >:::
+  tests_smt2 `Sat "solve/smt_lra/sat/"
+
+let smtlib2unsat =
+  "smtlib2-lra-unsat" >:::
+  tests_smt2 `Unsat  "solve/smt_lra/unsat/"
+
+let tests = TestList [basic;(* (\* mult;*\)altergo;*) smtlib2sat; smtlib2unsat]
