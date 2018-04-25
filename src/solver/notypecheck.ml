@@ -29,11 +29,11 @@ type env = Term.Id.t R.t
 let create_env () =
   R.create 10
 
-exception Typing_error of string * env * Dolmen.Term.t
+exception Typing_error of string * Dolmen.Term.t
 
-let _bad_op_arity env s n t =
+let _bad_op_arity _ s n t =
   let msg = Format.asprintf "Bad arity for operator '%s' (expected %d arguments)" s n in
-  raise (Typing_error (msg, env, t))
+  raise (Typing_error (msg, t))
 
 (** no typing *)
 let rec parse_formula' (env:env) (lets:Term.t MId.t) (t:Dolmen.Term.t) =
@@ -166,7 +166,7 @@ let rec parse_formula' (env:env) (lets:Term.t MId.t) (t:Dolmen.Term.t) =
     begin match MId.find_opt s lets with
     | None ->
     begin match R.find_opt env s with
-    | None -> raise (Typing_error("unbound variable",env,ast))
+    | None -> raise (Typing_error("unbound variable",ast))
     | Some id ->
       apply (const id) (List.map (parse_formula env lets) l)
     end
@@ -193,7 +193,7 @@ let rec parse_formula' (env:env) (lets:Term.t MId.t) (t:Dolmen.Term.t) =
           let lets = MId.add s t lets in
           aux lets l
       | t::_ ->
-        raise (Typing_error ("Unexpected let binding", env, t))
+        raise (Typing_error ("Unexpected let binding", t))
     in
     aux lets vars
 
@@ -203,17 +203,17 @@ let rec parse_formula' (env:env) (lets:Term.t MId.t) (t:Dolmen.Term.t) =
 
   (* Other cases *)
   | { Ast.term = Ast.App ({Ast.term = Ast.Builtin _}, _) } ->
-    raise (Typing_error ("Unexpected builtin", env, t))
+    raise (Typing_error ("Unexpected builtin", t))
   | { term = Ast.Builtin _; _; } ->
-    raise (Typing_error ("Unexpected builtin", env, t))
+    raise (Typing_error ("Unexpected builtin", t))
   | { term = Ast.Colon (_,_); _; } ->
-    raise (Typing_error ("Unexpected colon", env, t))
+    raise (Typing_error ("Unexpected colon", t))
   | { term = Ast.App (_,_); _; }->
-    raise (Typing_error ("Unexpected app", env, t))
+    raise (Typing_error ("Unexpected app", t))
   | { term = Ast.Binder (_,_,_); _; } ->
-    raise (Typing_error ("Unexpected binder", env, t))
+    raise (Typing_error ("Unexpected binder", t))
   | { term = Ast.Match (_,_); _; } ->
-    raise (Typing_error ("Unexpected construction", env, t))
+    raise (Typing_error ("Unexpected construction", t))
 
 and parse_formula (env:env) lets (t:Dolmen.Term.t) =
   try
@@ -221,7 +221,7 @@ and parse_formula (env:env) lets (t:Dolmen.Term.t) =
   with
   | (Typing_error _) as exn -> raise exn
   | exn ->
-    raise (Typing_error (Printexc.to_string exn,env,t))
+    raise (Typing_error (Printexc.to_string exn, t))
 
 
 let get_loc =
@@ -282,7 +282,7 @@ let run ?limit ~theories statements =
              | Antecedent t ->
                let map t =
                  match parse_formula env MId.empty t with
-                 | exception (Typing_error (msg, _, t)) ->
+                 | exception (Typing_error (msg, t)) ->
                    Format.eprintf
                      "%a:@\n%s:@ %a"
                      Dolmen.ParseLocation.fmt (get_loc t) msg
@@ -313,7 +313,7 @@ let run ?limit ~theories statements =
 
 let () = Exn_printer.register (fun fmt exn ->
     match exn with
-    | Typing_error (msg, _, t) ->
+    | Typing_error (msg, t) ->
       Format.fprintf fmt
         "%a:@\n%s:@ %a"
         Dolmen.ParseLocation.fmt (get_loc t) msg

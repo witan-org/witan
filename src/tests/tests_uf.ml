@@ -287,7 +287,7 @@ let check_file filename =
   try
     Witan_solver.Notypecheck.run ~theories ~limit:1000 statements
   with
-  | Witan_solver.Notypecheck.Typing_error (msg, _, t) ->
+  | Witan_solver.Notypecheck.Typing_error (msg, t) ->
     assert_failure
       (Format.asprintf
          "%a:@\n%s:@ %a"
