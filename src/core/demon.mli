@@ -29,6 +29,8 @@ module Create : sig
     | EventDom      : Node.t * 'a Dom.t  * 'b -> 'b event
     (** the value of the class is watched *)
     | EventValue    : Node.t * 'a ValueKind.t  * 'b -> 'b event
+    (** the values of the class is watched *)
+    | EventAnyValue    : Node.t  * 'b -> 'b event
     (** we want to register this class *)
     | EventRegCl    : Node.t           * 'b -> 'b event
     (** Warn when the class is not the representant of its eq-class anymore *)

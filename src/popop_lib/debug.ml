@@ -151,8 +151,14 @@ let dprintf11 ?nobox flag s a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 =
 let dprintf12 ?nobox flag s a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 =
   if !flag then real_dprintf ?nobox s a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12
 
-let dprintfn ?nobox flag s a1 a2 a3 a4 a5 a6 a7 a8 a9 =
-  if !flag then real_dprintf ?nobox s a1 a2 a3 a4 a5 a6 a7 a8 a9
+let dprintf13 ?nobox flag s a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 =
+  if !flag then real_dprintf ?nobox s a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13
+
+let dprintf14 ?nobox flag s a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 =
+  if !flag then real_dprintf ?nobox s a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14
+
+let dprintfn ?nobox flag s a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 =
+  if !flag then real_dprintf ?nobox s a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15
   else
     (* ifprintf take too many times for computing the format *)
     let rec aux = fun _ -> Obj.magic aux in

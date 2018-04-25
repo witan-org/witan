@@ -3,6 +3,4 @@
 
 
 - naming:
- - TODO: Id.t -> Term.t list
- - Interpretation: Id.t -> Term.t list
- - Node -> Var?
+ Conflict => conflict_element \/ hypothesis

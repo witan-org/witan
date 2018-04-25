@@ -152,6 +152,9 @@ module Value: sig
   val ty: t -> Ty.t
 
   val value: 'a ValueKind.t -> t -> 'a option
+
+  val semantic_equal: t -> t -> [ `Uncomparable | `Equal | `Disequal ]
+    (** Test semantic equality of comparable value (same value kind) *)
 end
 
 (** {3 For building a particular value} *)

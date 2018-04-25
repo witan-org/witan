@@ -32,6 +32,7 @@ module Create = struct
     type 'b event =
     | EventDom      : Node.t * 'a Dom.t  * 'b -> 'b event
     | EventValue    : Node.t * 'a ValueKind.t * 'b -> 'b event
+    | EventAnyValue : Node.t  * 'b -> 'b event
     | EventRegCl    : Node.t           * 'b -> 'b event
     | EventChange   : Node.t           * 'b -> 'b event
     | EventRegSem   :        'a ThTermKind.t  * 'b -> 'b event
@@ -43,6 +44,8 @@ module Create = struct
         Format.fprintf fmt "dom:%a of %a" Dom.pp dom Node.pp node
       | EventValue    (node, value, _) ->
         Format.fprintf fmt "value:%a of %a" ValueKind.pp value Node.pp node
+      | EventAnyValue    (node, _) ->
+        Format.fprintf fmt "any value of %a" Node.pp node
       | EventRegCl  (node, _)    ->
         Format.fprintf fmt "registration of %a" Node.pp node
       | EventChange   (node, _)    ->
@@ -266,13 +269,15 @@ module Key = struct
       mark_dem t dem k;
     (** record waiters *)
       let iter ev =
-      Debug.dprintf2 debug "[Demon] @[Attach event %a@]"
-        Create.pp ev;
+        Debug.dprintf2 debug "[Demon] @[Attach event %a@]"
+          Create.pp ev;
         match ev with
         | Create.EventDom (node,dom,data) ->
           Egraph.attach_dom t node dom dem.dk_id (k,data)
         | Create.EventValue (node,value,data) ->
           Egraph.attach_value t node value dem.dk_id (k,data)
+        | Create.EventAnyValue (node,data) ->
+          Egraph.attach_any_value t node dem.dk_id (k,data)
         | Create.EventChange (node,data) ->
           Egraph.attach_node t node dem.dk_id (k,data)
         | Create.EventRegCl (node,data) ->
@@ -458,11 +463,15 @@ module Fast = struct
 
   let attach d dem events =
     let open Create in
-    List.iter (function
+    let iter ev =
+      Debug.dprintf2 debug "[Demon] @[Attach event %a@]" Create.pp ev;
+      match ev with
         | EventDom      (node,dom,data) ->
           Egraph.attach_dom d node dom dem.dk_id data
         | EventValue    (node,value,data) ->
           Egraph.attach_value d node value dem.dk_id data
+        | EventAnyValue    (node,data) ->
+          Egraph.attach_any_value d node dem.dk_id data
         | EventRegCl  (node,data) ->
           Egraph.attach_reg_node d node dem.dk_id data
         | EventChange   (node,data) ->
@@ -471,7 +480,8 @@ module Fast = struct
           Egraph.attach_reg_sem d sem dem.dk_id data
         | EventRegValue (value,data) ->
           Egraph.attach_reg_value d value dem.dk_id data
-      ) events
+    in
+    List.iter iter events
 
   let register_init_daemon
     (type a)

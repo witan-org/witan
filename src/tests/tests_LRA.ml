@@ -165,11 +165,11 @@ let basic = "LRA.Basic" &:
             [solve0a;
              (* solve0b; *)
              solve0c;
-             (* solve1; *)
-             (* solve2; *)
+             solve1;
+             solve2;
              solve3;
-             (* solve4; *)
-             (* solve5 *)
+             solve4;
+             solve5
             ]
 
 (* let mult0 () =

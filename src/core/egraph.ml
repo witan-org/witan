@@ -66,7 +66,8 @@ module Def = struct
 type t = {
   mutable repr  : Node.t Node.M.t;
   mutable rang  : int Node.M.t;
-  mutable event : Events.Wait.t Bag.t Node.M.t;
+  mutable event_repr : Events.Wait.t Bag.t Node.M.t;
+  mutable event_value : Events.Wait.t Bag.t Node.M.t;
   mutable event_reg : Events.Wait.t list Node.M.t;
   mutable event_any_reg : Events.Wait.t list;
           (** extensible "number of fields" *)
@@ -386,6 +387,8 @@ module Delayed = struct
     } in
     VValueTable.set t.env.value value valuetable;
     let events = Node.M.find_opt node valuetable.events in
+    Wait.wakeup_events_bag Events.Wait.translate_value t events (node,value);
+    let events = Node.M.find_opt node t.env.event_value in
     Wait.wakeup_events_bag Events.Wait.translate_value t events (node,value)
 
   let add_pending_merge (t : t) pexp node node' =
@@ -467,9 +470,16 @@ module Delayed = struct
           ~node1_repr:node ~node2_repr:node0'
           ~new_repr:node;
         (** wakeup the daemons register_node *)
-        let event, other_event = Node.M.find_remove node0' t.env.event in
+        let event, other_event = Node.M.find_remove node0' t.env.event_repr in
         Wait.wakeup_events_bag Events.Wait.translate_change t other_event node0';
-        t.env.event <- event
+        t.env.event_repr <- event;
+        (** set the value if node0' is one *)
+        match Nodes.Only_for_solver.nodevalue node0' with
+        | None -> ()
+        | Some value ->
+          match Nodes.Only_for_solver.value_of_node value with
+          | Nodes.Only_for_solver.Value(value,v) ->
+            set_value_direct t value node0 v
       end
       (** node' is already registered *)
       else if Node.equal node (find t node0') then
@@ -590,8 +600,9 @@ module Delayed = struct
       let old_s   = Node.M.find_opt node  valuetable.table in
       let old_s'  = Node.M.find_opt node' valuetable.table in
       let (module V) = Nodes.get_value value in
-      Debug.dprintf12 debug
-        "[Egraph] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
+      Debug.dprintf14 debug
+        "[Egraph] @[merge value %a (%a(%a),%a)@ and (%a(%a),%a)@]"
+        ValueKind.pp value
         Node.pp node Node.pp node0
         (Pp.option (print_value value)) old_s
         Node.pp node' Node.pp node0'
@@ -633,13 +644,13 @@ module Delayed = struct
       Trail.print_current_age t.env.trail
       Node.pp other_node Node.pp other_node0
       Node.pp repr_node Node.pp repr_node0;
-    let event, other_event = Node.M.find_remove other_node t.env.event in
+    let event, other_event = Node.M.find_remove other_node t.env.event_repr in
 
     (** move node events *)
     begin match other_event with
       | None -> ()
       | Some other_event ->
-        t.env.event <-
+        t.env.event_repr <-
           Node.M.add_change (fun x -> x) Bag.concat repr_node other_event
             event
     end;
@@ -877,7 +888,12 @@ module Delayed = struct
   let attach_node t node dem event =
     let node = find_def t node in
     let event = Events.Wait.Event (dem,event) in
-    t.env.event <- Node.M.add_change Bag.elt Bag.add node event t.env.event
+    t.env.event_repr <- Node.M.add_change Bag.elt Bag.add node event t.env.event_repr
+
+  let attach_any_value t node dem event =
+    let node = find_def t node in
+    let event = Events.Wait.Event (dem,event) in
+    t.env.event_value <- Node.M.add_change Bag.elt Bag.add node event t.env.event_value
 
   let attach_reg_node t node dem event =
     let event = Events.Wait.Event (dem,event) in
@@ -926,7 +942,7 @@ module Delayed = struct
             match Events.Dem.Eq.coerce_type dem dem' with
             | Keys.Eq, Keys.Eq -> (event:k)
         )
-      (Node.M.find_def Bag.empty node d.env.event)
+      (Node.M.find_def Bag.empty node d.env.event_repr)
 
 
 end
@@ -940,7 +956,8 @@ module Backtrackable = struct
   let new_t () = {
     repr = Node.M.empty;
     rang = Node.M.empty;
-    event = Node.M.empty;
+    event_repr = Node.M.empty;
+    event_value = Node.M.empty;
     event_reg = Node.M.empty;
     event_any_reg = [];
     dom = VDomTable.create 5;
@@ -956,7 +973,8 @@ module Backtrackable = struct
     {
       repr  = t.repr;
       rang  = t.rang;
-      event = t.event;
+      event_repr = t.event_repr;
+      event_value = t.event_value;
       event_reg = t.event_reg;
       event_any_reg = t.event_any_reg;
       dom = VDomTable.copy t.dom;

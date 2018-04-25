@@ -36,7 +36,8 @@ module RealValue = ValueKind.Register(struct
     let key = real
   end)
 
-let cst c = RealValue.node (RealValue.index c Term._Real)
+let cst' c = RealValue.index ~basename:(Format.asprintf "%aR" Q.pp c) c Term._Real
+let cst c = RealValue.node (cst' c)
 
 let debug_todo = debug
 type bound = Interval_sig.bound = Strict | Large
@@ -46,10 +47,8 @@ module S = struct
     type t =
       | Add of Q.t * Node.t * Q.t * Node.t
       | GZero of Node.t * bound
-      | Conflict of Polynome.t
+      | Conflict of Polynome.t * bound
       [@@ deriving eq,ord]
-
-      let _ = Conflict Polynome.zero
 
     let pp fmt = function
       | Add (q1,cl1,q2,cl2) ->
@@ -64,7 +63,8 @@ module S = struct
         else Format.fprintf fmt "%a + %a" pp (q1,cl1) pp (q2,cl2)
       | GZero (node,b) ->
         Format.fprintf fmt "0 %a %a" Interval.pp_bound b Node.pp node
-      | Conflict (p) -> Polynome.pp fmt p
+      | Conflict (p,b) ->
+        Format.fprintf fmt "0 %a %a" Interval.pp_bound b Polynome.pp p
 
     let hash = function
       | Add (q1,cl1,q2,cl2) ->
@@ -72,7 +72,8 @@ module S = struct
              + 5*(Hashtbl.hash q2) + 7*Node.hash cl2) + 1
       | GZero (node,Strict) -> 7 * Node.hash node + 2
       | GZero (node,Large) -> 7 * Node.hash node + 3
-      | Conflict(p) -> 7 * Polynome.hash p + 4
+      | Conflict(p,Strict) -> CCHash.combine2 (Polynome.hash p) 4
+      | Conflict(p,Large) -> CCHash.combine2 (Polynome.hash p) 5
 
   end
   include T
@@ -92,7 +93,7 @@ type exp =
   | ExpEmptyDomInter of Trail.Pexp.t * Node.t
   | ExpDistIsZero of SE.t
   | ExpGZeroUp of SE.t * bool
-  | ExpGZeroDown of SE.t * bool
+  | ExpGZeroDown of SE.t * Node.t * bool
   | ExpIsSingleton of Trail.Pexp.t  * Node.t
                       * bool (* the domain of node *) * RealValue.t
   | ExpCst of RealValue.t
@@ -107,7 +108,7 @@ let exp : exp Trail.Exp.t =
 let set_dom d pexp node v b =
   match D.is_singleton v with
   | Some q ->
-    let cst = RealValue.index q Term._Real in
+    let cst = cst' q in
     let pexp = Egraph.mk_pexp d exp (ExpIsSingleton(pexp,node,b,cst)) in
     Egraph.set_value d pexp node (RealValue.nodevalue cst)
   | None ->
@@ -161,6 +162,10 @@ module DaemonPropa = struct
   let le_zero = D.le Q.zero
 
   let get_dom del node = Opt.get_def D.reals (Egraph.get_dom del dom node)
+  let get_value del node =
+      match Egraph.get_value del real node with
+        | None -> D.reals
+        | Some d -> D.singleton d
 
   let upd del node d d' pexp =
     match D.inter d d' with
@@ -175,38 +180,40 @@ module DaemonPropa = struct
       then set_dom del (Egraph.mk_pexp del exp pexp) node d'
           (D.is_singleton d' = None)
 
+  let upd_value del node d d' pexp =
+    match D.inter d d' with
+    | None ->
+      let pexp = Egraph.mk_pexp del exp pexp in
+      let pexp = Egraph.mk_pexp del exp (ExpEmptyDomInter(pexp,node)) in
+      Debug.dprintf6 debug "[LRA] upd node = %a d = %a d' = %a"
+        Node.pp node D.pp d D.pp d';
+      Egraph.contradiction del pexp
+    | Some d' ->
+      if not (D.equal d d')
+      then set_dom del (Egraph.mk_pexp del exp pexp) node d'
+          (D.is_singleton d' = None)
+
   let propagate del s =
     match SE.sem s with
-    (* | S.Cst q ->
-     *   let pexp = Egraph.mk_pexp del exp (ExpCst(SE.node s,q)) in
-     *   Egraph.set_dom del pexp dom (SE.node s) (D.singleton q) *)
     | S.Add(q1,cl1,q2,cl2) ->
       let cl0 = SE.node s in
-      let d0 = get_dom del cl0 in
+      let d0 = get_value del cl0 in
       if Q.equal q1 Q.one && Q.equal q2 Q.minus_one &&
          D.equal d0 D.zero then
         let pexp = Egraph.mk_pexp del exp (ExpDistIsZero(s)) in
         Egraph.merge del pexp cl1 cl2
       else
-        let d1 = get_dom del cl1 in
-        let d2 = get_dom del cl2 in
-        let upd node d d' = upd del node d d' (ExpAdd(s,node)) in
+        let d1 = get_value del cl1 in
+        let d2 = get_value del cl2 in
+        let upd_value node d d' = upd_value del node d d' (ExpAdd(s,node)) in
         let qd1 = D.mult_cst q1 d1 in
         let qd2 = D.mult_cst q2 d2 in
-        upd cl0 d0 (D.add qd1 qd2);
-        upd cl1 d1 (D.mult_cst (Q.inv q1) (D.minus d0 qd2));
-        upd cl2 d2 (D.mult_cst (Q.inv q2) (D.minus d0 qd1))
+        upd_value cl0 d0 (D.add qd1 qd2);
+        upd_value cl1 d1 (D.mult_cst (Q.inv q1) (D.minus d0 qd2));
+        upd_value cl2 d2 (D.mult_cst (Q.inv q2) (D.minus d0 qd1))
     | S.GZero(node,b) -> begin
-      let cl0 = SE.node s in
-      match Bool.is del cl0 with
-      | Some nonot ->
-        let dzero = if b=Strict
-          then if nonot then gt_zero else le_zero
-          else if nonot then ge_zero else lt_zero in
-        let d = get_dom del node in
-        upd del node d dzero (ExpGZeroDown(s,nonot))
-      | None ->
-        let d = get_dom del node in
+        let cl0 = SE.node s in
+        let d = get_value del node in
         let dzero_true  = if b=Strict then gt_zero else ge_zero in
         let dzero_false = if b=Strict then le_zero else lt_zero in
         if D.is_included d dzero_true
@@ -219,7 +226,7 @@ module DaemonPropa = struct
           let pexp = Egraph.mk_pexp del exp (ExpGZeroUp(s,false)) in
           Bool.set_false del pexp cl0
       end
-    | S.Conflict(p) ->
+    | S.Conflict(p,b) ->
       (** Choose representative of the equivalence class among the
             present classes, not the current representative *)
       let repr = Polynome.fold (fun acc node _ ->
@@ -232,23 +239,49 @@ module DaemonPropa = struct
         )
           (Polynome.cst p.cst)
           p in
-      let upd node d d' = upd del node d d' (ExpAdd(s,node)) in
       let rec aux d_first = function
-        | [] ->
-          let cl0 = SE.node s in
-          let d0 = get_dom del cl0 in
-          upd cl0 d0 d_first;
-          d0
+        | [] -> begin
+            let cl0 = SE.node s in
+            if D.is_singleton d_first <> None then
+              let d = d_first in
+              let dzero_true  = if b=Strict then gt_zero else ge_zero in
+              let dzero_false = if b=Strict then le_zero else lt_zero in
+              if D.is_included d dzero_true
+              then begin
+                let pexp = Egraph.mk_pexp del exp (ExpGZeroUp(s,true)) in
+                Bool.set_true del pexp cl0;
+                raise Exit
+              end
+              else if D.is_included d dzero_false
+              then
+                let pexp = Egraph.mk_pexp del exp (ExpGZeroUp(s,false)) in
+                Bool.set_false del pexp cl0;
+                raise Exit
+              else
+                assert false
+            else
+              match Bool.is del cl0 with
+              | Some nonot ->
+                let dzero = if b=Strict
+                  then if nonot then gt_zero else le_zero
+                  else if nonot then ge_zero else lt_zero in
+                dzero,nonot
+              | None ->
+                raise Exit
+        end
         | (node,q)::l ->
           let d = get_dom del node in
           let d' = (D.mult_cst q d) in
-          let d_last = aux (D.add d' d_first) l in
+          let d_last,b = aux (D.add d' d_first) l in
           Debug.dprintf6 debug "node=%a d_first=%a d_last=%a"
             Node.pp node D.pp d_first D.pp d_last;
+          let upd node d d' = upd del node d d' (ExpGZeroDown(s,node,b)) in
           upd node d (D.mult_cst (Q.inv q) (D.minus d_last d_first));
-          D.minus d_last d'
+          D.minus d_last d', b
       in
-      ignore (aux (D.singleton p'.cst) (Node.M.bindings p'.poly))
+      try
+        ignore (aux (D.singleton p'.cst) (Node.M.bindings p'.poly))
+      with Exit -> ()
 
   let wakeup del = function
     | Events.Fired.EventValue(_,_,s)
@@ -261,24 +294,25 @@ module DaemonPropa = struct
   let init del s =
     begin match SE.sem s with
       | S.Add (_,cl1,_,cl2) ->
+    Debug.dprintf2 debug "TOTO: %a" SE.pp s;
         Egraph.register del cl1; Egraph.register del cl2;
         Demon.Fast.attach del key
-          [Demon.Create.EventDom(SE.node s, dom, s);
-           Demon.Create.EventDom(cl1, dom, s);
-           Demon.Create.EventDom(cl2, dom, s);
+          [Demon.Create.EventValue(SE.node s, real, s);
+           Demon.Create.EventValue(cl1, real, s);
+           Demon.Create.EventValue(cl2, real, s);
           ]
       | GZero (node,_) ->
         Egraph.register del node;
         Demon.Fast.attach del key
           [Demon.Create.EventValue(SE.node s, Bool.dom, s);
-           Demon.Create.EventDom(node, dom, s)]
-      | Conflict(p) ->
+           Demon.Create.EventValue(node, real, s)]
+      | Conflict(p,_) ->
         Demon.Fast.attach del key
-          [Demon.Create.EventDom(SE.node s, dom, s)];
+          [Demon.Create.EventValue(SE.node s, Bool.dom, s)];
         Polynome.iter (fun node _ ->
             Egraph.register del node;
             Demon.Fast.attach del key
-              [Demon.Create.EventDom(node, dom, s);
+              [Demon.Create.EventValue(node, real, s);
                Demon.Create.EventChange(node, s);
               ]
           ) p
@@ -325,7 +359,7 @@ let of_poly p =
 
 let to_poly = function
   | S.Add(q1,cl1,q2,cl2) -> Polynome.of_list Q.one [cl1,q1;cl2,q2]
-  | Conflict p -> p
+  | Conflict (p,_) -> p
   | GZero _ -> raise Impossible
 
 let choarith : Node.t Trail.Cho.t =
@@ -567,24 +601,29 @@ module GenEquality = struct
 end
 *)
 
+type hypbound =
+  | Eq
+  | Le
+  | Lt
+
+let _ = Eq
+let _ = Le
+let _ = Lt
+
 type hyppoly = {
-  minb : (Node.t * Trail.Age.t) option;
-  maxb : (Node.t * Trail.Age.t) option;
-  bound: bound;
-  eqs : (Node.t * Node.t) list;
-  singleton: Node.t list;
+  bound: hypbound ;
+  poly: Polynome.t ;
 }
 
 let pp_hyppoly fmt c =
-  let ppb c fmt = function
-    | None -> ()
-    | Some (n,a) ->
-      Format.fprintf fmt "%s%a[%a]" c Node.pp n Trail.Age.pp a
+  let bound = function
+    | Eq -> "="
+    | Le -> "󠀼≤"
+    | Lt -> "<"
   in
-  Format.fprintf fmt "0 %a %a %a"
-    Interval.pp_bound c.bound
-    (ppb " ") c.minb
-    (ppb " - ") c.maxb
+  Format.fprintf fmt "0 %s %a"
+    (bound c.bound)
+    Polynome.pp c.poly
 
 module HypDom = struct
   type t = hyppoly
@@ -598,7 +637,16 @@ module HypDom = struct
 
   let levels _ = assert false
   let split _ = assert false
-  let apply_learnt _ = assert false
+  let apply_learnt hyp =
+    match hyp.bound with
+    | Eq ->
+      let n = of_poly hyp.poly in
+      (Equality.equality [n;zero], Conflict.Neg)
+    | Le | Lt ->
+      let b = if hyp.bound = Le then Interval.Large else Interval.Strict in
+      let i = SE.index (S.Conflict(hyp.poly, b)) Term._Real in
+      let i = SE.node i in
+      (i, Conflict.Neg)
   let useful_nodes _ = assert false
 end
 
@@ -1023,6 +1071,10 @@ let th_register env =
 
 (** {2 Interpretations} *)
 let () =
+  let gzero bound n =
+    let v = (match bound with | Strict -> Q.lt | Large -> Q.le) Q.zero n in
+    (if v then Bool.values_true else Bool.values_false)
+  in
   let interp ~interp (t:S.t) =
     let get_v n = RealValue.value (RealValue.coerce_nodevalue (interp n)) in
     match t with
@@ -1030,11 +1082,10 @@ let () =
       let v = Q.( q1 * (get_v n1) + q2 * (get_v n2)) in
       RealValue.nodevalue (RealValue.index v Term._Real)
     | GZero(n,bound) ->
-      let v = (match bound with | Strict -> Q.lt | Large -> Q.le) Q.zero (get_v n) in
-      (if v then Bool.values_true else Bool.values_false)
-    | Conflict p ->
+      gzero bound (get_v n)
+    | Conflict (p,bound) ->
       let v = Polynome.fold (fun acc n q -> Q.( acc + q * (get_v n))) Q.zero p in
-      RealValue.nodevalue (RealValue.index v Term._Real)
+      gzero bound v
   in
   Interp.Register.thterm S.key interp
 

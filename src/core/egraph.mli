@@ -99,6 +99,8 @@ val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) Events.Dem.t -> 'event ->
 (** wakeup when the dom change *)
 val attach_value: t -> Node.t -> 'a ValueKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
 (** wakeup when a value is attached to this equivalence class *)
+val attach_any_value: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+(** wakeup when any kind of value is attached to this equivalence class *)
 val attach_reg_node: t -> Node.t -> ('event,'r) Events.Dem.t -> 'event -> unit
 (** wakeup when this node is registered *)
 val attach_reg_sem: t -> 'a ThTermKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit

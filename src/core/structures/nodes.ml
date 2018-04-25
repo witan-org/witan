@@ -302,6 +302,12 @@ module Value = struct
       | None -> None
       | Some Keys.Eq -> Some v
 
+  let semantic_equal (x:t) (y:t) : [ `Uncomparable | `Equal | `Disequal ] =
+    match x, y with
+    | Node.Value(_,_,xk,_), Node.Value(_,_,yk,_) when not (ValueKind.equal xk yk) ->
+      `Uncomparable
+    | _ -> if equal x y then `Equal else `Disequal
+
 end
 
 module type RegisteredValue = sig
