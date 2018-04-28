@@ -21,6 +21,8 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Std
+    
 module Register = struct
 
   let ids : (Term.id -> Nodes.Value.t list -> Nodes.Value.t option) list ref = ref []
@@ -90,7 +92,7 @@ and thterm  ?(leaf=(fun _ -> None)) t =
   | Nodes.Only_for_solver.ThTerm (sem,v) ->
     (** check if it is not a synterm *)
     match Nodes.ThTermKind.Eq.eq_type sem SynTerm.key with
-    | Some Keys.Eq ->
+    | Some Eq ->
       term ~leaf (v:Term.t)
     | None ->
       if Register.ThInterp.is_uninitialized Register.thterms sem

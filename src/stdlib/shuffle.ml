@@ -34,10 +34,10 @@ let make_random =
       Hashtbl.add h i s;
       Random.State.copy s
 
-let int m =
+let int m = 
   match !opt_shuffle with
   | Some rnd -> Random.State.int rnd m
-  | None -> Witan_open.Open.max ~compare:Stdlib.DInt.compare 0 (m-1)
+  | None -> max 0 (m-1)
 
 let set_shuffle = function
   | None -> opt_shuffle := None

@@ -22,16 +22,17 @@
 (*************************************************************************)
 
 open Stdlib
+open Std
 open Nodes
 
 exception Contradiction of Trail.Pexp.t
 
 let debug = Debug.register_info_flag
-  ~desc:"for the core solver"
-  "Egraph.all"
+    ~desc:"for the core solver"
+    "Egraph.all"
 let debug_few = Debug.register_info_flag
-  ~desc:"for the core solver"
-  "Egraph.few"
+    ~desc:"for the core solver"
+    "Egraph.few"
 
 let stats_set_dom =
   Debug.register_stats_int ~name:"Egraph.set_dom/merge" ~init:0
@@ -63,44 +64,44 @@ module VValueTable = ValueKind.MkVector (struct type ('a,'unit) t = 'a valuetabl
 (** mutable but only contain persistent structure *)
 (** Just for easy qualification *)
 module Def = struct
-type t = {
-  mutable repr  : Node.t Node.M.t;
-  mutable event : Events.Wait.t Bag.t Node.M.t;
-  mutable event_reg : Events.Wait.t list Node.M.t;
-  mutable event_any_reg : Events.Wait.t list;
-          (** extensible "number of fields" *)
-          dom   : delayed_t VDomTable.t;
-          sem   : semtable VSemTable.t;
-          value : unit VValueTable.t;
-          envs  : unit Env.VectorH.t;
-          trail : Trail.t;
-  mutable current_delayed  : delayed_t; (** For assert-check *)
-}
+  type t = {
+    mutable repr  : Node.t Node.M.t;
+    mutable event : Events.Wait.t Bag.t Node.M.t;
+    mutable event_reg : Events.Wait.t list Node.M.t;
+    mutable event_any_reg : Events.Wait.t list;
+    (** extensible "number of fields" *)
+    dom   : delayed_t VDomTable.t;
+    sem   : semtable VSemTable.t;
+    value : unit VValueTable.t;
+    envs  : Env.VectorH.t;
+    trail : Trail.t;
+    mutable current_delayed  : delayed_t; (** For assert-check *)
+  }
 
-(** delayed_t is used *)
-and delayed_t = {
-  env : t;
-  todo_immediate_dem : action_immediate_dem Queue.t;
-  todo_merge_dom : action_merge_dom Queue.t;
-  mutable todo_delayed_merge : (Trail.Pexp.t * Node.t * Node.t * bool) option;
-  todo_merge : action_merge Queue.t;
-  todo_ext_action : action_ext Queue.t;
-  sched_daemon : Events.Wait.daemon_key -> unit;
-  sched_decision : Trail.chogen -> unit;
-}
+  (** delayed_t is used *)
+  and delayed_t = {
+    env : t;
+    todo_immediate_dem : action_immediate_dem Queue.t;
+    todo_merge_dom : action_merge_dom Queue.t;
+    mutable todo_delayed_merge : (Trail.Pexp.t * Node.t * Node.t * bool) option;
+    todo_merge : action_merge Queue.t;
+    todo_ext_action : action_ext Queue.t;
+    sched_daemon : Events.Wait.daemon_key -> unit;
+    sched_decision : Trail.chogen -> unit;
+  }
 
-and action_immediate_dem =
-| RunDem : Events.Wait.daemon_key -> action_immediate_dem
+  and action_immediate_dem =
+    | RunDem : Events.Wait.daemon_key -> action_immediate_dem
 
-and action_merge_dom =
-| SetMergeDomNode  :
-    Trail.Pexp.t * 'a Dom.t * Node.t * Node.t * bool -> action_merge_dom
+  and action_merge_dom =
+    | SetMergeDomNode  :
+        Trail.Pexp.t * 'a Dom.t * Node.t * Node.t * bool -> action_merge_dom
 
-and action_merge =
-| Merge of Trail.Pexp.t * Node.t * Node.t
+  and action_merge =
+    | Merge of Trail.Pexp.t * Node.t * Node.t
 
-and action_ext =
-| ExtDem         : Events.Wait.daemon_key  -> action_ext
+  and action_ext =
+    | ExtDem         : Events.Wait.daemon_key  -> action_ext
 
 end
 open Def
@@ -314,8 +315,8 @@ let output_graph filename t =
   close_out cout
 
 let show_graph = Debug.register_flag
-  ~desc:"Show each step in a gui"
-  "dotgui"
+    ~desc:"Show each step in a gui"
+    "dotgui"
 
 let draw_graph =
   let c = ref 0 in
@@ -406,12 +407,12 @@ module Delayed = struct
     assert (is_current_env t);
     if not (is_registered t node) then begin
       if Debug.test_flag debug_few then begin
-      match Only_for_solver.thterm node with
-      | None ->
-        Debug.dprintf2 debug "[Egraph] @[register %a@]" Node.pp node
-      | Some thterm ->
-        Debug.dprintf4 debug "[Egraph] @[register %a: %a@]"
-          Node.pp node ThTerm.pp thterm
+        match Only_for_solver.thterm node with
+        | None ->
+          Debug.dprintf2 debug "[Egraph] @[register %a@]" Node.pp node
+        | Some thterm ->
+          Debug.dprintf4 debug "[Egraph] @[register %a: %a@]"
+            Node.pp node ThTerm.pp thterm
       end;
       assert ( check_no_dom t node );
       t.env.repr <- Node.M.add node node t.env.repr;
@@ -426,19 +427,19 @@ module Delayed = struct
       match Only_for_solver.open_node node with
       | Only_for_solver.ThTerm thterm ->
         begin match Only_for_solver.sem_of_node thterm with
-        | Only_for_solver.ThTerm(sem,_) ->
-          let reg_events = get_table_sem t.env sem in
-          Wait.wakeup_events_list Events.Wait.translate_regsem
-            t (Some reg_events) (thterm)
+          | Only_for_solver.ThTerm(sem,_) ->
+            let reg_events = get_table_sem t.env sem in
+            Wait.wakeup_events_list Events.Wait.translate_regsem
+              t (Some reg_events) (thterm)
         end
       | Only_for_solver.Value nodevalue ->
         begin match Only_for_solver.value_of_node nodevalue with
-        | Only_for_solver.Value(value,v) ->
-          let valuetable = get_table_value t.env value in
-          let reg_events = valuetable.reg_events in
-          Wait.wakeup_events_list Events.Wait.translate_regvalue
-            t (Some reg_events) (nodevalue);
-          set_value_direct t value node v
+          | Only_for_solver.Value(value,v) ->
+            let valuetable = get_table_value t.env value in
+            let reg_events = valuetable.reg_events in
+            Wait.wakeup_events_list Events.Wait.translate_regvalue
+              t (Some reg_events) (nodevalue);
+            set_value_direct t value node v
         end
     end
 
@@ -543,7 +544,7 @@ module Delayed = struct
     let iteri (type a) (dom : a Dom.t) (domtable : a domtable) =
       let s1 = Node.M.find_opt node1 domtable.table in
       let s2  = Node.M.find_opt node2  domtable.table in
-    let (module Dom) = VDom.get_dom dom in
+      let (module Dom) = VDom.get_dom dom in
       if not (Dom.merged s1 s2)
       then begin
         dom_not_done := true;
@@ -690,7 +691,7 @@ module Delayed = struct
     | Some runable -> Wait.new_pending_daemon delayed dem runable
 
   and nothing_todo t =
-      Queue.is_empty t.todo_immediate_dem
+    Queue.is_empty t.todo_immediate_dem
     && Queue.is_empty t.todo_merge_dom
     && t.todo_delayed_merge == None
     && Queue.is_empty t.todo_merge
@@ -719,26 +720,26 @@ module Delayed = struct
             Is it really needed to do a fixpoint? *)
         do_delayed_merge t pexp node1_0 node2_0 inv;
         do_pending t
-    | None ->
-      if not (Queue.is_empty t.todo_merge) then
-      match Queue.pop t.todo_merge with
-      | Merge (pexp,node1,node2) ->
-        Debug.dprintf4 debug "[Egraph] @[do_pending Merge %a %a@]"
-          Node.pp node1 Node.pp node2;
-        merge_pending t pexp node1 node2;
-        do_pending t
-    else if not (Queue.is_empty t.todo_ext_action) then
-      (begin match Queue.pop t.todo_ext_action with
-      | ExtDem att ->
-        Debug.dprintf0 debug "[Egraph] @[do_pending RunDem@]";
-        let store_ext_action = Queue.create () in
-        Queue.transfer t.todo_ext_action store_ext_action;
-        do_pending_daemon t att;
-        Queue.transfer store_ext_action t.todo_ext_action;
-       end;
-       do_pending t)
-    else
-      Debug.dprintf0 debug "[Egraph] Nothing to do"
+      | None ->
+        if not (Queue.is_empty t.todo_merge) then
+          match Queue.pop t.todo_merge with
+          | Merge (pexp,node1,node2) ->
+            Debug.dprintf4 debug "[Egraph] @[do_pending Merge %a %a@]"
+              Node.pp node1 Node.pp node2;
+            merge_pending t pexp node1 node2;
+            do_pending t
+        else if not (Queue.is_empty t.todo_ext_action) then
+          (begin match Queue.pop t.todo_ext_action with
+             | ExtDem att ->
+               Debug.dprintf0 debug "[Egraph] @[do_pending RunDem@]";
+               let store_ext_action = Queue.create () in
+               Queue.transfer t.todo_ext_action store_ext_action;
+               do_pending_daemon t att;
+               Queue.transfer store_ext_action t.todo_ext_action;
+           end;
+           do_pending t)
+        else
+          Debug.dprintf0 debug "[Egraph] Nothing to do"
 
   and flush_internal d =
     assert (d.env.current_delayed == d);
@@ -798,11 +799,11 @@ module Delayed = struct
       Node.pp node (print_dom dom) v;
     check d node;
     let node' = match d.todo_delayed_merge with
-    | Some(_,node1,node2,_) when Node.equal node1 node -> node2
-    | Some(_,node1,node2,_) when Node.equal node2 node -> node1
-    | _ -> raise (BrokenInvariant(
-        "set_dom_premerge should be used only on the \
-         nodeasses currently merged")) in
+      | Some(_,node1,node2,_) when Node.equal node1 node -> node2
+      | Some(_,node1,node2,_) when Node.equal node2 node -> node1
+      | _ -> raise (BrokenInvariant(
+          "set_dom_premerge should be used only on the \
+           nodeasses currently merged")) in
     set_dom_premerge_pending d dom ~from:node' node v
 
   let unset_dom d dom node =
@@ -879,25 +880,17 @@ module Delayed = struct
           | Events.Wait.Event(dem',_) ->
             Events.Dem.equal dem dem'
         )
-      ~map:(function
-          | Events.Wait.Event(dem',event) ->
-            match Events.Dem.Eq.coerce_type dem dem' with
-            | Keys.Eq, Keys.Eq -> (event:k)
+      ~map:(fun (Events.Wait.Event(dem',event)) ->
+          let Eq = Events.Dem.Eq.coerce_type dem dem' in (event:k)
         )
       (Node.M.find_def [] node d.env.event_reg)
 
   let attached_node
       (type k) (type d) d node (dem:(k,d) Events.Dem.t) : k Enum.t =
     Enum.from_bag
-      ~filter:(function
-          | Events.Wait.Event(dem',_) ->
-            Events.Dem.equal dem dem'
-        )
-      ~map:(function
-          | Events.Wait.Event(dem',event) ->
-            match Events.Dem.Eq.coerce_type dem dem' with
-            | Keys.Eq, Keys.Eq -> (event:k)
-        )
+      ~filter:(fun (Events.Wait.Event(dem',_)) -> Events.Dem.equal dem dem')
+      ~map:(fun (Events.Wait.Event(dem',event)) ->
+          let Eq = Events.Dem.Eq.coerce_type dem dem' in (event:k) )
       (Node.M.find_def Bag.empty node d.env.event)
 
 
@@ -1034,9 +1027,9 @@ module type Getter = sig
   val is_equal  : t -> Node.t -> Node.t -> bool
   val find_def  : t -> Node.t -> Node.t
   val get_dom   : t -> 'a Dom.t -> Node.t -> 'a option
-    (** dom of the nodeass *)
+  (** dom of the nodeass *)
   val get_value : t -> 'a ValueKind.t -> Node.t -> 'a option
-    (** value of the nodeass *)
+  (** value of the nodeass *)
 
   (** {4 The nodeasses must have been marked has registered} *)
 

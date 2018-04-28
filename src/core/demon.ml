@@ -90,12 +90,16 @@ module Key = struct
   }
 
   let create (type k d i) name =
-    { dk_id   = Events.Dem.create_key name;
-      dk_data = (let module M = struct
-                   type t = (k,d,i) demtable
-                   let name = name
-                 end
-                 in Env.create_key (module M)) }
+    { dk_id   = Events.Dem.create_key (module struct
+          type t = k * d
+          type nonrec d = k
+          let name = name
+        end);
+      dk_data = Env.create_key (module struct
+          type t = (k,d,i) demtable
+          let name = name
+        end)
+    }
 
   module type S = sig
     module Key: Stdlib.Datatype
@@ -348,13 +352,15 @@ module Fast = struct
 
   let create (type d) name
     = {
-      dk_id   = Events.Dem.create_key name;
-      dk_data = (
-        let module M = struct
+      dk_id   = Events.Dem.create_key (module struct
+          type t = d
+          type d = unit
+          let name = name
+        end);
+      dk_data = Env.create_key (module struct
           type t = d Events.Fired.event list
           let name = name
-        end
-        in Env.create_key (module M));
+        end);
       dk_remaining = 0;
       dk_current = Queue.create ();
     }
