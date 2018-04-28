@@ -33,7 +33,7 @@ module Make_key(X:sig end) = struct
   type 'a t = { gadt : 'a gadt;
                 name : K.t;
                 id   : int;
-                is_eq : 'b. 'b gadt -> ('a,'b) eq option }
+                iseq : 'b. 'b gadt -> ('a,'b) Poly.iseq }
 
   let pp fmt x = K.pp fmt x.name
   let equal a b = a.id = b.id
@@ -44,10 +44,10 @@ module Make_key(X:sig end) = struct
                  
   (** the 'a k can be used as equality witness because K gives fresh values *)
   module Eq = struct
-    let eq_type a b = a.is_eq b.gadt
-    let coerce_type a b = eq_type a b |> Option.get_lazy (fun () -> raise BadCoercion)
+    let eq_type a b = a.iseq b.gadt
+    let coerce_type a b = eq_type a b |> Poly.eq
     let coerce (type a) (type b) (a:a t) (b:b t) (x:a) : b =
-      let Eq = coerce_type a b in x
+      let Poly.Eq = coerce_type a b in x
   end
 
   type key = K : _ t -> key [@@unboxed]
@@ -64,14 +64,14 @@ module Make_key(X:sig end) = struct
     let module TMP = struct
       type _ gadt += K : NT.t gadt
     end in
-    let is_eq : type b. b gadt -> (NT.t,b) eq option = function
-      | TMP.K -> Some Eq
-      | _ -> None
+    let iseq : type b. b gadt -> (NT.t,b) Poly.iseq = function
+      | TMP.K -> Poly.Eq
+      | _ -> Poly.Neq
     in
     let key = { gadt = TMP.K;
                 name = K.create NT.name;
                 id = AllKeys.length all_keys;
-                is_eq }
+                iseq }
     in
     AllKeys.add all_keys (K key) ();
     key
@@ -167,7 +167,7 @@ module Make_key2(X:sig end) : Key2 = struct
   type ('k,'d) t = { gadt : ('k,'d) gadt;
                      name : K.t;
                      id   : int;
-                     is_eq : 'b1 'b2. ('b1,'b2) gadt -> ('k*'d,'b1*'b2) eq option }
+                     iseq : 'b1 'b2. ('b1,'b2) gadt -> ('k*'d,'b1*'b2) Poly.iseq }
 
   let pp fmt x = K.pp fmt x.name
   let equal a b = a.id = b.id
@@ -178,8 +178,8 @@ module Make_key2(X:sig end) : Key2 = struct
   
   (** the ('k,'d) k can be used as equality witness because K gives fresh values *)
   module Eq = struct
-    let eq_type a b = a.is_eq b.gadt
-    let coerce_type a b = eq_type a b |> Option.get_lazy (fun () -> raise BadCoercion)
+    let eq_type a b = a.iseq b.gadt
+    let coerce_type a b = eq_type a b |> Poly.eq
   end
 
   type key = K : _ t -> key [@@unboxed]
@@ -198,14 +198,14 @@ module Make_key2(X:sig end) : Key2 = struct
     let module TMP = struct
       type (_,_) gadt += K : (NT.t,NT.d) gadt
     end in
-    let is_eq : type b1 b2. (b1,b2) gadt -> (NT.t*NT.d,b1*b2) eq option = function
-      | TMP.K -> Some Eq
-      | _ -> None
+    let iseq : type b1 b2. (b1,b2) gadt -> (NT.t*NT.d,b1*b2) Poly.iseq = function
+      | TMP.K -> Poly.Eq
+      | _ -> Poly.Neq
     in
     let key = { gadt = TMP.K;
                 name = K.create NT.name;
                 id = AllKeys.length all_keys;
-                is_eq }
+                iseq }
     in
     AllKeys.add all_keys (K key) ();
     key

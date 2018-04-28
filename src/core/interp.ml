@@ -92,9 +92,8 @@ and thterm  ?(leaf=(fun _ -> None)) t =
   | Nodes.Only_for_solver.ThTerm (sem,v) ->
     (** check if it is not a synterm *)
     match Nodes.ThTermKind.Eq.eq_type sem SynTerm.key with
-    | Some Eq ->
-      term ~leaf (v:Term.t)
-    | None ->
+    | Poly.Eq  -> term ~leaf (v:Term.t)
+    | Poly.Neq ->
       if Register.ThInterp.is_uninitialized Register.thterms sem
       then raise (CantInterpretThTerm t);
       (Register.ThInterp.get Register.thterms sem) ~interp:(node ~leaf) v

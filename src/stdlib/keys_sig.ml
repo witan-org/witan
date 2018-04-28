@@ -34,9 +34,6 @@ open Std
 
 (** {2 Type comparison and coercion } *)
 
-exception BadCoercion
-(** Raised when making a bad coercion *)
-
 module type Registry = sig
   type 'a key
   type 'a data
@@ -79,11 +76,11 @@ module type Key = sig
   val hint_size : unit -> int
 
   module Eq: sig
-    val eq_type : 'a t -> 'b t -> ('a,'b) eq option
+    val eq_type : 'a t -> 'b t -> ('a,'b) Poly.iseq
     (** If the two arguments are identical then an equality witness
         between the types is returned *)
 
-    val coerce_type : 'a t -> 'b t -> ('a,'b) eq
+    val coerce_type : 'a t -> 'b t -> ('a,'b) Poly.eq
     (** If the two arguments are identical then an equality witness
         between the types is returned otherwise
         the exception BadCoercion is raised  *)
@@ -159,11 +156,11 @@ module type Key2 = sig
                   -> ('a1,'a2) t
 
   module Eq: sig
-    val eq_type : ('a1,'a2) t -> ('b1,'b2) t -> ('a1*'a2,'b1*'b2) eq option
+    val eq_type : ('a1,'a2) t -> ('b1,'b2) t -> ('a1*'a2,'b1*'b2) Poly.iseq
     (** If the two arguments are identical then an equality witness
         between the types is returned *)
 
-    val coerce_type : ('a1,'a2) t -> ('b1,'b2) t -> ('a1*'a2,'b1*'b2) eq
+    val coerce_type : ('a1,'a2) t -> ('b1,'b2) t -> ('a1*'a2,'b1*'b2) Poly.eq
       (** If the two arguments are identical then an equality witness
           between the types is returned otherwise
           the exception BadCoercion is raised  *)

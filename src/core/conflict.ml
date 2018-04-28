@@ -166,13 +166,13 @@ module ChoGenH = Stdlib.XHashtbl.Make(struct
     let equal (Trail.GCho(n1,cho1,k1)) (Trail.GCho(n2,cho2,k2)) =
       Node.equal n1 n2 &&
       match Cho.Eq.eq_type cho1 cho2 with
-      | Some Eq ->
+      | Poly.Eq ->
         let f (type a) (cho: a Cho.t) k1 k2 =
           let module C = (val ChoRegistry.get cho) in
           C.OnWhat.equal k1 k2
         in
         f cho1 k1 k2
-      | None -> false
+      | Poly.Neq -> false
   end)
 
 module Exp = Trail.Exp

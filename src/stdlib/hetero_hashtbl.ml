@@ -49,8 +49,9 @@ module MakeS1(K:Keys1)(D:sig type ('a,'b) t end)
 
     let get (type a) (m: 'b t) (k : a key) : (a, 'b) data =
       let Pair(k',r) = H.find m (K.tag k) in
-      let Eq = K.equal k k' |> Option.get_lazy (fun () -> raise IncoherentTable)
-      in r
+      match K.equal k k' with
+      | Poly.Eq -> r
+      | Poly.Neq -> raise IncoherentTable
 
     let get_def : 'b t -> 'a key -> ('a, 'b) data -> ('a, 'b) data =
       fun _ -> failwith "What on earth is this?"
@@ -161,8 +162,9 @@ module Make2
 
   let get (type a1 a2) (m: 'b t) (k : (a1,a2) key) : (a1,a2, 'b) data =
     let Pair(k',r) = H.find m (K.tag k) in
-    let Eq = K.equal k k' |> Option.get_lazy (fun () -> raise IncoherentTable)
-    in r
+    match K.equal k k' with
+    | Poly.Eq -> r
+    | Poly.Neq -> raise IncoherentTable
 
   let get_def : 'b t -> ('a1,'a2) key -> ('a1,'a2, 'b) data -> ('a1,'a2, 'b) data =
     fun _ -> failwith "What on earth is this?"

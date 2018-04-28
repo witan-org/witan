@@ -40,7 +40,7 @@ module type S = sig
   val is_empty: 'b t -> bool
   val set_submap : 'a t -> 'b t -> bool
 
-  val singleton: 'a key -> 'b -> 'b t
+  val singleton: 'a key -> ('a,'b) data -> 'b t
 
   val find: 'a key -> 'b t -> ('a,'b) data
   (** [find x m] returns the current binding of [x] in [m],

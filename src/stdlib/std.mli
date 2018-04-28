@@ -2,6 +2,25 @@ open Witan_popop_lib.Stdlib
 
 include module type of Std_sig
 
+module Poly : sig
+
+  type (_,_,_) t =
+    | Eq : ('a,'a,_) t
+    | Neq: (_,_,[`IsEq]) t
+    | Gt : (_,_,[`Ord]) t
+    | Lt : (_,_,[`Ord]) t
+          
+  type ('a,'b) eq   = ('a,'b,[`Eq]) t
+  type ('a,'b) iseq = ('a,'b,[`IsEq]) t
+  type ('a,'b) ord  = ('a,'b,[`Ord]) t
+
+  val iseq : ('a,'b,_) t -> ('a,'b) iseq
+
+  exception NotEq  
+  val eq   : ('a,'b,_) t -> ('a,'b) eq
+  
+end
+
 module Goption : sig
   type (_,_) t =
     | Some: 'a -> ('a,[`Some]) t

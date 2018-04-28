@@ -193,12 +193,12 @@ module RegisterThTerm (D:ThTerm) : RegisteredThTerm with type s = D.t = struct
         | ThTerm(_,tya,sema,va), ThTerm(_,tyb,semb,vb) ->
           match ThTermKind.Eq.coerce_type sema D.key,
                 ThTermKind.Eq.coerce_type semb D.key with
-          | Eq, Eq -> Ty.equal tya tyb && D.equal va vb
+          | Poly.Eq, Poly.Eq -> Ty.equal tya tyb && D.equal va vb
 
       let hash: t -> int = fun a ->
         match a with
         | ThTerm(_,tya,sema,va) ->
-          let Eq = ThTermKind.Eq.coerce_type sema D.key in
+          let Poly.Eq = ThTermKind.Eq.coerce_type sema D.key in
           Hashcons.combine (Ty.hash tya) (D.hash va)
 
       let set_tag: int -> t -> t =
@@ -240,7 +240,7 @@ module RegisterThTerm (D:ThTerm) : RegisteredThTerm with type s = D.t = struct
 
   let sem : t -> D.t =
     fun (Node.ThTerm(_,_,sem,v)) ->
-      let Eq = ThTermKind.Eq.coerce_type sem D.key in v
+      let Poly.Eq = ThTermKind.Eq.coerce_type sem D.key in v
 
   let ty = ThTerm.ty
 
@@ -276,8 +276,8 @@ module Value = struct
   let value : type a. a ValueKind.t -> t -> a option =
     fun value (Node.Value(_,_,value',v)) ->
       match ValueKind.Eq.eq_type value value' with
-      | None -> None
-      | Some Eq -> Some v
+      | Poly.Neq -> None
+      | Poly.Eq  -> Some v
 
   let semantic_equal (x:t) (y:t) : [ `Uncomparable | `Equal | `Disequal ] =
     match x, y with
@@ -344,12 +344,12 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
         | Value(_,tya,valuea,va), Value(_,tyb,valueb,vb) ->
           match ValueKind.Eq.coerce_type valuea D.key,
                 ValueKind.Eq.coerce_type valueb D.key with
-          | Eq, Eq  -> Ty.equal tya tyb && D.equal va vb
+          | Poly.Eq, Poly.Eq  -> Ty.equal tya tyb && D.equal va vb
 
       let hash: t -> int = fun a ->
         match a with
         | Value(_,tya,valuea,va) ->
-          let Eq = ValueKind.Eq.coerce_type valuea D.key in
+          let Poly.Eq = ValueKind.Eq.coerce_type valuea D.key in
           Hashcons.combine (Ty.hash tya) (D.hash va)
 
       let set_tag: int -> t -> t = fun tag x ->
@@ -392,7 +392,7 @@ module RegisterValue (D:Value) : RegisteredValue with type s = D.t = struct
 
   let value : t -> D.t = function
     | Node.Value(_,_,value,v) ->
-      let Eq = ValueKind.Eq.coerce_type value D.key in v
+      let Poly.Eq = ValueKind.Eq.coerce_type value D.key in v
 
   let ty = Value.ty
 

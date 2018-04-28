@@ -28,7 +28,7 @@ exception IncoherentTable
 module type Keys1 = sig
   type 'a t
   val tag : 'a t -> int
-  val equal : 'a t -> 'b t -> ('a,'b) eq option
+  val equal : 'a t -> 'b t -> ('a,'b) Poly.iseq
 end
 
 (** imperative, extensible and heterogene hash-tables *)
@@ -129,7 +129,7 @@ end
 module type Keys2 = sig
   type ('a1,'a2) t
   val tag : ('a1,'a2) t -> int
-  val equal : ('a1,'a2) t -> ('b1,'b2) t -> ('a1*'a2,'b1*'b2) eq option
+  val equal : ('a1,'a2) t -> ('b1,'b2) t -> ('a1*'a2,'b1*'b2) Poly.iseq
 end
 
 module type S2 = sig

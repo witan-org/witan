@@ -924,7 +924,7 @@ module Delayed = struct
             Events.Dem.equal dem dem'
         )
       ~map:(fun (Events.Wait.Event(dem',event)) ->
-          let Eq = Events.Dem.Eq.coerce_type dem dem' in (event:k)
+          let Poly.Eq = Events.Dem.Eq.coerce_type dem dem' in (event:k)
         )
       (Node.M.find_def [] node d.env.event_reg)
 
@@ -933,7 +933,7 @@ module Delayed = struct
     Enum.from_bag
       ~filter:(fun (Events.Wait.Event(dem',_)) -> Events.Dem.equal dem dem')
       ~map:(fun (Events.Wait.Event(dem',event)) ->
-          let Eq = Events.Dem.Eq.coerce_type dem dem' in (event:k) )
+          let Poly.Eq = Events.Dem.Eq.coerce_type dem dem' in (event:k) )
       (Node.M.find_def Bag.empty node d.env.event_repr)
 
 

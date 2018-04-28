@@ -1,8 +1,6 @@
 exception Impossible (* Absurd *)
 exception TODO of string
 
-type (_,_) eq = Eq : ('a,'a) eq
-
 module type TaggedType =
 sig
   type t
