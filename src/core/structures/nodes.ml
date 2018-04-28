@@ -279,6 +279,12 @@ module Value = struct
       | None -> None
       | Some Eq -> Some v
 
+  let semantic_equal (x:t) (y:t) : [ `Uncomparable | `Equal | `Disequal ] =
+    match x, y with
+    | Node.Value(_,_,xk,_), Node.Value(_,_,yk,_) when not (ValueKind.equal xk yk) ->
+      `Uncomparable
+    | _ -> if equal x y then `Equal else `Disequal
+
 end
 
 module type RegisteredValue = sig
@@ -440,6 +446,11 @@ module Only_for_solver = struct
   let open_node : Node.t -> opened_node = function
     | Node.All (Node.ThTerm _ as x) -> ThTerm x
     | Node.All (Node.Value _ as x) -> Value x
+
+  let is_value : Node.t -> bool = function
+    | Node.All(Node.ThTerm _) -> false
+    | Node.All(Node.Value _) -> true
+
 end
 
 

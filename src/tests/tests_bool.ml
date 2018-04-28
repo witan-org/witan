@@ -142,45 +142,16 @@ let check_file filename =
       ~dir:(Filename.dirname filename)
       (Filename.basename filename)
   in
-  let env = Witan_solver.Notypecheck.create_env () in
-  let clauses = ref [] in
-  let res =
-    Witan_solver.Scheduler.run
-      ~theories
-      ~limit:1000
-      (fun d ->
-         Gen.iter (fun stmt ->
-             let open Dolmen.Statement in
-             match stmt.descr with
-             | Clause l ->
-               let map t =
-                 match Witan_solver.Notypecheck.parse_formula env Witan_solver.Notypecheck.MId.empty t with
-                 | exception (Witan_solver.Notypecheck.Typing_error (msg, _, t)) ->
-                   assert_failure
-                     (Format.asprintf
-                        "%a:@\n%s:@ %a"
-                        Dolmen.ParseLocation.fmt (Witan_solver.Notypecheck.get_loc t) msg
-                        Dolmen.Term.print t
-                     );
-                 | t ->
-                   SynTerm.node_of_term t
-               in
-               let l = Shuffle.shufflel l in
-               let l = List.map map l in
-               let l = Shuffle.shufflel l in
-               let cl = Bool._or l in
-               clauses := cl::!clauses;
-               Egraph.register d cl;
-               Bool.set_true d Trail.pexp_fact cl
-             | _ -> ())
-           statements) in
-  match res with
-  | `Contradiction -> `Unsat
-  | `Done d ->
-    let model = Witan_solver.Notypecheck.get_model env d in
-    let iter c = (assert_bool "check_model" (Witan_solver.Notypecheck.check_model model Bool.values_true c)) in
-    List.iter iter !clauses;
-    `Sat
+  try
+    Witan_solver.Notypecheck.run ~theories ~limit:1000 statements
+  with
+  | Witan_solver.Notypecheck.Typing_error (msg, t) ->
+    assert_failure
+      (Format.asprintf
+         "%a:@\n%s:@ %a"
+         Dolmen.ParseLocation.fmt (Witan_solver.Notypecheck.get_loc t) msg
+         Dolmen.Term.print t
+      )
 
 let tests_dimacs expected dir =
   let files = Sys.readdir dir in

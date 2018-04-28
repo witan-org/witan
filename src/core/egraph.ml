@@ -64,19 +64,22 @@ module VValueTable = ValueKind.MkVector (struct type ('a,'unit) t = 'a valuetabl
 (** mutable but only contain persistent structure *)
 (** Just for easy qualification *)
 module Def = struct
-  type t = {
-    mutable repr  : Node.t Node.M.t;
-    mutable event : Events.Wait.t Bag.t Node.M.t;
-    mutable event_reg : Events.Wait.t list Node.M.t;
-    mutable event_any_reg : Events.Wait.t list;
-    (** extensible "number of fields" *)
-    dom   : delayed_t VDomTable.t;
-    sem   : semtable VSemTable.t;
-    value : unit VValueTable.t;
-    envs  : Env.VectorH.t;
-    trail : Trail.t;
-    mutable current_delayed  : delayed_t; (** For assert-check *)
-  }
+
+type t = {
+  mutable repr  : Node.t Node.M.t;
+  mutable rang  : int Node.M.t;
+  mutable event_repr : Events.Wait.t Bag.t Node.M.t;
+  mutable event_value : Events.Wait.t Bag.t Node.M.t;
+  mutable event_reg : Events.Wait.t list Node.M.t;
+  mutable event_any_reg : Events.Wait.t list;
+          (** extensible "number of fields" *)
+          dom   : delayed_t VDomTable.t;
+          sem   : semtable VSemTable.t;
+          value : unit VValueTable.t;
+          envs  : Env.VectorH.t;
+          trail : Trail.t;
+  mutable current_delayed  : delayed_t; (** For assert-check *)
+}
 
   (** delayed_t is used *)
   and delayed_t = {
@@ -384,6 +387,8 @@ module Delayed = struct
     } in
     VValueTable.set t.env.value value valuetable;
     let events = Node.M.find_opt node valuetable.events in
+    Wait.wakeup_events_bag Events.Wait.translate_value t events (node,value);
+    let events = Node.M.find_opt node t.env.event_value in
     Wait.wakeup_events_bag Events.Wait.translate_value t events (node,value)
 
   let add_pending_merge (t : t) pexp node node' =
@@ -465,9 +470,16 @@ module Delayed = struct
           ~node1_repr:node ~node2_repr:node0'
           ~new_repr:node;
         (** wakeup the daemons register_node *)
-        let event, other_event = Node.M.find_remove node0' t.env.event in
+        let event, other_event = Node.M.find_remove node0' t.env.event_repr in
         Wait.wakeup_events_bag Events.Wait.translate_change t other_event node0';
-        t.env.event <- event
+        t.env.event_repr <- event;
+        (** set the value if node0' is one *)
+        match Nodes.Only_for_solver.nodevalue node0' with
+        | None -> ()
+        | Some value ->
+          match Nodes.Only_for_solver.value_of_node value with
+          | Nodes.Only_for_solver.Value(value,v) ->
+            set_value_direct t value node0 v
       end
       (** node' is already registered *)
       else if Node.equal node (find t node0') then
@@ -513,7 +525,32 @@ module Delayed = struct
     let events = Node.M.find_opt node domtable.events in
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (node0,dom)
 
-  let choose_repr a b = Shuffle.shuffle2 (a,b)
+  let flag_choose_repr_no_value =
+    Debug.register_flag
+      ~desc:"Accept to use value as representative"
+      "choose_repr_no_value"
+  let choose_repr t ((_,a) as pa) ((_,b) as pb) =
+    let heuristic () =
+      if Shuffle.is_shuffle () then
+        Shuffle.shuffle2 (pa,pb)
+      else
+        let ra = Node.M.find_def 0 a t.rang in
+        let rb = Node.M.find_def 0 b t.rang in
+        if ra = rb then begin
+          t.rang <- Node.M.add a (ra+1) t.rang;
+          (pa,pb)
+        end else
+        if ra < rb then (pb,pa)
+        else (pa,pb)
+    in
+    if Debug.test_noflag flag_choose_repr_no_value then
+      let va = Nodes.Only_for_solver.is_value a in
+      let vb = Nodes.Only_for_solver.is_value b in
+      if va && not vb then (pb,pa)
+      else if va && not vb then (pa,pb)
+      else heuristic ()
+    else
+      heuristic ()
 
   let merge_dom_pending (type a) t pexp (dom : a Dom.t) node1_0 node2_0 inv =
     let node1 = find t node1_0 in
@@ -563,8 +600,9 @@ module Delayed = struct
       let old_s   = Node.M.find_opt node  valuetable.table in
       let old_s'  = Node.M.find_opt node' valuetable.table in
       let (module V) = Nodes.get_value value in
-      Debug.dprintf12 debug
-        "[Egraph] @[merge value (%a(%a),%a)@ and (%a(%a),%a)@]"
+      Debug.dprintf14 debug
+        "[Egraph] @[merge value %a (%a(%a),%a)@ and (%a(%a),%a)@]"
+        ValueKind.pp value
         Node.pp node Node.pp node0
         (Pp.option (print_value value)) old_s
         Node.pp node' Node.pp node0'
@@ -606,13 +644,13 @@ module Delayed = struct
       Trail.print_current_age t.env.trail
       Node.pp other_node Node.pp other_node0
       Node.pp repr_node Node.pp repr_node0;
-    let event, other_event = Node.M.find_remove other_node t.env.event in
+    let event, other_event = Node.M.find_remove other_node t.env.event_repr in
 
     (** move node events *)
     begin match other_event with
       | None -> ()
       | Some other_event ->
-        t.env.event <-
+        t.env.event_repr <-
           Node.M.add_change (fun x -> x) Bag.concat repr_node other_event
             event
     end;
@@ -664,7 +702,7 @@ module Delayed = struct
     let node2 = find t node2_0 in
     if not (Node.equal node1 node2) then begin
       let ((other_node0,_),(_,repr_node)) =
-        choose_repr (node1_0,node1) (node2_0,node2) in
+        choose_repr t.env (node1_0,node1) (node2_0,node2) in
       let inv = not (Node.equal node1_0 other_node0) in
       Trail.add_merge_start t.env.trail pexp
         ~node1:node1_0 ~node2:node2_0
@@ -850,7 +888,12 @@ module Delayed = struct
   let attach_node t node dem event =
     let node = find_def t node in
     let event = Events.Wait.Event (dem,event) in
-    t.env.event <- Node.M.add_change Bag.elt Bag.add node event t.env.event
+    t.env.event_repr <- Node.M.add_change Bag.elt Bag.add node event t.env.event_repr
+
+  let attach_any_value t node dem event =
+    let node = find_def t node in
+    let event = Events.Wait.Event (dem,event) in
+    t.env.event_value <- Node.M.add_change Bag.elt Bag.add node event t.env.event_value
 
   let attach_reg_node t node dem event =
     let event = Events.Wait.Event (dem,event) in
@@ -891,7 +934,7 @@ module Delayed = struct
       ~filter:(fun (Events.Wait.Event(dem',_)) -> Events.Dem.equal dem dem')
       ~map:(fun (Events.Wait.Event(dem',event)) ->
           let Eq = Events.Dem.Eq.coerce_type dem dem' in (event:k) )
-      (Node.M.find_def Bag.empty node d.env.event)
+      (Node.M.find_def Bag.empty node d.env.event_repr)
 
 
 end
@@ -904,7 +947,9 @@ module Backtrackable = struct
 
   let new_t () = {
     repr = Node.M.empty;
-    event = Node.M.empty;
+    rang = Node.M.empty;
+    event_repr = Node.M.empty;
+    event_value = Node.M.empty;
     event_reg = Node.M.empty;
     event_any_reg = [];
     dom = VDomTable.create 5;
@@ -919,7 +964,9 @@ module Backtrackable = struct
     assert (t.current_delayed == dumb_delayed);
     {
       repr  = t.repr;
-      event = t.event;
+      rang  = t.rang;
+      event_repr = t.event_repr;
+      event_value = t.event_value;
       event_reg = t.event_reg;
       event_any_reg = t.event_any_reg;
       dom = VDomTable.copy t.dom;

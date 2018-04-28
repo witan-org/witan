@@ -375,7 +375,9 @@ module DaemonInit = struct
           | Demon.AliveReattached ->
             let events = Node.S.fold (fun cl acc ->
               (Demon.Create.EventChange(cl,()))::
-                (Demon.Create.EventDom(cl,dom,()))::acc
+              (Demon.Create.EventDom(cl,dom,()))::
+              (Demon.Create.EventAnyValue(cl,()))::
+              acc
               ) v [] in
             let events = Demon.Create.EventValue(own,Bool.dom,())::events in
             Demon.Key.attach d DaemonPropa.key v events;

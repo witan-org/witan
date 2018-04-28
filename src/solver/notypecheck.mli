@@ -21,44 +21,12 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-let theories = Witan_theories_bool.[Bool.th_register; Equality.th_register; Uninterp.th_register ]
+exception Typing_error of string * Dolmen.Term.t
 
+val get_loc: Dolmen.Term.t -> Dolmen.ParseLocation.t
 
-let () =
-  if not Witan_core.(Egraph.check_initialization () &&
-                     Conflict.check_initialization ()) then
-    exit 1
-
-
-let one_file opts file =
-  (* Parse input *)
-  let statements = Witan_solver.Input.read
-      ?language:Options.(opts.input.language)
-      ~dir:Options.(opts.input.dir)
-      file
-  in
-  if opts.Options.type_only then exit 0;
-  let res =
-    Witan_solver.Notypecheck.run
-      ?limit:(if opts.Options.step_limit < 0 then None else Some opts.Options.step_limit)
-      ~theories statements in
-  match res with
-  | `Unsat -> Printf.printf "unsat\n"
-  | `Sat -> Printf.printf "sat\n"
-
-let () =
-  (* Parse command line options *)
-  let opts = match Cmdliner.Term.eval (Options.all, Options.info) with
-    | `Version | `Help -> exit 0
-    | `Error `Parse
-    | `Error `Term
-    | `Error `Exn -> exit 1
-    | `Ok opts -> opts
-  in
-  List.iter (fun f -> Witan_popop_lib.Debug.set_flag f) opts.Options.debug_flags;
-  Witan_popop_lib.Debug.(if test_flag stack_trace then Printexc.record_backtrace true);
-  begin match opts.Options.seed_shuffle with
-    | None   -> Witan_stdlib.Shuffle.set_shuffle None;
-    | Some i ->  Witan_stdlib.Shuffle.set_shuffle (Some [|i|]);
-  end;
-  one_file opts Options.(opts.input.file)
+val run:
+  ?limit:int ->
+  theories:(Egraph.t -> unit) list ->
+  (unit -> Dolmen.Statement.t option) ->
+  [> `Sat | `Unsat ]

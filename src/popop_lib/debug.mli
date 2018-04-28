@@ -125,10 +125,22 @@ val dprintf12 : ?nobox:unit -> flag ->
   'l -> 'k -> 'j -> 'i -> 'h -> 'g -> 'f -> 'e -> 'd -> 'c -> 'b -> 'a -> unit
 (** Print only if the flag is set *)
 
-val dprintfn : ?nobox:unit -> flag ->
-  ('i -> 'h -> 'g -> 'f -> 'e -> 'd -> 'c -> 'b -> 'a -> 'z,
+val dprintf13 : ?nobox:unit -> flag ->
+  ('m -> 'l -> 'k -> 'j -> 'i -> 'h -> 'g -> 'f -> 'e -> 'd -> 'c -> 'b -> 'a -> unit,
   Format.formatter, unit) format ->
-  'i -> 'h -> 'g -> 'f -> 'e -> 'd -> 'c -> 'b -> 'a -> 'z
+  'm -> 'l -> 'k -> 'j -> 'i -> 'h -> 'g -> 'f -> 'e -> 'd -> 'c -> 'b -> 'a -> unit
+(** Print only if the flag is set *)
+
+val dprintf14 : ?nobox:unit -> flag ->
+  ('n -> 'm -> 'l -> 'k -> 'j -> 'i -> 'h -> 'g -> 'f -> 'e -> 'd -> 'c -> 'b -> 'a -> unit,
+  Format.formatter, unit) format ->
+  'n -> 'm -> 'l -> 'k -> 'j -> 'i -> 'h -> 'g -> 'f -> 'e -> 'd -> 'c -> 'b -> 'a -> unit
+(** Print only if the flag is set *)
+
+val dprintfn : ?nobox:unit -> flag ->
+  ('o -> 'n -> 'm -> 'l -> 'k -> 'j -> 'i -> 'h -> 'g -> 'f -> 'e -> 'd -> 'c -> 'b -> 'a -> 'z,
+  Format.formatter, unit) format ->
+  'o -> 'n -> 'm -> 'l -> 'k -> 'j -> 'i -> 'h -> 'g -> 'f -> 'e -> 'd -> 'c -> 'b -> 'a -> 'z
 (** Print only if the flag is set *)
 
 (* val dprintf : flag -> ('a, Format.formatter, unit) format -> 'a *)
