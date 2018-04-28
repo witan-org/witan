@@ -54,6 +54,9 @@ val fold_initializedi : ('a -> int -> 'b -> 'a) -> 'a -> 'b t -> 'a
 val copy : 'a t -> 'a t
 (* shallow *)
 
+val move : from:'a t -> to_:'a t -> unit
+(* transfer the data *)
+
 (** used as a stack, put the element at the end of the array *)
 val push: 'a t -> 'a -> unit
 val drop_last: 'a t -> unit

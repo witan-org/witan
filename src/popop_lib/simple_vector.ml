@@ -134,3 +134,6 @@ let fold_initializedi f acc t =
 
 
 let copy t = { data = Array.copy t.data; size = t.size}
+let move ~from ~to_ =
+  to_.data <- from.data;
+  to_.size <- from.size

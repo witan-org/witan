@@ -120,6 +120,16 @@ let new_handle t = {
   nodehist = t.nodehist;
 }
 
+let move ~from ~to_ =
+  to_.last_dec <- from.last_dec;
+  to_.first_dec <- from.first_dec;
+  to_.nbdec <- from.nbdec;
+  to_.age <- from.age;
+  Simple_vector.move ~from:from.trail ~to_:to_.trail;
+  to_.nodehist <- from.nodehist
+
+
+
 let new_dec (t:t)  =
   t.nbdec <- t.nbdec + 1;
   let dec = t.age + 1 in

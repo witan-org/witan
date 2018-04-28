@@ -40,6 +40,10 @@ module ConvexeInfo(Info: sig
   end) : sig
   include Stdlib.Datatype
 
+  val get_info: t -> Info.t * Info.t
+  val to_convexe: t -> Convexe.t
+  val of_convexe: Convexe.t -> info:Info.t -> t
+
   val invariant: t -> bool
 
   val is_distinct: t -> t -> bool

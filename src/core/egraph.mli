@@ -58,10 +58,8 @@ module type Getter = sig
 
 end
 
-module Getter : Getter
-
 module type Ro = sig
-  type t = private Getter.t
+  type t
   include Getter with type t := t
 
   val register : t -> Node.t -> unit
@@ -142,11 +140,13 @@ val check_initialization: unit -> bool
 val print_dom: 'a Dom.t -> 'a Pp.pp
 val print_dom_opt: 'a Dom.t -> 'a option Pp.pp
 
+module Getter : Getter
 
 (** {2 External use of the solver} *)
 module Backtrackable: sig
   type delayed = t
   include Getter
+  type backtrack_point
 
   val new_t    : unit -> t
 
@@ -182,8 +182,11 @@ module Backtrackable: sig
   (** {2 Implementation Specifics } *)
   (** Because this module is implemented with persistent datastructure *)
 
-  val new_handle: t -> t
-  (** Modification in one of the environnement doesn't modify the other *)
+  val backtrack_point: t -> backtrack_point
+  (** set a backtrack point *)
+
+  val rewind_to: backtrack_point -> unit
+  (** recover the state of the environment when the backtrack point have been created *)
 
   (** Debug *)
   val draw_graph: ?force:bool -> t -> unit

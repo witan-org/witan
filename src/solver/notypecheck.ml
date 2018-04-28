@@ -35,6 +35,8 @@ let _bad_op_arity _ s n t =
   let msg = Format.asprintf "Bad arity for operator '%s' (expected %d arguments)" s n in
   raise (Typing_error (msg, t))
 
+let regexp_decimal = Str.regexp "^[0-9]+\\(\\.[0-9]*\\)?$"
+
 (** no typing *)
 let rec parse_formula' (env:env) (lets:Term.t MId.t) (t:Dolmen.Term.t) =
   let module Ast = Dolmen.Term in
@@ -46,6 +48,9 @@ let rec parse_formula' (env:env) (lets:Term.t MId.t) (t:Dolmen.Term.t) =
     _Type
   | { Ast.term = Ast.Builtin Ast.Prop } ->
     _Prop
+
+  | { Ast.term = Ast.Symbol {Dolmen.Id.name = "Real"} } ->
+    _Real
 
   (* Basic formulas *)
   | { Ast.term = Ast.App ({ Ast.term = Ast.Builtin Ast.True }, []) }
@@ -149,28 +154,53 @@ let rec parse_formula' (env:env) (lets:Term.t MId.t) (t:Dolmen.Term.t) =
       | _ -> _bad_op_arity env "ite" 3 t
     end
 
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Add}, l) }
+  | { Ast.term = Ast.App ({Ast.term = Ast.Symbol {Dolmen.Id.name = "+"}}, l) } ->
+    let f = (add_real_term (List.length l)) in
+    let l = (List.map (parse_formula env lets) l) in
+    apply f l
+
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Sub}, ([_;_] as l)) }
+  | { Ast.term = Ast.App ({Ast.term = Ast.Symbol {Dolmen.Id.name = "-"}}, ([_;_] as l)) } ->
+    let f = sub_real_term in
+    let l = (List.map (parse_formula env lets) l) in
+    apply f l
+
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Sub}, ([_] as l)) }
+  | { Ast.term = Ast.App ({Ast.term = Ast.Symbol {Dolmen.Id.name = "-"}}, ([_] as l)) } ->
+    let f = neg_real_term in
+    let l = (List.map (parse_formula env lets) l) in
+    apply f l
+
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Mult}, ([_;_] as l)) }
+  | { Ast.term = Ast.App ({Ast.term = Ast.Symbol {Dolmen.Id.name = "*"}}, ([_;_] as l)) } ->
+    let f = mul_real_term in
+    let l = (List.map (parse_formula env lets) l) in
+    apply f l
+
+  | {Ast.term = Ast.Symbol {Dolmen.Id.name = cst}}
+  | { Ast.term = Ast.App ({Ast.term = Ast.Symbol {Dolmen.Id.name = cst}}, []) } when Str.string_match regexp_decimal cst 0 ->
+    const_real_term cst
+
   (* General case: application *)
-  | { Ast.term = Ast.Symbol s }
-  | { Ast.term = Ast.App ({ Ast.term = Ast.Symbol s }, []) } ->
+  | { Ast.term = Ast.Symbol s } as ast ->
     begin match MId.find_opt s lets with
-    | None ->
-      let id = R.memo (fun id ->
-          let s = Format.asprintf "%a" Dolmen.Id.print id in
-          (** only in dimacs they are not declared *)
-          Witan_core.Id.mk s _Prop) env s in
-      const id
     | Some t -> t
+    | None ->
+      begin match R.find_opt env s with
+        | Some id -> (const id)
+        | None -> raise (Typing_error("unbound variable",ast))
+      end
     end
 
   | { Ast.term = Ast.App ({ Ast.term = Ast.Symbol s }, l) } as ast ->
     begin match MId.find_opt s lets with
-    | None ->
-    begin match R.find_opt env s with
-    | None -> raise (Typing_error("unbound variable",ast))
-    | Some id ->
-      apply (const id) (List.map (parse_formula env lets) l)
-    end
     | Some t -> apply t (List.map (parse_formula env lets) l)
+    | None ->
+      begin match R.find_opt env s with
+        | Some id -> apply (const id) (List.map (parse_formula env lets) l)
+        | None -> raise (Typing_error("unbound variable",ast))
+      end
     end
 
   | { term = Ast.Binder (_,[],t); _; } ->
@@ -223,6 +253,26 @@ and parse_formula (env:env) lets (t:Dolmen.Term.t) =
   | exn ->
     raise (Typing_error (Printexc.to_string exn, t))
 
+let rec parse_clause_lit (env:env) t =
+  let module Ast = Dolmen.Term in
+  let open Term in
+  match t with
+  | { Ast.term = Ast.Symbol s }
+  | { Ast.term = Ast.App ({ Ast.term = Ast.Symbol s }, []) } ->
+    let id = R.memo (fun id ->
+        let s = Format.asprintf "%a" Dolmen.Id.print id in
+        (** only in dimacs they are not declared *)
+        Witan_core.Id.mk s _Prop) env s in
+    const id
+  | { Ast.term = Ast.App ({Ast.term = Ast.Builtin Ast.Not}, l) } as t ->
+    begin match l with
+      | [p] ->
+        apply not_term [parse_clause_lit env p]
+      | _ -> _bad_op_arity env "not" 1 t
+    end
+  | _ ->
+    raise (Typing_error ("Unexpected construction in dimacs", t))
+
 
 let get_loc =
   let default_loc = Dolmen.ParseLocation.mk "<?>" 0 0 0 0 in
@@ -271,7 +321,7 @@ let run ?limit ~theories statements =
                in
                R.add_new Witan_stdlib.Std.Impossible env id t';
              | Clause l ->
-               let map t = SynTerm.node_of_term (parse_formula env MId.empty t), Witan_core.Conflict.Pos in
+               let map t = SynTerm.node_of_term (parse_clause_lit env t), Witan_core.Conflict.Pos in
                let l = Witan_stdlib.Shuffle.shufflel l in
                let l = List.map map l in
                let l = Witan_stdlib.Shuffle.shufflel l in
@@ -280,17 +330,7 @@ let run ?limit ~theories statements =
                Egraph.register d cl;
                !Witan_core.Conflict._set_true d Trail.pexp_fact cl
              | Antecedent t ->
-               let map t =
-                 match parse_formula env MId.empty t with
-                 | exception (Typing_error (msg, t)) ->
-                   Format.eprintf
-                     "%a:@\n%s:@ %a"
-                     Dolmen.ParseLocation.fmt (get_loc t) msg
-                     Dolmen.Term.print t;
-                   Pervasives.exit 2
-                 | t ->
-                   SynTerm.node_of_term t
-               in
+               let map t = SynTerm.node_of_term (parse_formula env MId.empty t) in
                let t = Dolmen.Normalize.smtlib t in
                let cl = map t in
                clauses := cl::!clauses;

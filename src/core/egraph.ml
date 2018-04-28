@@ -952,6 +952,8 @@ include Delayed
 module Backtrackable = struct
   type delayed = t
   type t = Def.t
+  type backtrack_point = {copy : t; original : t}
+  (** simple implementation of backtrack point for now *)
 
   let new_t () = {
     repr = Node.M.empty;
@@ -967,6 +969,9 @@ module Backtrackable = struct
     trail = Trail.create ();
     current_delayed = dumb_delayed;
   }
+
+  let check_disabled_delayed t =
+    t.current_delayed == dumb_delayed || t.current_delayed == unsat_delayed
 
   let new_handle t =
     assert (t.current_delayed == dumb_delayed);
@@ -984,6 +989,23 @@ module Backtrackable = struct
       trail = Trail.new_handle t.trail;
       current_delayed = t.current_delayed;
     }
+
+  let backtrack_point t =
+    assert (t.current_delayed == dumb_delayed);
+    {copy = new_handle t; original = t}
+  let rewind_to {copy;original} =
+    original.repr <- copy.repr;
+    original.rang <- copy.rang;
+    original.event_repr <- copy.event_repr;
+    original.event_value <- copy.event_value;
+    original.event_reg <- copy.event_reg;
+    original.event_any_reg <- copy.event_any_reg;
+    VDomTable.move ~to_:original.dom ~from:copy.dom;
+    VSemTable.move ~to_:original.sem ~from:copy.sem;
+    VValueTable.move ~to_:original.value ~from:copy.value;
+    Env.VectorH.move ~to_:original.envs ~from:copy.envs;
+    Trail.move ~to_:original.trail ~from:copy.trail;
+    original.current_delayed <- dumb_delayed
 
   let new_delayed ~sched_daemon ~sched_decision t =
     assert (t.current_delayed == dumb_delayed);
@@ -1015,7 +1037,7 @@ module Backtrackable = struct
     T.is_registered t node
 
   let is_equal t node1 node2 =
-    assert (t.current_delayed == dumb_delayed);
+    assert (check_disabled_delayed t);
     let node1,node2 = Shuffle.shuffle2 (node1,node2) in
     Debug.dprintf4 debug "[Egraph] @[is_equal %a %a@]"
       Node.pp node1 Node.pp node2;
@@ -1023,53 +1045,49 @@ module Backtrackable = struct
     T.is_equal t node1 node2
 
   let find t node =
-    assert (t.current_delayed == dumb_delayed);
+    assert (check_disabled_delayed t);
     T.find t node
 
   let get_dom t dom node =
-    assert (t.current_delayed == dumb_delayed);
     T.get_dom t dom node
 
   let get_value t value node =
-    assert (t.current_delayed == dumb_delayed);
+    assert (check_disabled_delayed t);
     T.get_value t value node
 
   let get_env t env =
-    assert (t.current_delayed == dumb_delayed);
+    assert (check_disabled_delayed t);
     T.get_env t env
 
   let set_env t env v =
-    assert (t.current_delayed == dumb_delayed);
+    assert (check_disabled_delayed t);
     T.set_env t env v
 
   let is_repr t node =
-    assert (t.current_delayed == dumb_delayed);
+    assert (check_disabled_delayed t);
     T.is_repr t node
 
   let find_def t node =
-    assert (t.current_delayed == dumb_delayed);
+    assert (check_disabled_delayed t);
     T.find_def t node
 
   let get_trail t =
-    (* assert (t.current_delayed == dumb_delayed ||
-     *         t.current_delayed == unsat_delayed); *)
+    (* assert (check_disabled_delayed t); *)
     t.trail
 
   let get_getter t =
-    (* assert (t.current_delayed == dumb_delayed); *)
-    t.current_delayed
-
+    (* assert (check_disabled_delayed t); *)
+    t
 
   let new_dec t =
-    assert (t.current_delayed == dumb_delayed);
+    assert (check_disabled_delayed t);
     Trail.new_dec t.trail
 
   let current_age (t:t) = Trail.current_age t.trail
   let current_nbdec (t:t) = Trail.nbdec t.trail
 
   let get_direct_dom t dom node =
-    assert (t.current_delayed == dumb_delayed ||
-            t.current_delayed == unsat_delayed);
+    assert (check_disabled_delayed t);
     get_direct_dom t dom node
 
   let draw_graph = draw_graph
@@ -1098,10 +1116,10 @@ module type Getter = sig
 
 end
 
-module Getter : Getter with type t = Delayed.t = Delayed
+module Getter : Getter with type t = Backtrackable.t = Backtrackable
 
 module type Ro = sig
-  type t = private Getter.t
+  type t
   include Getter with type t := t
 
   (** {3 Immediate information} *)

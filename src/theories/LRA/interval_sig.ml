@@ -28,6 +28,7 @@ module type S = sig
   val invariant: t -> bool
 
   val is_distinct: t -> t -> bool
+  val is_comparable: t -> t -> [`Uncomparable | `Lt | `Gt]
   val is_included: t -> t -> bool
 
   val mult_cst: Q.t -> t -> t

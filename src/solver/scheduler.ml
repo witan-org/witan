@@ -74,15 +74,16 @@ module Prio = Leftistheap.Make(Att)
 type pre =
   { pre_wakeup_daemons    : Prio.t;
     pre_prev_scheduler_state : pre option;
-    pre_solver_state              : S.Backtrackable.t;
+    pre_backtrack_point      : S.Backtrackable.backtrack_point;
+    pre_age_dec : Trail.Age.t;
     pre_learnt : Conflict.Learnt.t Bag.t;
-    pre_lastdec : Trail.chogen;
+    pre_last_dec : Trail.chogen;
   }
 
 type t =
   { mutable wakeup_daemons    : Prio.t;
     mutable prev_scheduler_state : pre option;
-    mutable solver_state      : S.Backtrackable.t;
+            solver_state      : S.Backtrackable.t;
     mutable delayed           : S.t option;
     mutable learnt : Conflict.Learnt.t Bag.t;
     (* global *)
@@ -101,39 +102,39 @@ let print_level fmt t =
     Trail.Age.pp (S.Backtrackable.current_age t.solver_state)
     (S.Backtrackable.current_nbdec t.solver_state) nb_dec
 
-let new_handler t =
-  if t.delayed <> None then raise NeedStopDelayed;
-  {wakeup_daemons    = t.wakeup_daemons;
-   prev_scheduler_state = t.prev_scheduler_state;
-   solver_state      = S.Backtrackable.new_handle t.solver_state;
-   learnt = t.learnt;
-   delayed           = None;
-   decprio = t.decprio;
-   var_inc = t.var_inc
-  }
+(* let new_handler t =
+ *   if t.delayed <> None then raise NeedStopDelayed;
+ *   {wakeup_daemons    = t.wakeup_daemons;
+ *    prev_scheduler_state = t.prev_scheduler_state;
+ *    solver_state      = S.Backtrackable.new_handle t.solver_state;
+ *    learnt = t.learnt;
+ *    delayed           = None;
+ *    decprio = t.decprio;
+ *    var_inc = t.var_inc
+ *   } *)
 
-let new_t t =
+let new_solver () =
   { wakeup_daemons = Prio.empty;
     prev_scheduler_state = None;
-    solver_state = S.Backtrackable.new_handle t;
+    solver_state = S.Backtrackable.new_t ();
     learnt = Bag.empty;
     delayed    = None;
     decprio = Node.H.create 100;
     var_inc = ref 1.;
   }
 
-let new_solver () = new_t (S.Backtrackable.new_t ())
-
 let push t chogen =
   if Debug.test_flag debug_dotgui then
     S.Backtrackable.draw_graph ~force:true t.solver_state;
   Debug.dprintf0 debug_pushpop "[Scheduler] push";
+  let age_dec = Trail.last_dec (S.Backtrackable.get_trail t.solver_state) in
   let prev =
     { pre_wakeup_daemons    = t.wakeup_daemons;
       pre_prev_scheduler_state = t.prev_scheduler_state;
-      pre_solver_state      = S.Backtrackable.new_handle t.solver_state;
+      pre_backtrack_point      = S.Backtrackable.backtrack_point t.solver_state;
       pre_learnt = t.learnt;
-      pre_lastdec = chogen;
+      pre_last_dec = chogen;
+      pre_age_dec = age_dec;
     } in
   t.prev_scheduler_state <- Some prev;
   t.learnt <- Bag.empty
@@ -205,7 +206,7 @@ and pop_to t prev =
     print_level t;
   t.wakeup_daemons <- prev.pre_wakeup_daemons;
   t.prev_scheduler_state <- prev.pre_prev_scheduler_state;
-  t.solver_state <- prev.pre_solver_state;
+  Egraph.Backtrackable.rewind_to prev.pre_backtrack_point;
   t.learnt <- prev.pre_learnt;
   let d = new_delayed t in
   Egraph.Backtrackable.draw_graph t.solver_state;
@@ -263,8 +264,8 @@ and conflict_analysis t pexp =
         raise Contradiction
       | Some prev ->
         let llearnt_all = Bag.concat llearnt prev.pre_learnt in
-        let lastdec = Trail.last_dec (S.Backtrackable.get_trail prev.pre_solver_state) in
-        if Trail.Age.(backlevel < lastdec) then
+        let age_dec = prev.pre_age_dec in
+        if Trail.Age.(backlevel < age_dec) then
           rewind t learnt llearnt_all prev.pre_prev_scheduler_state
         else
           let d = pop_to t prev in
