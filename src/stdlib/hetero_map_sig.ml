@@ -28,7 +28,7 @@ exception IncoherentMap
 module type Keys = sig
   type 'a t
   val tag : 'a t -> int
-  val equal : 'a t -> 'b t -> ('a,'b) eq option
+  val equal : 'a t -> 'b t -> ('a,'b) Poly.iseq
 end
 
 module type S = sig
