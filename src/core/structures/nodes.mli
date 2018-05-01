@@ -71,7 +71,7 @@ end
 
 val get_thterm: 'a ThTermKind.t -> (module ThTerm with type t = 'a)
 val check_thterm_registered: 'a ThTermKind.t -> unit
-val print_thterm : 'a ThTermKind.t -> 'a Pp.pp
+val print_thterm : 'a ThTermKind.t -> 'a Format.printer
 
 module ThTerm: sig
   include Datatype
@@ -136,7 +136,7 @@ module type Value = sig
   val key: t ValueKind.t
 end
 
-val print_value : 'a ValueKind.t -> 'a Pp.pp
+val print_value : 'a ValueKind.t -> 'a Format.printer
 val get_value: 'a ValueKind.t -> (module Value with type t = 'a)
 val check_value_registered: 'a ValueKind.t -> unit
 

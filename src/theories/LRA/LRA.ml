@@ -118,7 +118,7 @@ let set_dom d pexp node v b =
 let minus_or_one inv =
   if inv then Q.minus_one else Q.one
 
-let print_bag_node = Bag.pp Pp.comma Node.pp
+let print_bag_node = Bag.pp Format.(const char ',') Node.pp
 
 let () = Dom.register(module struct
     include D
@@ -635,7 +635,8 @@ module HypDom = struct
     Trail.Hyp.create_key (module struct type nonrec t = t let name = "Arith.hyp" end)
 
   let pp_v fmt v =
-    Pp.iter2 SE.M.iter Pp.semi Pp.nothing Pp.nothing pp_hyppoly fmt v
+    let aux fmt (_,v) = pp_hyppoly fmt v in
+    SE.M.bindings v |> Format.(list ~sep:(const char ';') aux) fmt
 
   let levels _ = assert false
   let split _ = assert false

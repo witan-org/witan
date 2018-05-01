@@ -44,7 +44,7 @@ module Levels = struct
   [@@ deriving eq, show]
 
   let pp fmt = function
-    | No -> Pp.string fmt "-"
+    | No -> Format.string fmt "-"
     | One age -> Age.pp fmt age
     | Two (age1,age2) -> Format.fprintf fmt "%a,%a" Age.pp age1 Age.pp age2
 
@@ -218,7 +218,7 @@ module type Exp = sig
 
   type t
 
-  val pp: t Pp.pp
+  val pp: t Format.printer
 
   val key: t Trail.Exp.t
 
@@ -258,7 +258,7 @@ module type Hyp = sig
 
   type t
 
-  val pp: t Pp.pp
+  val pp: t Format.printer
 
   val key: t Trail.Hyp.t
 
@@ -371,7 +371,7 @@ end = struct
 
   let merge t l2 =
     Debug.dprintf2 debug "[Hypflict] @[Analyse resulted in: %a@]"
-      (Pp.list Pp.comma pp_phyp) l2;
+      Format.(list ~sep:(const char ',') pp_phyp) l2;
     let iter (type a) hyp (c:a) dec pc =
       match dec with
       | `Dec -> t.fromdec <- pc::t.fromdec
@@ -399,7 +399,7 @@ end = struct
     let l = List.rev_append last (List.rev_append t.fromdec t.before_last_dec) in
     Debug.dprintf4 debug "[Conflict] @[End analysis with (bl %a): %a@]"
       Age.pp backtrack_level
-      (Pp.list Pp.comma pp_phyp) l;
+      Format.(list ~sep:(const char ',') pp_phyp) l;
     (backtrack_level, l)
 
   let to_nodes l =
@@ -566,7 +566,7 @@ module Specific = struct
       type t = unit
       let key = Trail.exp_fact
 
-      let pp fmt () = Pp.string fmt "fact"
+      let pp fmt () = Format.string fmt "fact"
 
       let analyse _ _ _ = []
       let from_contradiction _ _ =

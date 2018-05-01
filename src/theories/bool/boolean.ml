@@ -125,11 +125,13 @@ module T = struct
       print_cl fmt node true
     | None ->
       let print_cl topnot fmt (node,b) = print_cl fmt node (mulbool topnot b) in
+      let aux b fmt m = IArray.fold (fun sofar e -> e::sofar) [] m
+                        |> List.rev
+                        |> Format.(list ~sep:(const char ',') (print_cl b) fmt)
+      in
       if x.topnot
-      then Format.fprintf fmt "⋀(%a)"
-          (Pp.iter1 IArray.iter Pp.comma (print_cl true)) x.lits
-      else Format.fprintf fmt "⋁(%a)"
-          (Pp.iter1 IArray.iter Pp.comma (print_cl false)) x.lits
+      then Format.fprintf fmt "⋀(%a)" (aux true) x.lits
+      else Format.fprintf fmt "⋁(%a)" (aux false) x.lits
 
 end
 
@@ -592,7 +594,8 @@ module ExpProp = struct
       from_b
       Node.pp to_
       to_b
-      (Pp.list Pp.comma pp_phyp) eqs
+      (Format.(list ~sep:(const char ',') pp_phyp))
+      eqs
       pp_phyp eq;
     (eq::eqs)
 

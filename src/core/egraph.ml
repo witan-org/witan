@@ -229,20 +229,21 @@ open T
 (** {2 For debugging and display} *)
 let _print_env fmt t =
   let printd (type a) dom fmt (domtable:a domtable) =
-    Format.fprintf fmt "%a:@[%a@]" Dom.pp dom
-      (Pp.iter2 Node.M.iter Pp.newline Pp.colon
-         Node.pp (Bag.pp Pp.comma Events.Wait.pp))
-      domtable.events
+    let aux =
+      Format.(pair ~sep:(const char ';') Node.pp (Bag.pp (const char ',') Events.Wait.pp))
+    in
+    let aux fmt m = Node.M.bindings m |> Format.(list ~sep:newline aux) fmt in
+    Format.fprintf fmt "%a:@[%a@]" Dom.pp dom aux domtable.events
   in
-  VDomTable.pp Pp.newline Pp.nothing
-    {VDomTable.printk = Pp.nothing}
+  VDomTable.pp Format.newline Format.silent
+    {VDomTable.printk = Format.silent}
     {VDomTable.printd} fmt t.dom
 
 
 let dot_to_escape = Str.regexp "[{}|<>]"
 
 let escape_for_dot pp v =
-  let s = Pp.string_of_wnl pp v in
+  let s = Format.to_string pp v in
   let s = Str.global_replace dot_to_escape "\\\\\\0" s in
   s
 
@@ -288,20 +289,20 @@ let output_graph filename t =
         print_ty node
         print_sem node
         (if is_repr t node
-         then VDomTable.pp Pp.nothing Pp.nothing
-             {VDomTable.printk=Pp.nothing}
+         then VDomTable.pp Format.silent Format.silent
+             {VDomTable.printk=Format.silent}
              {VDomTable.printd=iter_dom}
-         else Pp.nothing)
+         else Format.silent)
         t.dom
         (if is_repr t node
-         then VValueTable.pp Pp.nothing Pp.nothing
-             {VValueTable.printk=Pp.nothing}
+         then VValueTable.pp Format.silent Format.silent
+             {VValueTable.printk=Format.silent}
              {VValueTable.printd=iter_value}
-         else Pp.nothing)
+         else Format.silent)
         t.value
 
     let vertex_attributes node =
-      let label = Pp.string_of_wnl pp node in
+      let label = Format.to_string pp node in
       [`Label label]
     let default_edge_attributes _ = []
     let edge_attributes _ = []
@@ -562,9 +563,9 @@ module Delayed = struct
     Debug.dprintf12 debug_few
       "[Egraph] @[merge dom (%a(%a),%a)@ and (%a(%a),%a)@]"
       Node.pp node1 Node.pp node1_0
-      (Pp.option Dom.pp) old_other_s
+      (Format.opt Dom.pp) old_other_s
       Node.pp node2 Node.pp node2_0
-      (Pp.option Dom.pp) old_repr_s;
+      (Format.opt Dom.pp) old_repr_s;
     match old_other_s, old_repr_s with
     | None, None   -> ()
     | _ ->
@@ -604,9 +605,9 @@ module Delayed = struct
         "[Egraph] @[merge value %a (%a(%a),%a)@ and (%a(%a),%a)@]"
         ValueKind.pp value
         Node.pp node Node.pp node0
-        (Pp.option (print_value value)) old_s
+        (Format.opt (print_value value)) old_s
         Node.pp node' Node.pp node0'
-        (Pp.option (print_value value)) old_s';
+        (Format.opt (print_value value)) old_s';
       match old_s, old_s' with
       | None, None   -> ()
       | Some v, None ->

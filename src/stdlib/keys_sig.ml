@@ -42,7 +42,7 @@ module type Registry = sig
   val check_is_registered : 'a key -> unit
   val is_well_initialized : unit -> bool
   val get : 'a key -> 'a data
-  val print : 'a key -> 'a Pp.pp
+  val print : 'a key -> 'a Format.printer
 
   (** the key shouldn't be used before its registration and shouldn't be
       registered again *)
@@ -62,7 +62,7 @@ module type Key = sig
   module K: Datatype
   type 'a t
 
-  val pp: 'a t Pp.pp
+  val pp: 'a t Format.printer
   val compare: 'a t -> 'b t -> int
   val equal: 'a t -> 'b t -> bool
   val hash : 'a t -> int
@@ -104,7 +104,7 @@ module type Key = sig
   module M : Map_hetero.R with type 'a key = 'a t
   module Make_Registry(S:sig
       type 'a data
-      val pp : 'a data -> 'a Pp.pp
+      val pp : 'a data -> 'a Format.printer
       val key: 'a data -> 'a t
     end) : Registry with type 'a key := 'a t and type 'a data = 'a S.data
 end
@@ -126,8 +126,8 @@ module type Registry2 = sig
   val check_is_registered : ('k,'d) key -> unit
   val is_well_initialized : unit -> bool
   val get : ('k,'d) key -> ('k,'d) data
-  val printk : ('k,'d) key -> 'k Pp.pp
-  val printd : ('k,'d) key -> 'd Pp.pp
+  val printk : ('k,'d) key -> 'k Format.printer
+  val printd : ('k,'d) key -> 'd Format.printer
 
 
   exception UnregisteredKey : ('a,'b) key -> exn
@@ -140,7 +140,7 @@ module type Key2 = sig
   module K: Datatype
   type ('k,'d) t
 
-  val pp: ('k,'d) t Pp.pp
+  val pp: ('k,'d) t Format.printer
   val equal: ('k1,'d1) t -> ('k2,'d2) t -> bool
   val hash : ('k,'d) t -> int
   val key: ('k,'d) t -> K.t
@@ -170,8 +170,8 @@ module type Key2 = sig
                          and type ('k,'d,'b) data = ('k,'d,'b) D.t
   module Make_Registry(S:sig
       type ('k,'d) data
-      val ppk: ('k,'d) data -> 'k Pp.pp
-      val ppd: ('k,'d) data -> 'd Pp.pp
+      val ppk: ('k,'d) data -> 'k Format.printer
+      val ppd: ('k,'d) data -> 'd Format.printer
       val key: ('k,'d) data -> ('k,'d) t
     end) : Registry2 with type ('k,'d) key := ('k,'d) t and type ('k,'d) data = ('k,'d) S.data
 end

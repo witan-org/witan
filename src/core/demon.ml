@@ -158,7 +158,7 @@ module Key = struct
       | Alive (events,info) ->
         Debug.dprintf6 debug "[Demon] @[Run daemon %a for %a:@[%a@]@]"
           Events.Dem.pp D.key.dk_id DemTable.Key.pp k
-          (Pp.list Pp.newline Events.Fired.pp) events;
+          (Format.list ~sep:Format.newline Events.Fired.pp) events;
         (** event can be added during wakeup *)
         let module DemTable' = struct
           include DemTable
@@ -238,10 +238,11 @@ module Key = struct
 
 
     let () =
-      let print_demtable fmt (d: (D.Key.t,D.Data.t,D.info) demtable) =
-        let module DT = (val d) in
-        Pp.iter2 DT.Key.M.iter Pp.newline Pp.colon
-          D.Key.pp print_daemon_state fmt DT.state
+      let print_demtable fmt ((module DT): (D.Key.t,D.Data.t,D.info) demtable) =
+        let open Format in
+        let aux = pair ~sep:(const char ';') D.Key.pp print_daemon_state in
+        let l = DT.Key.M.bindings DT.state in
+        Format.list ~sep:newline aux fmt l
       in
       Env.register print_demtable D.key.dk_data;
     (** Interface for generic daemon *)
@@ -375,7 +376,7 @@ module Fast = struct
 
     module Data: sig
       type t
-      val pp: t Pp.pp
+      val pp: t Format.printer
     end
 
     val key: Data.t t
@@ -453,9 +454,7 @@ module Fast = struct
 
 
     let () =
-      let print_demtable fmt d =
-        Pp.list Pp.comma Events.Fired.pp fmt d
-      in
+      let print_demtable = Format.(list ~sep:(const char ',') Events.Fired.pp) in
       Env.register print_demtable D.key.dk_data;
     (** Interface for generic daemon *)
     let module Dem = struct

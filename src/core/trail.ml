@@ -65,7 +65,7 @@ module Pexp = struct
   type t =
     | Pexp: age * 'a Exp.t * 'a -> t
 
-  let _pp_pexp : t Pp.pp ref = ref (fun _ _ -> assert false)
+  let _pp_pexp : t Format.printer ref = ref (fun _ _ -> assert false)
 
   let pp fmt x = !_pp_pexp fmt x
 end

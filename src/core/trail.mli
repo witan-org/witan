@@ -58,7 +58,7 @@ module Pexp : sig
     | Pexp: age * 'a Exp.t * 'a -> t
     (** An explanation. The age indicate the state to consider *)
 
-  val pp: t Pp.pp
+  val pp: t Format.printer
 
 end
 
@@ -80,7 +80,7 @@ val create: unit -> t
 val new_handle: t -> t
 
 val current_age: t -> age
-val print_current_age: t Pp.pp
+val print_current_age: t Format.printer
 val last_dec: t -> age
 val before_last_dec: t -> age -> bool
 val before_first_dec: t -> age -> bool
@@ -90,7 +90,7 @@ val get_pexp: t -> age -> Pexp.t
 (** {2 Decisions} *)
 type dec
 
-val print_dec: dec Pp.pp
+val print_dec: dec Format.printer
 val age_of_dec: dec -> age
 
 (** mark a new decisions *)
@@ -154,4 +154,4 @@ val age_merge_opt: t -> Node.t -> Node.t -> Age.t option
 
 (** backward reference *)
 
-val _pp_pexp: Pexp.t Pp.pp ref
+val _pp_pexp: Pexp.t Format.printer ref

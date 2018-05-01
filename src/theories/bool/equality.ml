@@ -65,8 +65,10 @@ module Th = struct
       | Some (cl1,cl2) ->
         Format.fprintf fmt "%a=@,%a" Node.pp cl1 Node.pp cl2
       | None ->
-        Format.fprintf fmt "or=(%a)"
-          (Pp.iter1 Node.S.iter Pp.comma Node.pp) s
+        let aux fmt m = Node.S.elements m
+                        |> Format.(list ~sep:(const char ',') Node.pp) fmt
+        in
+        Format.fprintf fmt "or=(%a)" aux s
   end
 
   include T
@@ -99,8 +101,12 @@ end = struct
   type elt = ThE.t
   let empty = ThE.M.empty
   let pp fmt s =
-    Format.fprintf fmt "{%a}"
-      (Pp.iter2 ThE.M.iter Pp.comma Pp.colon ThE.pp Trail.Age.pp) s
+    let aux fmt m =
+      ThE.M.bindings m
+      |> Format.(list ~sep:(const char ';')
+                   (pair ~sep:(const char ',') ThE.pp Trail.Age.pp)) fmt
+    in
+    Format.fprintf fmt "{%a}" aux s
   let of_node x = x
   let to_node x = x
   let test_disjoint f m1 m2 =

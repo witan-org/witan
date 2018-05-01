@@ -313,10 +313,10 @@ module ConvexeWithExceptions = struct
   let pp fmt x =
     if Q.S.is_empty x.exc then Convexe.pp fmt x.con
     else
-      Format.fprintf fmt "%a \ {%a}"
-        Convexe.pp x.con
-        (Pp.iter1 Q.S.iter Pp.comma Q.pp)
-        x.exc
+      let aux fmt m = Q.S.elements m
+                      |> Format.(list ~sep:(const char ',') Q.pp) fmt
+      in
+      Format.fprintf fmt "%a \ {%a}" Convexe.pp x.con aux x.exc
 
   let invariant x =
     Convexe.invariant x.con &&
@@ -449,7 +449,7 @@ module Union = struct
       aux Strict Q.minus_inf l
 
   let pp fmt l =
-    Pp.list (Pp.constant_string "∪") Convexe.pp fmt l
+    Format.list ~sep:Format.(const string "∪") Convexe.pp fmt l
 
   let equal l1 l2 =
     List.length l1 = List.length l2 &&
