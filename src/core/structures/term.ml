@@ -24,6 +24,8 @@
 (* Proof terms *)
 (* ************************************************************************ *)
 
+open Witan_popop_lib
+    
 type binder =
   | Pi      (** Dependant product *)
   | Arrow   (** Non-dependant product *)
@@ -31,7 +33,7 @@ type binder =
   | Forall  (** Universal quantification *)
   | Exists  (** Existencial quantification *)
 
-and id = t Id.t
+and id = t Id.id
 
 and descr =
   | Type
@@ -45,6 +47,7 @@ and t = {
   term : descr;
   mutable hash : int;
 }
+[@@deriving eq]
 
 exception Function_expected of t
 exception Type_mismatch of t * t
@@ -114,7 +117,7 @@ let rec compare_aux t t' =
   | u, v -> Pervasives.compare (_descr u) (_descr v)
 
 and compare t t' =
-  if t == t' then 0
+  if CCEqual.physical t t' then 0
   else
     CCOrd.(Pervasives.compare (hash t) (hash t')
            <?> (compare_aux, t, t'))
@@ -213,7 +216,7 @@ and subst s t =
         v', Subst.add v (const v') s'
     in
     let body' = subst s'' body in
-    if v == v' && e == e' && body == body' then t
+    if CCEqual.physical v v' && CCEqual.physical e e' && CCEqual.physical body body' then t
     else letin v' e' body'
   | Binder (b, v, body) ->
     let ty = Id.ty v in
@@ -226,7 +229,7 @@ and subst s t =
         v', Subst.add v (const v') s'
     in
     let body' = subst s'' body in
-    if v == v' && body == body' then t
+    if CCEqual.physical v v' && CCEqual.physical body body' then t
     else bind b v' body'
 
 
@@ -319,7 +322,7 @@ let uncurry ?(assoc=_assoc) t =
 
 let flatten_binder b t =
   let rec aux b acc = function
-    | { term = Binder (b', v, body); _ } when (b = b') ->
+    | { term = Binder (b', v, body); _ } when (equal_binder b b') ->
       aux b (v :: acc) body
     | t -> List.rev acc, t
   in
@@ -363,7 +366,7 @@ let print_id = Id.print
 
 let rec print_app fmt t =
   let f, l = uncurry_app t in
-  assert (l <> []);
+  assert (nnil l);
   Format.fprintf fmt "(%a@ %a)"
     print f CCFormat.(list ~sep:(return "@ ") print) l
 
@@ -379,7 +382,7 @@ and print_arrow fmt t =
     CCFormat.(list ~sep print) l' print body
 
 and print_var_list fmt (ty, l) =
-  assert (l <> []);
+  assert (nnil l);
   Format.fprintf fmt "(%a :@ %a)"
     CCFormat.(list ~sep:(return "@ ") print_id) l print ty
 

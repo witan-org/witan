@@ -21,6 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
 open Stdlib
 open Std
 open Witan_core
@@ -47,15 +48,18 @@ let value_false = BoolValue.index ~basename:"⊥" false ty
 let values_false = BoolValue.nodevalue value_false
 let node_false = BoolValue.node value_false
 
-let union_disjoint m1 m2 =
-  Node.M.union (fun _ b1 b2 -> assert (b1 == b2); Some b1) m1 m2
+(* Function is not used. Don't know what the types of b1 and b2 are. *)
+(* let union_disjoint m1 m2 =
+ *   Node.M.union (fun _ b1 b2 -> assert (Equal.physical b1 b2); Some b1) m1 m2 *)
 
 let index sem v = Node.index_sem sem v ty
 
 let is env node = Egraph.get_value env dom node
-let is_true  env node = Node.equal node node_true || is env node = Some true
-let is_false env node = Node.equal node node_false || is env node = Some false
-let is_unknown env node = is env node = None
+let is_true  env node = Node.equal node node_true
+                        || Equal.option Equal.bool (is env node) (Some true)
+let is_false env node = Node.equal node node_false
+                        || Equal.option Equal.bool (is env node) (Some false)
+let is_unknown env node = Equal.option Equal.bool (is env node) None
 
 let set_bool env pexp node b =
   Egraph.merge env pexp node
@@ -76,14 +80,14 @@ let find x n =
   fold (fun acc (n1,b) -> if Node.equal n1 n then Some b else acc) None x
 
 let isnot v =
-  if IArray.length v.lits == 1 then
+  if IArray.length v.lits = 1 then
     let node,sign = IArray.get v.lits 0 in
     assert (v.topnot && not sign);
     Some node
   else
     None
 
-let mulbool b1 b2 = b1 != b2
+let mulbool b1 b2 = not(Equal.bool b1 b2)
 
 let node_of_bool b =
   if b then node_true else node_false
@@ -93,7 +97,7 @@ module T = struct
   type t = r
   let equal n1 n2 =
     let clbool (cl1,b1) (cl2,b2) = Node.equal cl1 cl2 && DBool.equal b1 b2 in
-    n1.topnot == n2.topnot &&
+    Equal.bool n1.topnot n2.topnot &&
     IArray.equal clbool n1.lits n2.lits
 
   let hash n =
@@ -102,10 +106,10 @@ module T = struct
 
   let compare n1 n2 =
     let c = DBool.compare n1.topnot n2.topnot in
-    if c != 0 then c else
+    if c <> 0 then c else
       let clbool (cl1,b1) (cl2,b2) =
         let c = Node.compare cl1 cl2 in
-        if c != 0 then c
+        if c <> 0 then c
         else DBool.compare b1 b2 in
       IArray.compare clbool n1.lits n2.lits
 
@@ -149,7 +153,7 @@ module Th = struct
     try
       let res = IArray.fold (fun acc node ->
         match Egraph.get_value d dom node, acc with
-        | Some b, _ when b = absorbent -> raise (TopKnown absorbent)
+        | Some b, _ when Equal.bool b absorbent -> raise (TopKnown absorbent)
         | Some _, _ -> acc
         | None, Some _ -> raise Exit
         | None, None -> Some node)
@@ -168,7 +172,8 @@ type bcpkind =
   | BCPOwnKnown      (** Top is known and true modulo topnot, propagate true modulo sign to propa *)
   | BCPLeavesKnown   (** All leaves are known and false modulo sign, propagate false modulo topnot to own *)
   | BCP              (** Merge top with the remaining leave *)
-
+[@@deriving eq]
+      
 type expprop =
 | ExpBCP  of ThE.t (* own *) * Node.t (* propa *) * bcpkind
 | ExpUp  of ThE.t (* own *) * Node.t  (* one leaf to own *)
@@ -249,7 +254,7 @@ module DaemonPropa = struct
     let set_dom_up_true d own leaf _ =
       let b = (not v.topnot) in
       match Egraph.get_value d dom own with
-      | Some b' when b' == b -> ()
+      | Some b' when Equal.bool b' b -> ()
       | _ -> set_bool d (pexp (ExpUp(thterm,leaf))) own b in
     let merge_bcp node sign =
       Debug.dprintf2 debug "[Bool] @[merge_bcp %a@]" Node.pp node;
@@ -275,8 +280,8 @@ module DaemonPropa = struct
           then DaemonPropaNot.init d thterm node
           else Egraph.merge d (pexp (ExpBCP(thterm,node,BCP))) own node in
     let rec find_watch dir pos bound =
-      assert (dir == 1 || dir == -1);
-      if pos == bound
+      assert (dir = 1 || dir = -1);
+      if pos = bound
       then
         let node,sign = IArray.get v.lits pos in
         (merge_bcp node sign; raise Exit)
@@ -382,7 +387,7 @@ let _not node =
 let filter fold_left =
   let m = fold_left (fun acc (e,b) ->
       Node.M.add_change (fun b -> b)
-        (fun b1 b2 -> if b1 == b2 then b1 else raise Exit) e b acc)
+        (fun b1 b2 -> if Equal.bool b1 b2 then b1 else raise Exit) e b acc)
       Node.M.empty  in
   Node.M.bindings m
 
@@ -403,7 +408,7 @@ let _or_and b l =
         List.fold_left (fun acc e -> f acc (e,b)) acc l) in
     match l with
     | [] -> if b then node_true else node_false
-    | [a,b'] -> assert (b == b'); a
+    | [a,b'] -> assert (Equal.bool b b'); a
     | l ->
       index sem {topnot = b; lits = IArray.of_list l}
   with Exit -> if b then node_false else node_true
@@ -611,9 +616,9 @@ module ExpProp = struct
             let sign = mulbool false v.topnot in
             Conflict.split t phyp propa (node_of_bool sign)
         in
-        let eqs = if kind = BCPOwnKnown then (eq_of_bool own (mulbool true v.topnot))::eqs else eqs in
+        let eqs = if equal_bcpkind kind BCPOwnKnown then (eq_of_bool own (mulbool true v.topnot))::eqs else eqs in
         fold (fun eqs (node,sign) ->
-            if kind <> BCPLeavesKnown && (Node.equal node propa) then eqs
+            if (not(equal_bcpkind kind BCPLeavesKnown)) && (Node.equal node propa) then eqs
             else (eq_of_bool node (mulbool false sign))::eqs) eqs v
       | ExpUp (thterm,leaf)    ->
         let v = ThE.sem thterm in

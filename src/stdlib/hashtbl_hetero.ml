@@ -23,7 +23,7 @@
 
 open Std
     
-include Hetero_hashtbl_sig
+include Hashtbl_hetero_sig
 
 module MakeS1(K:Keys1)(D:sig type ('a,'b) t end)
 = struct

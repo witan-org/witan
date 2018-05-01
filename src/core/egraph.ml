@@ -21,8 +21,8 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
 open Stdlib
-open Std
 open Nodes
 
 exception Contradiction of Trail.Pexp.t
@@ -339,7 +339,7 @@ module Delayed = struct
   open T
   type t = delayed_t
 
-  let is_current_env t = t.env.current_delayed == t
+  let is_current_env t = Equal.physical t.env.current_delayed t
 
   let find t node =
     assert (is_current_env t);
@@ -731,7 +731,7 @@ module Delayed = struct
   and nothing_todo t =
     Queue.is_empty t.todo_immediate_dem
     && Queue.is_empty t.todo_merge_dom
-    && t.todo_delayed_merge == None
+    && Equal.physical t.todo_delayed_merge None
     && Queue.is_empty t.todo_merge
     && Queue.is_empty t.todo_ext_action
 
@@ -780,7 +780,7 @@ module Delayed = struct
           Debug.dprintf0 debug "[Egraph] Nothing to do"
 
   and flush_internal d =
-    assert (d.env.current_delayed == d);
+    assert (Equal.physical d.env.current_delayed d);
     Debug.dprintf0 debug "[Egraph] @[flush delayed@]";
     try
       if not (Queue.is_empty d.todo_ext_action) then
@@ -808,7 +808,7 @@ module Delayed = struct
       add_pending_merge t pexp node1_0 node2_0
 
   let check d node =
-    assert (d.env.current_delayed == d);
+    assert (Equal.physical d.env.current_delayed d);
     assert (is_registered d node)
 
   let set_thterm  d pexp node thterm =
@@ -961,7 +961,7 @@ module Backtrackable = struct
   }
 
   let new_handle t =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     {
       repr  = t.repr;
       rang  = t.rang;
@@ -978,7 +978,7 @@ module Backtrackable = struct
     }
 
   let new_delayed ~sched_daemon ~sched_decision t =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     let d =  { env = t;
                todo_immediate_dem = Queue.create ();
                todo_merge_dom = Queue.create ();
@@ -991,12 +991,12 @@ module Backtrackable = struct
     d
 
   let delayed_stop d =
-    assert (d.env.current_delayed == d);
+    assert (Equal.physical d.env.current_delayed d);
     assert (Delayed.nothing_todo d);
     d.env.current_delayed <- dumb_delayed
 
   let flush d =
-    assert (d.env.current_delayed == d);
+    assert (Equal.physical d.env.current_delayed d);
     Delayed.do_pending d;
     assert (Delayed.nothing_todo d)
 
@@ -1007,7 +1007,7 @@ module Backtrackable = struct
     T.is_registered t node
 
   let is_equal t node1 node2 =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     let node1,node2 = Shuffle.shuffle2 (node1,node2) in
     Debug.dprintf4 debug "[Egraph] @[is_equal %a %a@]"
       Node.pp node1 Node.pp node2;
@@ -1015,31 +1015,31 @@ module Backtrackable = struct
     T.is_equal t node1 node2
 
   let find t node =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     T.find t node
 
   let get_dom t dom node =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     T.get_dom t dom node
 
   let get_value t value node =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     T.get_value t value node
 
   let get_env t env =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     T.get_env t env
 
   let set_env t env v =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     T.set_env t env v
 
   let is_repr t node =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     T.is_repr t node
 
   let find_def t node =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     T.find_def t node
 
   let get_trail t =
@@ -1053,15 +1053,15 @@ module Backtrackable = struct
 
 
   let new_dec t =
-    assert (t.current_delayed == dumb_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed);
     Trail.new_dec t.trail
 
   let current_age (t:t) = Trail.current_age t.trail
   let current_nbdec (t:t) = Trail.nbdec t.trail
 
   let get_direct_dom t dom node =
-    assert (t.current_delayed == dumb_delayed ||
-            t.current_delayed == unsat_delayed);
+    assert (Equal.physical t.current_delayed dumb_delayed ||
+            Equal.physical t.current_delayed unsat_delayed);
     get_direct_dom t dom node
 
   let draw_graph = draw_graph

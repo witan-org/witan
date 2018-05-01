@@ -21,7 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-let theories = Witan_theories_bool.[Bool.th_register; Equality.th_register; Uninterp.th_register ]
+let theories = Witan_theories_bool.[Boolean.th_register; Equality.th_register; Uninterp.th_register ]
 
 
 let () =

@@ -21,6 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
 open Nodes
 
 let debug = Debug.register_info_flag
@@ -391,14 +392,14 @@ module Fast = struct
   module Register(D:S) = struct
 
     let run d () =
-      assert (D.key.dk_remaining == 0);
+      assert (Equal.physical D.key.dk_remaining 0);
       assert (Queue.is_empty D.key.dk_current);
       let rec last_rev q n = function
         | [] -> [],n
         | a::l ->
           let rem,n = last_rev q n l in
           if n > 0 then begin
-            assert (rem == []);
+            assert (Equal.physical rem []);
             Queue.add a q;
             rem,(n-1)
           end
@@ -407,7 +408,7 @@ module Fast = struct
       let events,n = last_rev D.key.dk_current D.throttle events in
       D.key.dk_remaining <- n;
       Egraph.set_env d D.key.dk_data events;
-      let new_runable = if events != [] then Some () else None in
+      let new_runable = match events with [] -> None | _::_ -> Some () in
       let rec run_one () =
         if not (Queue.is_empty D.key.dk_current) then
           let event = Queue.pop D.key.dk_current in
@@ -439,7 +440,7 @@ module Fast = struct
           "[Demon] @[schedule %a for %a@]"
           Events.Dem.pp D.key.dk_id Events.Fired.pp event;
         Egraph.Ro.set_env d D.key.dk_data (event::events);
-        if events = [] then Events.Wait.EnqRun () else Events.Wait.EnqAlready
+        match events with [] -> Events.Wait.EnqRun () | _::_ -> Events.Wait.EnqAlready
       else begin
         Debug.dprintf4 debug
           "[Demon] @[schedule %a for %a now@]"

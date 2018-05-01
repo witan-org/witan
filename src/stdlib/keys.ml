@@ -21,8 +21,10 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-open Witan_popop_lib
 open Std
+
+module Strings = Witan_popop_lib.Strings
+module Exn_printer = Witan_popop_lib.Exn_printer
 
 include Keys_sig
 
@@ -90,13 +92,11 @@ module Make_key(X:sig end) = struct
     let tag = tag
   end
 
-  module MkVector(D:sig type ('a,'b) t end) = Hetero_hashtbl.MakeS1(K1)(D)
-  module Vector  = Hetero_hashtbl.MakeR1(K1)
-  module VectorH = Hetero_hashtbl.MakeT1(K1)
-  module MkMap(D:sig type ('a,'b) t end) =
-    Intmap_hetero.Make1(struct type nonrec 'a t = K.t end)(D)
-  module M =
-    Intmap_hetero.RMake1(struct type nonrec 'a t = K.t end)
+  module MkVector(D:sig type ('a,'b) t end) = Hashtbl_hetero.MakeS1(K1)(D)
+  module Vector  = Hashtbl_hetero.MakeR1(K1)
+  module VectorH = Hashtbl_hetero.MakeT1(K1)
+  module MkMap(D:sig type ('a,'b) t end) = Map_hetero.MakeS(K1)(D)
+  module M = Map_hetero.MakeR(K1)
 
   module Make_Registry(S:sig
       type 'a data
@@ -221,7 +221,7 @@ module Make_key2(X:sig end) : Key2 = struct
     let tag = tag
   end
 
-  module MkVector(D:sig type ('k,'d,'b) t end) = Hetero_hashtbl.Make2(K2)(D)
+  module MkVector(D:sig type ('k,'d,'b) t end) = Hashtbl_hetero.Make2(K2)(D)
 
   module Make_Registry(S:sig
       type ('k,'d) data

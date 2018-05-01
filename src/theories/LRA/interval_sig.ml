@@ -20,6 +20,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Witan_popop_lib
+
 type bound = Strict | Large
 
 module type S = sig

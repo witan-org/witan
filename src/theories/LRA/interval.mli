@@ -20,9 +20,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Witan_popop_lib
+
 type bound = Interval_sig.bound = Strict | Large
 
-val pp_bound: bound Pp.pp
+val pp_bound: bound Format.printer
 
 val compare_bounds_inf: Q.t * bound -> Q.t * bound -> int
 val compare_bounds_sup: Q.t * bound -> Q.t * bound -> int

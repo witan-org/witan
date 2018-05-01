@@ -21,6 +21,8 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
+    
 (** Witan Typed terms
 
     This module defines higher-order typed terms. These terms are designed
@@ -90,7 +92,7 @@ val compare: t -> t -> int
 (** standard comparison function *)
 
 val print : Format.formatter -> t -> unit
-val pp: t Pp.pp
+val pp: t Format.printer
 (** Print a term (quite verbose). *)
 
 include Stdlib.Datatype with type t := t

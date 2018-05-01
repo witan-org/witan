@@ -20,38 +20,31 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Witan_popop_lib
 open Witan_stdlib.Std
 
-type bound = Interval_sig.bound = Strict | Large
+type bound = Interval_sig.bound = Strict | Large [@@deriving eq]
 
 let pp_bound fmt = function
-  | Strict -> Pp.string fmt "<"
-  | Large -> Pp.string fmt "≤"
+  | Strict -> Format.string fmt "<"
+  | Large -> Format.string fmt "≤"
 
-let compare_bounds_inf (e1,b1) (e2,b2) =
-  let c = Q.compare e1 e2 in
-  if c <> 0 then c
-  else if b1 = Large && b2 = Strict then -1
-  else if b1 = Strict && b2 = Large then 1
-  else 0
+let compare_inf b1 b2 = match b1,b2 with
+  | Large, Strict -> -1
+  | Strict, Large -> 1
+  | Large, Large | Strict, Strict -> 0
 
-let compare_bounds_sup (e1,b1) (e2,b2) =
-  let c = Q.compare e1 e2 in
-  if c <> 0 then c
-  else if b1 = Large && b2 = Strict then 1
-  else if b1 = Strict && b2 = Large then -1
-  else 0
+let compare_inf_sup b1 b2 = match b1,b2 with
+  | Large, Strict -> 1
+  | Strict, Large -> 1
+  | Large, Large -> 0
+  | Strict, Strict -> 1
 
-let compare_bounds_inf_sup (e1,b1) (e2,b2) =
-  let c = Q.compare e1 e2 in
-  if c <> 0 then c
-  else
-    match b1,b2 with
-    | Large, Strict -> 1
-    | Strict, Large -> 1
-    | Large, Large -> 0
-    | Strict, Strict -> 1
+let compare_sup b1 b2 = - (compare_inf b1 b2)
 
+let compare_bounds_inf = Ord.pair Q.compare compare_inf
+let compare_bounds_sup = Ord.pair Q.compare compare_sup
+let compare_bounds_inf_sup = Ord.pair Q.compare compare_inf_sup
 
 module Convexe = struct
 
@@ -64,14 +57,15 @@ module Convexe = struct
     let print_bound_right fmt = function
       | Large  -> Format.fprintf fmt "]"
       | Strict -> Format.fprintf fmt "[" in
-    if t.minb=Large && t.maxb=Large && Q.equal t.minv t.maxv
-    then Format.fprintf fmt "{%a}" Q.pp t.minv
-    else
-    Format.fprintf fmt "%a%a;%a%a"
-      print_bound_left t.minb
-      Q.pp t.minv
-      Q.pp t.maxv
-      print_bound_right t.maxb
+    match t.minb, t.maxb with
+    | Large, Large when Q.equal t.minv t.maxv
+      -> Format.fprintf fmt "{%a}" Q.pp t.minv
+    | _
+      -> Format.fprintf fmt "%a%a;%a%a"
+           print_bound_left t.minb
+           Q.pp t.minv
+           Q.pp t.maxv
+           print_bound_right t.maxb
 
   let compare e1 e2 =
     let compare_bound b1 b2 = match b1, b2 with
@@ -89,7 +83,7 @@ module Convexe = struct
     c
 
   let equal e1 e2 =
-    e1.minb == e2.minb && e1.maxb == e2.maxb &&
+    Equal.physical e1.minb e2.minb && Equal.physical e1.maxb e2.maxb &&
     Q.equal e1.minv e2.minv && Q.equal e1.maxv e2.maxv
 
   let hash e =
@@ -112,7 +106,7 @@ module Convexe = struct
     not (Q.equal e.maxv Q.minus_inf) &&
     let c = Q.compare e.minv e.maxv in
     if c = 0
-    then e.minb = Large && e.maxb = Large
+    then equal_bound e.minb Large && equal_bound e.maxb Large
     else c < 0
 
   let is_singleton = function
@@ -246,7 +240,7 @@ module Convexe = struct
     in
     if compare_bounds_inf_sup min max > 0
     then None
-    else if Q.equal minv maxv && minb = Large && maxb = Large
+    else if Q.equal minv maxv && equal_bound minb Large && equal_bound maxb Large
     then Some (singleton minv)
     else Some {minv;minb;maxv;maxb}
 
@@ -709,7 +703,7 @@ module ConvexeInfo (Info: sig
     let print_bound_right fmt = function
       | Large  -> Format.fprintf fmt "]"
       | Strict -> Format.fprintf fmt "[" in
-    if t.minb=Large && t.maxb=Large && Q.equal t.minv t.maxv
+    if equal_bound t.minb Large && equal_bound t.maxb Large && Q.equal t.minv t.maxv
     then Format.fprintf fmt "{%a}" Q.pp t.minv
     else
     Format.fprintf fmt "%a%a;%a%a"
@@ -738,7 +732,7 @@ module ConvexeInfo (Info: sig
     c
 
   let equal e1 e2 =
-    e1.minb == e2.minb && e1.maxb == e2.maxb &&
+    Equal.physical e1.minb e2.minb && Equal.physical e1.maxb e2.maxb &&
     Q.equal e1.minv e2.minv && Q.equal e1.maxv e2.maxv &&
     Info.equal e1.mini e2.mini && Info.equal e1.maxi e2.maxi
 
@@ -762,7 +756,7 @@ module ConvexeInfo (Info: sig
     not (Q.equal e.maxv Q.minus_inf) &&
     let c = Q.compare e.minv e.maxv in
     if c = 0
-    then e.minb = Large && e.maxb = Large
+    then equal_bound e.minb Large && equal_bound e.maxb Large
     else c < 0
 
   let is_singleton = function
@@ -899,7 +893,7 @@ module ConvexeInfo (Info: sig
     in
     if compare_bounds_inf_sup min max > 0
     then None
-    else if Q.equal minv maxv && minb = Large && maxb = Large
+    else if Q.equal minv maxv && equal_bound minb Large && equal_bound maxb Large
     then Some (singleton ~min_info:mini ~max_info:maxi minv)
     else Some {minv;minb;mini;maxv;maxb;maxi}
 

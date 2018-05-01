@@ -21,6 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
 open Nodes
 
 module Create : sig
@@ -41,7 +42,7 @@ module Create : sig
     | EventRegValue :      'a ValueKind.t  * 'b -> 'b event
 
 
-  val pp: 'b event Pp.pp
+  val pp: 'b event Format.printer
 
   type 'b t = 'b event list
 end
@@ -107,7 +108,7 @@ module Fast: sig
 
     module Data: sig
       type t
-      val pp: t Pp.pp
+      val pp: t Format.printer
     end
 
     val key: Data.t t

@@ -21,15 +21,10 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
-include module type of Hetero_hashtbl_sig
+include module type of Map_hetero_sig
 
-module MakeS1(K:Keys1)(D:sig type ('a,'b) t end)
-  : S1 with type 'a key = 'a K.t
-        and type ('a,'b) data = ('a,'b) D.t
+module MakeS(K:Keys)(D:sig type ('a,'b) t end)
+  : S with type 'a key = 'a K.t
+       and type ('a,'b) data = ('a,'b) D.t
 
-module MakeR1(K:Keys1) : R1 with type 'a key = 'a K.t
-module MakeT1(K:Keys1) : T1 with type 'a key = 'a K.t
-
-module Make2(K: Keys2)(D:sig type ('a1,'a2,'b) t end)
-  : S2 with type ('a1,'a2) key = ('a1,'a2) K.t
-        and type ('a1,'a2,'b) data = ('a1,'a2,'b) D.t
+module MakeR(K:Keys) : R with type 'a key = 'a K.t

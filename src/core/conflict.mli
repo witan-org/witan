@@ -21,6 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
 open Witan_core_structures
 open Nodes
 
@@ -80,7 +81,7 @@ module type Exp = sig
 
   type t
 
-  val pp: t Pp.pp
+  val pp: t Format.printer
 
   val key: t Trail.Exp.t
 
@@ -98,7 +99,7 @@ end
 
 val register_exp: (module Exp) -> unit
 
-val pp_pexp: Trail.Pexp.t Pp.pp
+val pp_pexp: Trail.Pexp.t Format.printer
 
 (** {2 Levels} *)
 
@@ -122,7 +123,7 @@ module type Hyp = sig
 
   type t
 
-  val pp: t Pp.pp
+  val pp: t Format.printer
 
   val key: t Trail.Hyp.t
 
@@ -143,7 +144,7 @@ end
 
 val register_hyp: (module Hyp) -> unit
 
-val pp_phyp: Trail.Phyp.t Pp.pp
+val pp_phyp: Trail.Phyp.t Format.printer
 
 (** {2 Conflict analysis} *)
 
@@ -165,7 +166,7 @@ module EqHyp : sig
     r: Node.t;
   }
 
-  val pp: t Witan_popop_lib.Pp.pp
+  val pp: t Format.printer
 
   val key : t Hyp.t
 

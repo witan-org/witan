@@ -27,41 +27,41 @@ open Witan_core
 open Tests_lib
 open Witan_theories_bool
 
-let theories = [(* Uninterp.th_register; *) Bool.th_register]
+let theories = [(* Uninterp.th_register; *) Boolean.th_register]
 
 let ($$) f x = f x
 
 let run = Tests_lib.run_exn ~theories
 
 let bool_interp () =
-  let ta = Term.const (Id.mk "a" Bool.ty) in
-  let tb = Term.const (Id.mk "b" Bool.ty) in
-  let tc = Term.const (Id.mk "c" Bool.ty) in
+  let ta = Term.const (Id.mk "a" Boolean.ty) in
+  let tb = Term.const (Id.mk "b" Boolean.ty) in
+  let tc = Term.const (Id.mk "c" Boolean.ty) in
   let to_n x = SynTerm.node_of_term x in
   let na = to_n ta in
   let nb = to_n tb in
   let nc = to_n tc in
   let leaf ~a ~b ~c t =
     if Term.equal t ta
-    then Some (Value.index Bool.dom a Bool.ty)
+    then Some (Value.index Boolean.dom a Boolean.ty)
     else if Term.equal t tb
-    then Some (Value.index Bool.dom b Bool.ty)
+    then Some (Value.index Boolean.dom b Boolean.ty)
     else if Term.equal t tc
-    then Some (Value.index Bool.dom c Bool.ty)
+    then Some (Value.index Boolean.dom c Boolean.ty)
     else None
   in
   let l = [
-    "true", Bool._true, true, (fun _-> None);
-    "false", Bool._false, false, (fun _-> None);
-    "or(a,b,c)", Bool._or [na;nb;nc], false, leaf ~a:false ~b:false ~c:false;
-    "or(a,b,c)", Bool._or [na;nb;nc], true, leaf ~a:false ~b:true ~c:false;
+    "true", Boolean._true, true, (fun _-> None);
+    "false", Boolean._false, false, (fun _-> None);
+    "or(a,b,c)", Boolean._or [na;nb;nc], false, leaf ~a:false ~b:false ~c:false;
+    "or(a,b,c)", Boolean._or [na;nb;nc], true, leaf ~a:false ~b:true ~c:false;
     "not(or(a,not b,and(c,c)))",
-       Bool.gen true [na,false;nb,true;(Bool._and [nc;nc]),false], true, leaf ~a:false ~b:true ~c:false;
+       Boolean.gen true [na,false;nb,true;(Boolean._and [nc;nc]),false], true, leaf ~a:false ~b:true ~c:false;
   ]
   in
   let test (msg,n,v,leaf) =
     let v' = Interp.node ~leaf n in
-    match Value.value Bool.dom v' with
+    match Value.value Boolean.dom v' with
     | None -> assert_failure (Printf.sprintf "Not a value of type bool: %s" msg)
     | Some v' -> assert_bool msg (v = v')
   in
@@ -69,35 +69,35 @@ let bool_interp () =
 
 let true_is_true () =
   let env = run (fun _ -> ()) in
-  assert_bool "" (Bool.is_true env Bool._true);
-  assert_bool "" (not (Bool.is_false env Bool._true))
+  assert_bool "" (Boolean.is_true env Boolean._true);
+  assert_bool "" (not (Boolean.is_false env Boolean._true))
 
 let not_true_is_false () =
-  let not_true = Bool._not Bool._true in
+  let not_true = Boolean._not Boolean._true in
   let env = run $$ fun env -> Egraph.register env not_true in
-  assert_bool "" (Bool.is_false env not_true);
-  assert_bool "" (not (Bool.is_true env not_true))
+  assert_bool "" (Boolean.is_false env not_true);
+  assert_bool "" (not (Boolean.is_true env not_true))
 
 let and_true_is_true () =
-  let _t = Bool._true in
-  let _and = Bool._and [_t;_t;_t] in
+  let _t = Boolean._true in
+  let _and = Boolean._and [_t;_t;_t] in
   let env = run $$ fun env -> Egraph.register env _and in
-  assert_bool "" (Bool.is_true env _and);
-  assert_bool "" (not (Bool.is_false env _and))
+  assert_bool "" (Boolean.is_true env _and);
+  assert_bool "" (not (Boolean.is_false env _and))
 
 let or_not_true_is_false () =
-  let _f = (Bool._not Bool._true) in
-  let _or = Bool._and [_f;_f;_f] in
+  let _f = (Boolean._not Boolean._true) in
+  let _or = Boolean._and [_f;_f;_f] in
   let env = run $$ fun env -> Egraph.register env _or in
-  assert_bool "" (Bool.is_false env _or);
-  assert_bool "" (not (Bool.is_true env _or))
+  assert_bool "" (Boolean.is_false env _or);
+  assert_bool "" (not (Boolean.is_true env _or))
 
 let merge_true () =
-  let a  = fresh Bool.ty "a" in
-  let b  = fresh Bool.ty "b" in
-  let c  = fresh Bool.ty "c" in
-  let d  = fresh Bool.ty "d" in
-  let _and = Bool._and [a;b;c] in
+  let a  = fresh Boolean.ty "a" in
+  let b  = fresh Boolean.ty "b" in
+  let c  = fresh Boolean.ty "c" in
+  let d  = fresh Boolean.ty "d" in
+  let _and = Boolean._and [a;b;c] in
   let env = run $$ fun env ->
       Egraph.register env _and;
       List.iter (Egraph.register env) [a;b;c;d];
@@ -106,9 +106,9 @@ let merge_true () =
          (fun () -> merge env a c);
         ];
       merge env a d;
-      Bool.set_true env Trail.pexp_fact d;
+      Boolean.set_true env Trail.pexp_fact d;
   in
-  assert_bool "" (Bool.is_true env _and)
+  assert_bool "" (Boolean.is_true env _and)
 
 let imply_implies () =
   let a = Term.const (Id.mk "a" Term._Prop) in
@@ -119,13 +119,13 @@ let imply_implies () =
   let tn = SynTerm.node_of_term t in
   let env = run $$ fun env ->
       Egraph.register env tn;
-      Bool.set_true env Trail.pexp_fact tn;
+      Boolean.set_true env Trail.pexp_fact tn;
       Egraph.register env an;
-      Bool.set_true env Trail.pexp_fact an;
+      Boolean.set_true env Trail.pexp_fact an;
   in
-  assert_bool "" (Bool.is_true env bn)
+  assert_bool "" (Boolean.is_true env bn)
 
-let basic = "Bool.Basic" >::: [ "bool_interp" >:: bool_interp;
+let basic = "Boolean.Basic" >::: [ "bool_interp" >:: bool_interp;
                                 "true_is_true" >:: true_is_true;
                                 "not_true_is_false" >:: not_true_is_false;
                                 "and_true_is_true" >:: and_true_is_true;

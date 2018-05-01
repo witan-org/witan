@@ -4,16 +4,18 @@
   ((name witan_theories_bool)
    (public_name witan.theories.bool)
    (synopsis "theories for witan")
-   (modules (Bool Equality Uninterp))
+   (modules (Boolean Equality Uninterp))
    (libraries (containers
                ocamlgraph
                witan.stdlib
                witan.popop_lib
                witan.core.structures
                witan.core))
+   (preprocess (pps (ppx_deriving.std)))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60-40-9@8 -color always
+           -open Containers
            -open Witan_stdlib
-           -open Witan_popop_lib
+           -open Std
            -open Witan_core))
    (ocamlopt_flags (:standard -O3 -bin-annot
                     -unbox-closures -unbox-closures-factor 20))

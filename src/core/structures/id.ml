@@ -28,11 +28,11 @@ type 'a t = {
   index   : int;     (** unique index *)
   name    : string;  (** id name *)
   ty      : 'a;      (** Identifier type *)
-}
+} [@@deriving eq]
 (** Polymorphic type for identifiers. Each identifiers has a unique index
     used for fast comparisons. Additionally, each id has a type. *)
 
-type 'a id = 'a t
+type 'a id = 'a t [@@deriving eq]
 (** Alias necessary because of recursive types by default (see type definition
     for Any.t). *)
 

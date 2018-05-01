@@ -27,13 +27,13 @@ open Witan_core
 open Tests_lib
 open Witan_theories_bool
 
-let theories = [Bool.th_register; Equality.th_register; Uninterp.th_register ]
+let theories = [Boolean.th_register; Equality.th_register; Uninterp.th_register ]
 let run = Tests_lib.run_exn ~theories ~nodec:()
 let ($$) f x = f x
 
-let a = SynTerm.node_of_term (Term.const (Id.mk "a" Bool.ty))
-let b = SynTerm.node_of_term (Term.const (Id.mk "b" Bool.ty))
-let c = SynTerm.node_of_term (Term.const (Id.mk "c" Bool.ty))
+let a = SynTerm.node_of_term (Term.const (Id.mk "a" Boolean.ty))
+let b = SynTerm.node_of_term (Term.const (Id.mk "b" Boolean.ty))
+let c = SynTerm.node_of_term (Term.const (Id.mk "c" Boolean.ty))
 
 let empty () =
   let env = run $$ fun env ->

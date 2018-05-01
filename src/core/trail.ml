@@ -21,6 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
 open Stdlib
 open Nodes
 
@@ -79,7 +80,9 @@ module Phyp = struct
 
   (** `Dec indiquate the conflict come from the explanation of a
      decision and then should not be explained further *)
-  let phyp ?(dec:unit option) c v = Phyp(c,v,if dec=None then `NoDec else `Dec)
+  let phyp ?(dec:unit option) c v = Phyp(c,v,
+                                         if Equal.option Equal.unit dec None
+                                         then `NoDec else `Dec)
   let map c l = List.map (phyp c) l
 end
 
@@ -124,7 +127,7 @@ let new_dec (t:t)  =
   t.nbdec <- t.nbdec + 1;
   let dec = t.age + 1 in
   t.last_dec <- dec;
-  if t.first_dec == max_int then t.first_dec <- dec;
+  if Equal.physical t.first_dec max_int then t.first_dec <- dec;
   Debug.dprintf2 debug "[Trail] @[new dec %a@]" Age.pp dec;
   dec
 

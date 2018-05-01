@@ -39,7 +39,7 @@ val compare : 'a t -> 'a t -> int
 (** Usual functions. *)
 
 val print : Format.formatter -> 'a t -> unit
-val pp : 'a t Pp.pp
+val pp : 'a t Format.printer
 (** Print an id. *)
 
 val mk : string -> 'a -> 'a t
@@ -56,7 +56,7 @@ val ty : 'a t -> 'a
 
 (** {2 Any identifiers} *)
 
-type 'a id = 'a t
+type 'a id = 'a t [@@deriving eq]
 (** Type alias. *)
 
 module Any : sig

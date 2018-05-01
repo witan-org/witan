@@ -21,8 +21,8 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
 open Stdlib
-open Std
 open Witan_core
 
 let debug = Debug.register_info_flag
@@ -83,7 +83,7 @@ module ThE = ThTermKind.Register(Th)
 module Dis : sig
   type t
   type elt
-  val pp: t Pp.pp
+  val pp: t Format.printer
   val empty: t
   val of_node: ThE.t -> elt
   val to_node: elt -> ThE.t
@@ -133,7 +133,8 @@ module D = struct
 
   let merged (b1:t option) (b2 :t option) =
     match b1,b2 with
-    | Some b1, Some b2 -> b1 == b2 (** not Dis.equality *)
+    | Some b1, Some b2 -> Equal.physical b1 b2 (** not Dis.equality *)
+    (* Really? Explanation needed...*)
     | None, None -> true
     | _ -> false
 
@@ -166,7 +167,7 @@ let set_dom d _pexp cl s =
   Egraph.set_dom d dom cl s
 
 let check_sem v cl =
-  let own = ThE.node (ThE.index v Bool.ty) in
+  let own = ThE.node (ThE.index v Boolean.ty) in
   Node.equal cl own
 
 (** API *)
@@ -175,11 +176,11 @@ let equality cll =
   try
     let fold acc e = Node.S.add_new Exit e acc in
     let s = List.fold_left fold Node.S.empty cll in
-    ThE.node (ThE.index s Bool.ty)
+    ThE.node (ThE.index s Boolean.ty)
   with Exit ->
-    Bool._true
+    Boolean._true
 
-let disequality cll = Bool._not (equality cll)
+let disequality cll = Boolean._not (equality cll)
 
 let is_equal t cl1 cl2 = Egraph.is_equal t cl1 cl2
 let is_disequal t cl1 cl2 =
@@ -203,7 +204,7 @@ let find_not_disequal d s =
      | _ -> false) ||
     (try
        let fold2_inter (type a) (k:a ValueKind.t) v1 v2 () =
-         let module V = (val ValueKind.get k) in
+         let (module V) = ValueKind.get k in
             if not (V.equal v1 v2) then raise Exit
         in
         MValues.fold2_inter {fold2_inter} values1 values2 ();
@@ -257,7 +258,7 @@ let norm_set d the =
   with Found (e1,e2) ->
     (** TODO remove that and choose what to do. ex: int real *)
     let pexp = Egraph.mk_pexp d exp (SubstUpTrue (the,e1,e2,own)) in
-    Bool.set_true d pexp own;
+    Boolean.set_true d pexp own;
     true
 
 module ChoEquals = struct
@@ -265,7 +266,7 @@ module ChoEquals = struct
 
   module OnWhat = ThE
 
-  let key = Trail.Cho.create_key "Equals.cho"
+  let key = Trail.Cho.create_key (module struct type t = ThE.t let name = "Equals.cho" end)
 
   let make_decision the (cl1,cl2) d =
     Debug.dprintf6 print_decision
@@ -287,7 +288,7 @@ module ChoEquals = struct
         match find_not_disequal d v with
         | `AllDiff al ->
           let pexp = Egraph.mk_pexp d exp (SubstUpFalse(the,al)) in
-          Bool.set_false d pexp own;
+          Boolean.set_false d pexp own;
           DecNo
         | `Found (cl1,cl2) ->
           DecTodo (make_decision the (cl1,cl2))
@@ -304,7 +305,7 @@ let norm_dom d the =
   else begin
     Debug.dprintf4 debug "[Equality] @[norm_dom %a %a@]"
       Node.pp own Th.pp v;
-    match Bool.is d own with
+    match Boolean.is d own with
     | Some false ->
       let age = Trail.Age.succ (Egraph.current_age d) in
       let dis, stag = new_tag the age in
@@ -322,7 +323,7 @@ let norm_dom d the =
           match find_not_disequal d v with
           | `AllDiff al ->
             let pexp = Egraph.mk_pexp d exp (SubstUpFalse(the,al)) in
-            Bool.set_false d pexp own; (** contradiction *)
+            Boolean.set_false d pexp own; (** contradiction *)
             raise Impossible
           | `Found _ ->
             Demon.AliveStopped
@@ -331,7 +332,7 @@ let norm_dom d the =
       match find_not_disequal d v with
       | `AllDiff al ->
         let pexp = Egraph.mk_pexp d exp (SubstUpFalse(the,al)) in
-        Bool.set_false d pexp own;
+        Boolean.set_false d pexp own;
         Demon.AliveStopped
       | `Found _ -> (** they are still not proved disequal *)
         Demon.AliveReattached
@@ -348,7 +349,7 @@ module DaemonPropa = struct
 
   let immediate = false
   let wakeup d v _ev () =
-    norm_dom d (ThE.index v Bool.ty)
+    norm_dom d (ThE.index v Boolean.ty)
 
 end
 
@@ -379,7 +380,7 @@ module DaemonInit = struct
               (Demon.Create.EventAnyValue(cl,()))::
               acc
               ) v [] in
-            let events = Demon.Create.EventValue(own,Bool.dom,())::events in
+            let events = Demon.Create.EventValue(own,Boolean.dom,())::events in
             Demon.Key.attach d DaemonPropa.key v events;
             if true (* GenEquality.dodec (Th.get_ty v) *) then begin
               Debug.dprintf4 debug "[Equality] @[ask_dec on %a for %a@]"
@@ -411,7 +412,7 @@ module HypDis = struct
     age : Trail.Age.t;
     }
 
-  let key : t Trail.Hyp.t = Trail.Hyp.create_key "Diff"
+  let key = Trail.Hyp.create_key (module struct type nonrec t = t let name = "Diff" end)
 
   let pp fmt c =
     Format.fprintf fmt "%a=%a≠%a=%a"
@@ -421,7 +422,7 @@ module HypDis = struct
       Node.pp c.r1
 
   let split t c cl1 cl2 =
-    if Conflict.age_merge_opt t cl1 c.l1 = None then
+    if Equal.option Trail.Age.equal (Conflict.age_merge_opt t cl1 c.l1) None then
       let cl1, cl2 = EqHyp.orient_split t {l=c.r0;r=c.r1} cl1 cl2 in
       (Trail.Phyp.phyp key {c with r1 = cl1})::(EqHyp.create_eq cl2 c.r1)
     else
@@ -508,12 +509,12 @@ module Exp = struct
     match e with
     | SubstUpTrue    (v,e1,e2,_)   -> (** two are equals *)
       let own = ThE.node v in
-      let lhyp = Conflict.split t phyp own Bool._true in
+      let lhyp = Conflict.split t phyp own Boolean._true in
       let phyp = Trail.Phyp.phyp EqHyp.key {l=e1;r=e2} in
       phyp::lhyp
     | SubstUpFalse   (v,al)   ->
       let own = ThE.node v in
-      let lhyp = Conflict.split t phyp own Bool._false in
+      let lhyp = Conflict.split t phyp own Boolean._false in
       let al = CCList.diagonal al in
       let fold lhyp ((e1,(dis1,val1)),(e2,(dis2,val2))) =
         let diff_value () = (** different values *)
@@ -526,7 +527,7 @@ module Exp = struct
             else acc
           in
           let lhyp' = MValues.fold2_inter {fold2_inter} val1 val2 lhyp in
-          assert (not (lhyp == lhyp')); (** One is different *)
+          assert (not (Equal.physical lhyp lhyp')); (** One is different *)
           lhyp'
         in
         match dis1, dis2 with
@@ -547,7 +548,7 @@ module Exp = struct
       match Node.S.elements v with
       | [a;b] ->
         let lhyp = Conflict.split t phyp a b in
-        (EqHyp.create_eq (ThE.node the) Bool._true)@lhyp
+        (EqHyp.create_eq (ThE.node the) Boolean._true)@lhyp
       | _ -> raise Impossible
     end
     | SubstDownFalse (the,_)   ->
@@ -556,16 +557,16 @@ module Exp = struct
       let lhyp = [] in
       let lhyp = (EqHyp.create_eq c.l1 c.l0)@lhyp in
       let lhyp = (EqHyp.create_eq c.r1 c.r0)@lhyp in
-      let lhyp = (EqHyp.create_eq (ThE.node the) Bool._false)@lhyp in
+      let lhyp = (EqHyp.create_eq (ThE.node the) Boolean._false)@lhyp in
       lhyp
     | Dec(n1,n2) ->
       let lhyp = Conflict.split t phyp n1 n2 in
       let eq = EqHyp.create_eq ~dec:() n1 n2 in
       eq@lhyp
     | Merge(pexp,cl1,cl2,i,age) ->
-      assert (pexp == Trail.pexp_fact);
+      assert (Equal.physical pexp (Trail.pexp_fact));
       (** only for bool currently *)
-      let cl2' = if Node.equal cl2 Bool._true then Bool._false else Bool._true in
+      let cl2' = if Node.equal cl2 Boolean._true then Boolean._false else Boolean._true in
       let lhyp = Conflict.split t phyp cl1 cl2' in
       let diff = HypDis.create_diff_far t cl1 cl2 i age in
       diff::lhyp
@@ -605,9 +606,9 @@ module ITE = struct
                     Node.equal x.else_ y.else_
     let compare x y =
       let c = Node.compare x.cond y.cond in
-      if c != 0 then c
+      if c <> 0 then c
       else let c = Node.compare x.then_ y.then_ in
-        if c != 0 then c
+        if c <> 0 then c
         else Node.compare x.else_ y.else_
     let hash x =
       Hashcons.combine2 (Node.hash x.cond) (Node.hash x.then_) (Node.hash x.else_)
@@ -620,7 +621,7 @@ module ITE = struct
   include TITE
   include MkDatatype(TITE)
 
-  let key = ThTermKind.create_key "ite"
+  let key = ThTermKind.create_key (module struct type nonrec t = t let name = "ite" end)
 
 end
 
@@ -632,8 +633,8 @@ let ite cond then_ else_ =
   assert (Ty.equal ty1 ty2);
   Node.index_sem ITE.key { cond; then_; else_} ty1
 
-let expite : (EITE.t * bool) Trail.Exp.t =
-  Trail.Exp.create_key "Ite.exp"
+let expite =
+  Trail.Exp.create_key (module struct type nonrec t = EITE.t * bool let name = "Ite.exp" end)
 
 module DaemonPropaITE = struct
   let key = Demon.Fast.create "ITE.propa"
@@ -652,10 +653,10 @@ module DaemonPropaITE = struct
   let throttle = 100
   let wakeup d = function
     | Events.Fired.EventValue(cond,dom,clsem) ->
-      assert (ValueKind.equal dom Bool.dom);
+      assert (ValueKind.equal dom Boolean.dom);
       let v = EITE.sem clsem in
       assert (Egraph.is_equal d cond v.cond);
-      begin match Bool.is d v.cond with
+      begin match Boolean.is d v.cond with
         | None -> assert false
         | Some b -> simplify d clsem b
       end
@@ -679,7 +680,7 @@ module DaemonInitITE = struct
         let clsem = EITE.coerce_thterm clsem in
         let v = EITE.sem clsem in
         let own = EITE.node clsem in
-        match Bool.is d v.cond with
+        match Boolean.is d v.cond with
         | Some b ->
           DaemonPropaITE.simplify d clsem b
         | None ->
@@ -688,8 +689,8 @@ module DaemonInitITE = struct
           Egraph.register d v.cond;
           Egraph.register d v.then_;
           Egraph.register d v.else_;
-          Egraph.register_decision d (Trail.GCho(v.cond,Bool.chobool,v.cond));
-          let events = [Demon.Create.EventValue(v.cond,Bool.dom,clsem)] in
+          Egraph.register_decision d (Trail.GCho(v.cond,Boolean.chobool,v.cond));
+          let events = [Demon.Create.EventValue(v.cond,Boolean.dom,clsem)] in
           Demon.Fast.attach d DaemonPropaITE.key events
     end
     | _ -> raise UnwaitedEvent
@@ -714,7 +715,7 @@ module ExpITE = struct
       let v = EITE.sem the in
       let own = EITE.node the in
       let lhyp = Conflict.split t hyp own (if b then v.then_ else v.else_) in
-      let phyp = EqHyp.create_eq v.cond (if b then Bool._true else Bool._false) in
+      let phyp = EqHyp.create_eq v.cond (if b then Boolean._true else Boolean._false) in
       phyp@lhyp
 
   let from_contradiction _ _ = raise Impossible
@@ -802,12 +803,12 @@ let init_diff_to_value (type a) (type b)
 
 let bool_init_diff_to_value d =
   init_diff_to_value
-    d (module Bool.BoolValue)
+    d (module Boolean.BoolValue)
     ~they_are_different:(fun d pexp n b ->
-        if not b then Bool.set_true d pexp n
-        else Bool.set_false d pexp n
+        if not b then Boolean.set_true d pexp n
+        else Boolean.set_false d pexp n
       )
-    ~already_registered:[Bool.value_true;Bool.value_false]
+    ~already_registered:[Boolean.value_true;Boolean.value_false]
 
 (** {2 Interpretations} *)
 let () =
@@ -815,15 +816,15 @@ let () =
     try
       let fold acc e = Value.S.add_new Exit (interp e) acc in
       let _ = Node.S.fold_left fold Value.S.empty t in
-      Bool.values_false
+      Boolean.values_false
     with Exit ->
-      Bool.values_true
+      Boolean.values_true
   in
   Interp.Register.thterm sem interp
 
 let () =
   let interp ~interp (t:ITE.t) =
-    let c = Bool.BoolValue.value (Bool.BoolValue.coerce_nodevalue (interp t.cond)) in
+    let c = Boolean.BoolValue.value (Boolean.BoolValue.coerce_nodevalue (interp t.cond)) in
     if c then interp t.then_ else interp t.else_
   in
   Interp.Register.thterm ITE.key interp
@@ -832,8 +833,8 @@ let () =
   Interp.Register.id (fun id args ->
       let open Term in
       let is builtin = Term.Id.equal id builtin in
-      let (!>) n = Bool.BoolValue.value (Bool.BoolValue.coerce_nodevalue n) in
-      let (!<) b = Some (if b then Bool.values_true else Bool.values_false) in
+      let (!>) n = Boolean.BoolValue.value (Boolean.BoolValue.coerce_nodevalue n) in
+      let (!<) b = Some (if b then Boolean.values_true else Boolean.values_false) in
       match args with
       | [a;b] when is equal_id || is equiv_id -> !< (Value.equal a b)
       | [c;a;b] when is ite_id -> Some (if (!> c) then a else b)
@@ -841,9 +842,9 @@ let () =
           try
             let fold acc v = Value.S.add_new Exit v acc in
             let _ = List.fold_left fold Value.S.empty args in
-            Some Bool.values_false
+            Some Boolean.values_false
           with Exit ->
-            Some Bool.values_true
+            Some Boolean.values_true
         end
       | _ -> None
     )

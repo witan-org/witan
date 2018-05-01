@@ -23,6 +23,7 @@
 
 (** Keep track of the explanation, conflict and choice *)
 
+open Witan_popop_lib
 open Nodes
 
 (** {2 Age: position in the trail } *)

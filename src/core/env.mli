@@ -28,10 +28,10 @@
 
 include Keys.Key
 
-val register: 'a Pp.pp -> 'a t -> unit
+val register: 'a Format.printer -> 'a t -> unit
 (** Only a pretty printer is needed for registration *)
 
-val print: 'a t -> 'a Pp.pp
+val print: 'a t -> 'a Format.printer
 (** Get a pretty printer for a particular environment *)
 
 val check_is_registered: 'a t -> unit

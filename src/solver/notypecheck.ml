@@ -21,8 +21,10 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
+  
 (* Exception for typing errors *)
-module R = Witan_popop_lib.Exthtbl.Hashtbl.Make(Dolmen.Id)
+module R = Exthtbl.Hashtbl.Make(Dolmen.Id)
 module MId = CCMap.Make(struct include Dolmen.Id let pp = print end)
 type env = Term.Id.t R.t
 

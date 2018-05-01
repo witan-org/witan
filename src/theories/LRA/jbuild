@@ -14,8 +14,9 @@
    ))
    (preprocess (pps (ppx_deriving.std)))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60-40-9@8 -color always
+           -open Containers
            -open Witan_stdlib
-           -open Witan_popop_lib
+           -open Std
            -open Witan_core
            -open Witan_theories_bool))
    (ocamlopt_flags (:standard -O3 -bin-annot

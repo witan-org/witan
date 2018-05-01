@@ -21,6 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
 open Witan_core_structures
 open Std
 open Nodes
@@ -320,7 +321,7 @@ module Conflict = struct
   let analyse t (Trail.Pexp.Pexp(_,exp,e)) pcon = analyse' t exp e pcon
 
   let split t (Trail.Phyp.Phyp(hyp,c,dec)) a b =
-    assert (dec = `NoDec);
+    assert (match dec with `NoDec -> true | _ -> false);
     let f (type a) (hyp: a Hyp.t) (c:a) =
       let module Hyp = (val (HypRegistry.get hyp)) in
       Hyp.split t c a b
@@ -356,8 +357,9 @@ end = struct
 
   let convert t l =
     let map (type a) hyp (c:a) dec pc =
-      if dec = `Dec then (Levels.No,pc)
-      else
+      match dec with
+      | `Dec -> (Levels.No,pc)
+      | _ ->
         let module Hyp = (val (HypRegistry.get hyp) : Hyp with type t = a) in
         (Hyp.levels t c, pc)
     in
@@ -371,9 +373,9 @@ end = struct
     Debug.dprintf2 debug "[Hypflict] @[Analyse resulted in: %a@]"
       (Pp.list Pp.comma pp_phyp) l2;
     let iter (type a) hyp (c:a) dec pc =
-      if dec = `Dec
-      then t.fromdec <- pc::t.fromdec
-      else
+      match dec with
+      | `Dec -> t.fromdec <- pc::t.fromdec
+      | _ ->
         let module Hyp = (val (HypRegistry.get hyp) : Hyp with type t = a) in
         let lv = Hyp.levels t c in
         if Levels.before_first_dec t.trail lv
@@ -516,11 +518,11 @@ module EqHyp = struct
         else Some b, Some a
       | Some _, None ->
         (** They must be equal to one of them *)
-        assert (Conflict.age_merge_opt t c.r b <> None);
+        assert (not(Equal.option Age.equal (Conflict.age_merge_opt t c.r b) None));
         Some a, Some b
       | None, Some _ ->
         (** They must be equal to one of them *)
-        assert (Conflict.age_merge_opt t c.r a <> None);
+        assert (not(Equal.option Age.equal (Conflict.age_merge_opt t c.r a) None));
         Some b, Some a
       | None, None ->
         assert false (** absurd: One of them must be equal with the left *)

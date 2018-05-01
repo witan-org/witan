@@ -21,6 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
 open Nodes
 
 let debug = Debug.register_info_flag ~desc:"for the events" "Egraph.events"
@@ -32,14 +33,14 @@ module Dem = Keys.Make_key2(struct end)
 module Print = struct (** Cutting the knot for pp *)
 
   type pdem_event = { mutable
-      pdem_event : 'k 'd. ('k,'d) Dem.t -> 'k Pp.pp}
+      pdem_event : 'k 'd. ('k,'d) Dem.t -> 'k Format.printer}
 
   let pdem_event : pdem_event =
     {pdem_event = fun _ _ _ -> assert false} (** called too early *)
   let dem_event dem fmt s = pdem_event.pdem_event dem fmt s
 
   type pdem_runable = { mutable
-      pdem_runable : 'k 'd. ('k,'d) Dem.t -> 'd Pp.pp}
+      pdem_runable : 'k 'd. ('k,'d) Dem.t -> 'd Format.printer}
 
   let pdem_runable : pdem_runable =
     {pdem_runable = fun _ _ _ -> assert false} (** called too early *)
@@ -159,10 +160,10 @@ module Wait = struct
     module type Dem =
     sig
       type runable
-      val print_runable : runable Pp.pp
+      val print_runable : runable Format.printer
       val run : delayed -> runable -> runable option
       type event
-      val print_event : event Pp.pp
+      val print_event : event Format.printer
       val enqueue : delayed_ro -> event Fired.event -> runable enqueue
       val key : (event, runable) Dem.t
       val immediate : bool
@@ -172,9 +173,9 @@ module Wait = struct
 
     val get_dem : ('k, 'd) Dem.t -> (module Dem with type event = 'k and type runable = 'd)
 
-    val print_dem_event : ('a, 'b) Dem.t -> 'a Pp.pp
+    val print_dem_event : ('a, 'b) Dem.t -> 'a Format.printer
 
-    val print_dem_runable : ('a, 'b) Dem.t -> 'b Pp.pp
+    val print_dem_runable : ('a, 'b) Dem.t -> 'b Format.printer
 
     val new_pending_daemon : delayed -> ('a, 'b) Dem.t -> 'b -> unit
 
@@ -204,11 +205,11 @@ module Wait = struct
 
     module type Dem = sig
       type runable
-      val print_runable: runable Pp.pp
+      val print_runable: runable Format.printer
       val run: delayed -> runable -> runable option
 
       type event
-      val print_event: event Pp.pp
+      val print_event: event Format.printer
       val enqueue: delayed_ro -> event Fired.event -> runable enqueue
 
       val key: (event,runable) Dem.t

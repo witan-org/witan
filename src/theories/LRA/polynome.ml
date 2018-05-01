@@ -20,8 +20,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Witan_popop_lib
 open Witan_core
-open Witan_stdlib.Std
 
 module T = struct
   type t = { cst : Q.t; poly : Q.t Node.M.t}

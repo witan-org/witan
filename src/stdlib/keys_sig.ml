@@ -93,15 +93,15 @@ module type Key = sig
   val create_key: (module NamedType with type t = 'a) -> 'a t
 
   module MkVector(D:sig type ('a,'b) t end)
-    : Hetero_hashtbl.S1 with type 'a key = 'a t
+    : Hashtbl_hetero.S1 with type 'a key = 'a t
                         and type ('a,'b) data = ('a,'b) D.t
-  module Vector  : Hetero_hashtbl.R1 with type 'a key = 'a t
-  module VectorH : Hetero_hashtbl.T1 with type 'a key = 'a t
+  module Vector  : Hashtbl_hetero.R1 with type 'a key = 'a t
+  module VectorH : Hashtbl_hetero.T1 with type 'a key = 'a t
 
   module MkMap(D:sig type ('a,'b) t end)
-    : Intmap_hetero.S1 with type _ key = K.t
-                        and type ('a,'b) data = ('a,'b) D.t
-  module M       : Intmap_hetero.R1 with type _ key = K.t
+    : Map_hetero.S with type 'a key = 'a t
+                    and type ('a,'b) data = ('a,'b) D.t
+  module M : Map_hetero.R with type 'a key = 'a t
   module Make_Registry(S:sig
       type 'a data
       val pp : 'a data -> 'a Pp.pp
@@ -166,7 +166,7 @@ module type Key2 = sig
           the exception BadCoercion is raised  *)
   end
   module MkVector(D:sig type ('k,'d,'b) t end)
-    : Hetero_hashtbl.S2 with type ('k,'d) key = ('k,'d) t
+    : Hashtbl_hetero.S2 with type ('k,'d) key = ('k,'d) t
                          and type ('k,'d,'b) data = ('k,'d,'b) D.t
   module Make_Registry(S:sig
       type ('k,'d) data

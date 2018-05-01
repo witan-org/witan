@@ -21,6 +21,8 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
+    
 open Nodes
 
 let synsem = ThTermKind.create_key (module struct type t = Term.t let name = "syntax" end)

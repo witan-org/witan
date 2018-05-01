@@ -25,7 +25,7 @@ module Env = Keys.Make_key(struct end)
 
 include Env
 
-type 'a data = {key: 'a Env.t; pp: 'a Pp.pp}
+type 'a data = {key: 'a Env.t; pp: 'a Format.printer}
 
 module VEnv = Env.Make_Registry(struct
     type nonrec 'a data = 'a data

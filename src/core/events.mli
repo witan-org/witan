@@ -21,6 +21,7 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+open Witan_popop_lib
 open Nodes
 
 module Fired : sig
@@ -42,7 +43,7 @@ module Fired : sig
     (** a new value 'a appear *)
     | EventRegValue : Value.t *             'b -> 'b event
 
-  val pp: 'b event Pp.pp
+  val pp: 'b event Format.printer
   val get_data: 'b event -> 'b
 
   type 'b t = 'b event list
@@ -65,7 +66,7 @@ module Wait : sig
   type daemon_key =
     | DaemonKey: ('k,'runable) Dem.t * 'runable -> daemon_key
 
-  val pp: t Pp.pp
+  val pp: t Format.printer
 
   type 'a translate = { translate : 'd. 'a -> 'd -> 'd Fired.event}
 
@@ -84,10 +85,10 @@ module Wait : sig
     module type Dem =
     sig
       type runable
-      val print_runable : runable Pp.pp
+      val print_runable : runable Format.printer
       val run : delayed -> runable -> runable option
       type event
-      val print_event : event Pp.pp
+      val print_event : event Format.printer
       val enqueue : delayed_ro -> event Fired.event -> runable enqueue
       val key : (event, runable) Dem.t
       val immediate : bool
@@ -97,9 +98,9 @@ module Wait : sig
 
     val get_dem : ('k, 'd) Dem.t -> (module Dem with type event = 'k and type runable = 'd)
 
-    val print_dem_event : ('a, 'b) Dem.t -> 'a Pp.pp
+    val print_dem_event : ('a, 'b) Dem.t -> 'a Format.printer
 
-    val print_dem_runable : ('a, 'b) Dem.t -> 'b Pp.pp
+    val print_dem_runable : ('a, 'b) Dem.t -> 'b Format.printer
 
     val new_pending_daemon : delayed -> ('a, 'b) Dem.t -> 'b -> unit
 

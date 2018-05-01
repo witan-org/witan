@@ -79,10 +79,13 @@ module type S = sig
   type 'b mapi = { mapi: 'a. 'a key -> ('a,'b) data -> ('a,'b) data }
   val mapi : 'b mapi -> 'b t -> 'b t
 
-  type 'b pp = { pp: 'a. ('a,'b) data Format.printer }
+  type printk = { printk: 'a. 'a key Format.printer }
+  type 'b printd = { printd: 'a. 'a key -> ('a,'b) data Format.printer }
   val pp:
-    (unit Format.printer) ->
-    'b pp ->
+    unit Format.printer ->
+    unit Format.printer ->
+    printk ->
+    'b printd ->
     'b t Format.printer
 
 end
@@ -139,12 +142,12 @@ module type R = sig
   type 'b mapi = { mapi: 'a. 'a key -> 'b -> 'b }
   val mapi : 'b mapi -> 'b t -> 'b t
 
-  type printk = { printk: 'a. 'a key Format.printer }
+  type printk = { printk : 'a. 'a key Containers.Format.printer; }
   val pp:
-    (unit Format.printer) ->
-    (unit Format.printer) ->
+    unit Format.printer ->
+    unit Format.printer ->
     printk ->
-    ('b Format.printer) ->
+    'b Format.printer ->
     'b t Format.printer
 
 end

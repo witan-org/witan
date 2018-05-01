@@ -24,7 +24,7 @@
 open Witan_core
 
 type t = App of Node.t * Node.t
-val pp: t Pp.pp
+val pp: t Format.printer
 
 val sem: t ThTermKind.t
 

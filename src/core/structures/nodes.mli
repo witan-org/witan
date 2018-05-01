@@ -23,6 +23,7 @@
 
 (** Define the Node, and the related types semantic terms and value *)
 
+open Witan_popop_lib
 open Stdlib
 
 (** {2 General exceptions (to move away) } *)

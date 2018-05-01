@@ -139,8 +139,8 @@ val register_dom : (module Dom with type t = 'a) -> unit
 val check_initialization: unit -> bool
 (** Check if the initialization of all the dom, sem and dem have been done *)
 
-val print_dom: 'a Dom.t -> 'a Pp.pp
-val print_dom_opt: 'a Dom.t -> 'a option Pp.pp
+val print_dom: 'a Dom.t -> 'a Format.printer
+val print_dom_opt: 'a Dom.t -> 'a option Format.printer
 
 
 (** {2 External use of the solver} *)

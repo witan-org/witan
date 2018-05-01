@@ -22,6 +22,7 @@
 (** Linear Arithmetique *)
 
 (** This module use one domain and two semantic values. *)
+open Witan_popop_lib
 open Witan_core
 open Witan_stdlib.Std
 
@@ -29,7 +30,7 @@ let debug = Debug.register_info_flag
   ~desc:"for the arithmetic theory"
   "LRA"
 
-let real : Q.t ValueKind.t = ValueKind.create_key "Q"
+let real = ValueKind.create_key (module struct type t = Q.t let name = "Q" end)
 
 module RealValue = ValueKind.Register(struct
     include Q
@@ -78,14 +79,14 @@ module S = struct
   end
   include T
   include Stdlib.MkDatatype(T)
-  let key : t ThTermKind.t = ThTermKind.create_key "SARITH"
+  let key = ThTermKind.create_key (module struct type nonrec t = t let name = "SARITH" end)
 end
 
 module SE = ThTermKind.Register(S)
 
 module D = Interval.Convexe
 
-let dom : D.t Dom.t = Dom.create_key "ARITH"
+let dom = Dom.create_key (module struct type t = D.t let name = "ARITH" end)
 
 type exp =
   | ExpAdd of SE.t * Node.t (** on what we propagated *)
@@ -102,8 +103,7 @@ type exp =
 
 (** The explanation for a dom will always work on conflict which is an inequality *)
 
-let exp : exp Trail.Exp.t =
-  Trail.Exp.create_key "LRA.exp"
+let exp = Trail.Exp.create_key (module struct type t = exp let name = "LRA.exp" end)
 
 let set_dom d pexp node v b =
   match D.is_singleton v with
@@ -178,7 +178,7 @@ module DaemonPropa = struct
     | Some d' ->
       if not (D.equal d d')
       then set_dom del (Egraph.mk_pexp del exp pexp) node d'
-          (D.is_singleton d' = None)
+          (Equal.option Q.equal (D.is_singleton d') None)
 
   let upd_value del node d d' pexp =
     match D.inter d d' with
@@ -191,7 +191,7 @@ module DaemonPropa = struct
     | Some d' ->
       if not (D.equal d d')
       then set_dom del (Egraph.mk_pexp del exp pexp) node d'
-          (D.is_singleton d' = None)
+          (Equal.option Q.equal (D.is_singleton d') None)
 
   let propagate del s =
     match SE.sem s with
@@ -214,17 +214,17 @@ module DaemonPropa = struct
     | S.GZero(node,b) -> begin
         let cl0 = SE.node s in
         let d = get_value del node in
-        let dzero_true  = if b=Strict then gt_zero else ge_zero in
-        let dzero_false = if b=Strict then le_zero else lt_zero in
+        let dzero_true  = if equal_bound b Strict then gt_zero else ge_zero in
+        let dzero_false = if equal_bound b Strict then le_zero else lt_zero in
         if D.is_included d dzero_true
         then begin
           let pexp = Egraph.mk_pexp del exp (ExpGZeroUp(s,true)) in
-          Bool.set_true del pexp cl0
+          Boolean.set_true del pexp cl0
         end
         else if D.is_included d dzero_false
         then
           let pexp = Egraph.mk_pexp del exp (ExpGZeroUp(s,false)) in
-          Bool.set_false del pexp cl0
+          Boolean.set_false del pexp cl0
       end
     | S.Conflict(p,b) ->
       (** Choose representative of the equivalence class among the
@@ -242,27 +242,27 @@ module DaemonPropa = struct
       let rec aux d_first = function
         | [] -> begin
             let cl0 = SE.node s in
-            if D.is_singleton d_first <> None then
+            if Equal.option Q.equal (D.is_singleton d_first) None then
               let d = d_first in
-              let dzero_true  = if b=Strict then gt_zero else ge_zero in
-              let dzero_false = if b=Strict then le_zero else lt_zero in
+              let dzero_true  = if equal_bound b Strict then gt_zero else ge_zero in
+              let dzero_false = if equal_bound b Strict then le_zero else lt_zero in
               if D.is_included d dzero_true
               then begin
                 let pexp = Egraph.mk_pexp del exp (ExpGZeroUp(s,true)) in
-                Bool.set_true del pexp cl0;
+                Boolean.set_true del pexp cl0;
                 raise Exit
               end
               else if D.is_included d dzero_false
               then
                 let pexp = Egraph.mk_pexp del exp (ExpGZeroUp(s,false)) in
-                Bool.set_false del pexp cl0;
+                Boolean.set_false del pexp cl0;
                 raise Exit
               else
                 assert false
             else
-              match Bool.is del cl0 with
+              match Boolean.is del cl0 with
               | Some nonot ->
-                let dzero = if b=Strict
+                let dzero = if equal_bound b Strict
                   then if nonot then gt_zero else le_zero
                   else if nonot then ge_zero else lt_zero in
                 dzero,nonot
@@ -304,11 +304,11 @@ module DaemonPropa = struct
       | GZero (node,_) ->
         Egraph.register del node;
         Demon.Fast.attach del key
-          [Demon.Create.EventValue(SE.node s, Bool.dom, s);
+          [Demon.Create.EventValue(SE.node s, Boolean.dom, s);
            Demon.Create.EventValue(node, real, s)]
       | Conflict(p,_) ->
         Demon.Fast.attach del key
-          [Demon.Create.EventValue(SE.node s, Bool.dom, s)];
+          [Demon.Create.EventValue(SE.node s, Boolean.dom, s)];
         Polynome.iter (fun node _ ->
             Egraph.register del node;
             Demon.Fast.attach del key
@@ -362,8 +362,8 @@ let to_poly = function
   | Conflict (p,_) -> p
   | GZero _ -> raise Impossible
 
-let choarith : Node.t Trail.Cho.t =
-  Trail.Cho.create_key "LRA.cho"
+let choarith =
+  Trail.Cho.create_key (module struct type t = Node.t let name = "LRA.cho" end)
 
 let make_dec node = Trail.GCho(node,choarith,node)
 
@@ -605,6 +605,7 @@ type hypbound =
   | Eq
   | Le
   | Lt
+[@@deriving eq]
 
 let _ = Eq
 let _ = Le
@@ -630,7 +631,8 @@ module HypDom = struct
 
   let pp = pp_hyppoly
 
-  let key = Trail.Hyp.create_key "Arith.hyp"
+  let key =
+    Trail.Hyp.create_key (module struct type nonrec t = t let name = "Arith.hyp" end)
 
   let pp_v fmt v =
     Pp.iter2 SE.M.iter Pp.semi Pp.nothing Pp.nothing pp_hyppoly fmt v
@@ -643,7 +645,7 @@ module HypDom = struct
       let n = of_poly hyp.poly in
       (Equality.equality [n;zero], Conflict.Neg)
     | Le | Lt ->
-      let b = if hyp.bound = Le then Interval.Large else Interval.Strict in
+      let b = if equal_hypbound hyp.bound Le then Interval.Large else Interval.Strict in
       let i = SE.index (S.Conflict(hyp.poly, b)) Term._Real in
       let i = SE.node i in
       (i, Conflict.Neg)
@@ -821,7 +823,7 @@ module ExpEquality = struct
    *       | _ -> raise Impossible in
    *     let cl0 = SE.node s in
    *     ComputeConflict.unknown_con t conclause
-   *       (Bool.get_dom t age cl0 Node.M.empty);
+   *       (Boolean.get_dom t age cl0 Node.M.empty);
    *     let p =
    *       let exp = Polynome.monome Q.one node in
    *       if nonot
@@ -997,10 +999,10 @@ let mult_cst cst node =
   add' cst node Q.one zero
 
 let gt_zero node =
-  SE.node (SE.index (GZero(node,Strict)) Bool.ty)
+  SE.node (SE.index (GZero(node,Strict)) Boolean.ty)
 
 let ge_zero node =
-  SE.node (SE.index (GZero(node,Large)) Bool.ty)
+  SE.node (SE.index (GZero(node,Large)) Boolean.ty)
 
 let lt cl1 cl2 = gt_zero (sub cl2 cl1)
 let le cl1 cl2 = ge_zero (sub cl2 cl1)
@@ -1073,7 +1075,7 @@ let th_register env =
 let () =
   let gzero bound n =
     let v = (match bound with | Strict -> Q.lt | Large -> Q.le) Q.zero n in
-    (if v then Bool.values_true else Bool.values_false)
+    (if v then Boolean.values_true else Boolean.values_false)
   in
   let interp ~interp (t:S.t) =
     let get_v n = RealValue.value (RealValue.coerce_nodevalue (interp n)) in
@@ -1103,7 +1105,7 @@ let () =
       let is builtin = Term.Id.equal id builtin in
       let (!>) n = RealValue.value (RealValue.coerce_nodevalue n) in
       let (!<) v = Some (RealValue.nodevalue (RealValue.index v Term._Real)) in
-      let (!<<) b = Some (if b then Bool.values_true else Bool.values_false) in
+      let (!<<) b = Some (if b then Boolean.values_true else Boolean.values_false) in
       match args with
       | [] when Term.is_const_real_id id ->
         !< (Term.get_const_real_id id)

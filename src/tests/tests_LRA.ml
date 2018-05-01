@@ -8,7 +8,7 @@ open Witan_core
 open Witan_stdlib.Std
 open Witan_stdlib
 
-let theories = [Bool.th_register; Equality.th_register; Uninterp.th_register; LRA.th_register]
+let theories = [Boolean.th_register; Equality.th_register; Uninterp.th_register; LRA.th_register]
 
 let ($$) f x = f x
 
