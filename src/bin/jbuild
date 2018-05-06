@@ -5,6 +5,7 @@
   ((name witan)
    (public_name witan)
    (libraries (containers gen dolmen cmdliner spelll
+               witan.psyche_lib
                witan.core
                witan.solver
                witan.theories.bool
