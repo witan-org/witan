@@ -128,7 +128,7 @@ module Make_key(X:sig end) = struct
 
     let register data =
       let key = S.key data in
-      (* V.inc_size key.name registry; *)
+      V.inc_size key registry;
       assert (if not (V.is_uninitialized registry key)
               then raise (AlreadyRegisteredKey key) else true);
       V.set registry key data
@@ -245,10 +245,10 @@ module Make_key2(X:sig end) : Key2 = struct
 
     let register data =
       let key = S.key data in
-        V.inc_size key registry;
-        assert (if not (V.is_uninitialized registry key)
-                then raise (AlreadyRegisteredKey key) else true);
-        V.set registry key data
+      V.inc_size key registry;
+      assert (if not (V.is_uninitialized registry key)
+              then raise (AlreadyRegisteredKey key) else true);
+      V.set registry key data
 
     let check_is_registered key =
       assert (if V.is_uninitialized registry key
