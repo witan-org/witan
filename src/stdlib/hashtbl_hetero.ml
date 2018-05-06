@@ -54,7 +54,9 @@ module MakeS1(K:Keys1)(D:sig type ('a,'b) t end)
       | Poly.Neq -> raise IncoherentTable
 
     let get_def : 'b t -> 'a key -> ('a, 'b) data -> ('a, 'b) data =
-      fun _ -> failwith "What on earth is this?"
+      fun m k def ->
+        try get m k
+        with Not_found -> def
 
     let set (m: 'b t) (k: 'a key) (v : ('a, 'b) data) : unit =
       H.add m (K.tag k) (Pair(k,v))
@@ -65,7 +67,7 @@ module MakeS1(K:Keys1)(D:sig type ('a,'b) t end)
 
     let clear : 'b t -> unit = H.clear
 
-    let inc_size : 'a key -> 'b t -> unit = fun _ -> failwith "No need for this"
+    let inc_size : 'a key -> 'b t -> unit = fun _ _ -> ()
 
     let iter_initialized (f : 'b iter_initialized) (m: 'b t) : unit =
       H.iter (fun _ (Pair(_,v)) -> f.iter v) m
@@ -167,7 +169,9 @@ module Make2
     | Poly.Neq -> raise IncoherentTable
 
   let get_def : 'b t -> ('a1,'a2) key -> ('a1,'a2, 'b) data -> ('a1,'a2, 'b) data =
-    fun _ -> failwith "What on earth is this?"
+    fun m k def ->
+      try get m k
+      with Not_found -> def
 
   let set (m: 'b t) (k: ('a1,'a2) key) (v : ('a1,'a2, 'b) data) : unit =
     H.add m (K.tag k) (Pair(k,v))
@@ -178,7 +182,7 @@ module Make2
 
   let clear : 'b t -> unit = H.clear
 
-  let inc_size : ('a1,'a2) key -> 'b t -> unit = fun _ -> failwith "No need for this"
+  let inc_size : ('a1,'a2) key -> 'b t -> unit = fun _ _ -> ()
 
   type 'b iter_initialized = { iter: 'a1 'a2. ('a1, 'a2, 'b) data -> unit }
   let iter_initialized (f : 'b iter_initialized) (m: 'b t) : unit =
