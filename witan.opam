@@ -28,6 +28,7 @@ depends: [
   "jbuilder" {build}
   "zarith"
   "ppx_deriving" { > "4.1.5" }
+  "ppx_optcomp"
   "ocamlgraph"
   "ocaml-migrate-parsetree"
   "ounit" {test}

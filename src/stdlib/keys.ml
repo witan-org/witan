@@ -21,6 +21,10 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+[%%import "config.ml"]
+
+[%%if keys = "well-typed"]
+
 open Std
 
 module Strings = Witan_popop_lib.Strings
@@ -274,3 +278,9 @@ module Make_key2(X:sig end) : Key2 = struct
       (S.ppd data) fmt s
   end
 end
+
+[%%else]
+
+include Comp_keys
+
+[%%endif]

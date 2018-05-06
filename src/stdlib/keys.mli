@@ -21,7 +21,17 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
 (*************************************************************************)
 
+[%%import "config.ml"]
+
+[%%if keys = "well-typed"]
+
 include module type of Keys_sig
 
 module Make_key(X:sig end) : Key
 module Make_key2(X:sig end): Key2
+
+[%%else]
+
+include module type of Comp_keys
+
+[%%endif]
