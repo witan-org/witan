@@ -74,7 +74,7 @@ module Prio = Leftistheap.Make(Att)
 type pre =
   { pre_wakeup_daemons    : Prio.t;
     pre_prev_scheduler_state : pre option;
-    pre_backtrack_point      : S.Backtrackable.backtrack_point;
+    pre_backtrack_point      : Context.bp;
     pre_age_dec : Trail.Age.t;
     pre_learnt : Conflict.Learnt.t Bag.t;
     pre_last_dec : Trail.chogen;
@@ -89,6 +89,7 @@ type t =
     (* global *)
     decprio : Att.db;
     var_inc  : float ref;
+    context : Context.context;
   }
 (** To treat in the reverse order *)
 
@@ -114,9 +115,11 @@ let print_level fmt t =
  *   } *)
 
 let new_solver () =
+  let context = Context.create () in
   { wakeup_daemons = Prio.empty;
     prev_scheduler_state = None;
-    solver_state = S.Backtrackable.new_t ();
+    solver_state = S.Backtrackable.new_t context;
+    context;
     learnt = Bag.empty;
     delayed    = None;
     decprio = Node.H.create 100;
@@ -131,13 +134,14 @@ let push t chogen =
   let prev =
     { pre_wakeup_daemons    = t.wakeup_daemons;
       pre_prev_scheduler_state = t.prev_scheduler_state;
-      pre_backtrack_point      = S.Backtrackable.backtrack_point t.solver_state;
+      pre_backtrack_point      = Context.bp t.context;
       pre_learnt = t.learnt;
       pre_last_dec = chogen;
       pre_age_dec = age_dec;
     } in
   t.prev_scheduler_state <- Some prev;
-  t.learnt <- Bag.empty
+  t.learnt <- Bag.empty;
+  ignore (Context.push t.context)
 
 let update_prio t chogen =
   Node.H.change (function
@@ -206,7 +210,7 @@ and pop_to t prev =
     print_level t;
   t.wakeup_daemons <- prev.pre_wakeup_daemons;
   t.prev_scheduler_state <- prev.pre_prev_scheduler_state;
-  Egraph.Backtrackable.rewind_to prev.pre_backtrack_point;
+  Context.pop prev.pre_backtrack_point;
   t.learnt <- prev.pre_learnt;
   let d = new_delayed t in
   Egraph.Backtrackable.draw_graph t.solver_state;

@@ -146,9 +146,8 @@ module Getter : Getter
 module Backtrackable: sig
   type delayed = t
   include Getter
-  type backtrack_point
 
-  val new_t    : unit -> t
+  val new_t    : Context.context -> t
 
   val new_delayed :
     sched_daemon:(Events.Wait.daemon_key -> unit) ->
@@ -178,15 +177,6 @@ module Backtrackable: sig
   val new_dec : t -> Trail.dec
   val current_age : t -> Trail.Age.t
   val current_nbdec : t -> int
-
-  (** {2 Implementation Specifics } *)
-  (** Because this module is implemented with persistent datastructure *)
-
-  val backtrack_point: t -> backtrack_point
-  (** set a backtrack point *)
-
-  val rewind_to: backtrack_point -> unit
-  (** recover the state of the environment when the backtrack point have been created *)
 
   (** Debug *)
   val draw_graph: ?force:bool -> t -> unit

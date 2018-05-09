@@ -75,9 +75,7 @@ end
 
 (** trail and additional information *)
 type t
-val create: unit -> t
-val new_handle: t -> t
-val move: from:t -> to_:t -> unit
+val create: Context.context -> t
 
 val current_age: t -> age
 val print_current_age: t Pp.pp

@@ -88,49 +88,64 @@ end
 *)
 type nodehist = (age * Node.t) Node.M.t
 
-type t = {
+module Saved = struct
+  type t = {
+    last_dec : Age.t;
+    first_dec : Age.t;
+    nbdec    : int;
+    age      : Age.t;
+    nodehist : nodehist;
+  }
+
+end
+
+type opened = {
   mutable last_dec : Age.t;
   mutable first_dec : Age.t;
   mutable nbdec    : int;
   mutable age      : Age.t;
   trail            : Pexp.t Simple_vector.t;
   mutable nodehist : nodehist;
+  history: Saved.t Context.history
 }
 
-let before_last_dec t a = Age.compare a t.last_dec < 0
-let before_first_dec t a = Age.(a < t.first_dec)
+module Hidden = Context.Make(struct
+    type nonrec t = opened
+    type saved = Saved.t
+    let save t : saved = { Saved.last_dec = t.last_dec; Saved.first_dec = t.first_dec;
+                           Saved.nbdec = t.nbdec;
+                           Saved.age = t.age;
+                           Saved.nodehist = t.nodehist }
+    let restore (saved:saved) (t:t) =
+      t.last_dec <- saved.last_dec;
+      t.first_dec <- saved.first_dec;
+      t.nbdec <- saved.nbdec;
+      t.age <- saved.age;
+      t.nodehist <- saved.nodehist;
+      Simple_vector.decrease_size_to t.trail (t.age + 1)
+    let get_history t = t.history
+  end)
 
-let get_pexp t age = Simple_vector.get t.trail age
+type t = Hidden.hidden
 
-let create () = {
+let before_last_dec t a = let t = Hidden.ro t in Age.compare a t.last_dec < 0
+let before_first_dec t a = let t = Hidden.ro t in Age.(a < t.first_dec)
+
+let get_pexp t age = let t = Hidden.ro t in Simple_vector.get t.trail age
+
+let create context =
+  Hidden.hide {
   last_dec = Age.bef;
   first_dec = max_int;
   nbdec = 0;
   age = Age.bef;
   trail = Simple_vector.create 10;
   nodehist = Node.M.empty;
+  history = Hidden.create context;
 }
-
-let new_handle t = {
-  last_dec = t.last_dec;
-  first_dec = t.first_dec;
-  nbdec = t.nbdec;
-  age = t.age;
-  trail = t.trail; (* not copied because we just add at the front new things *)
-  nodehist = t.nodehist;
-}
-
-let move ~from ~to_ =
-  to_.last_dec <- from.last_dec;
-  to_.first_dec <- from.first_dec;
-  to_.nbdec <- from.nbdec;
-  to_.age <- from.age;
-  Simple_vector.move ~from:from.trail ~to_:to_.trail;
-  to_.nodehist <- from.nodehist
-
-
 
 let new_dec (t:t)  =
+  let t = Hidden.rw t in
   t.nbdec <- t.nbdec + 1;
   let dec = t.age + 1 in
   t.last_dec <- dec;
@@ -138,19 +153,20 @@ let new_dec (t:t)  =
   Debug.dprintf2 debug "[Trail] @[new dec %a@]" Age.pp dec;
   dec
 
-let current_age t = t.age
-let print_current_age fmt t = Age.pp fmt t.age
-let last_dec t = t.last_dec
-let nbdec t = t.nbdec
+let current_age t = let t = Hidden.ro t in t.age
+let print_current_age fmt t = let t = Hidden.ro t in Age.pp fmt t.age
+let last_dec t = let t = Hidden.ro t in t.last_dec
+let nbdec t = let t = Hidden.ro t in t.nbdec
 
 let mk_pexp:
   t ->
   ?age:age (* in which age it should be evaluated *) ->
   'a Exp.t -> 'a -> Pexp.t =
-  fun t ?(age=t.age) exp e ->
+  fun t ?(age=(Hidden.ro t).age) exp e ->
     Pexp(age,exp,e)
 
 let add_pexp t pexp =
+  let t = Hidden.rw t in
   t.age <- Age.succ t.age;
   Simple_vector.inc_size (t.age + 1) t.trail;
   Simple_vector.set t.trail t.age pexp
@@ -168,6 +184,7 @@ let add_merge_finish:
   =
   fun t pexp ~node1:_ ~node2:_ ~node1_repr ~node2_repr ~new_repr ->
     add_pexp t pexp;
+    let t = Hidden.rw t in
     let old_repr = if Node.equal node1_repr new_repr then node2_repr else node1_repr in
     t.nodehist <- Node.M.add old_repr (t.age,new_repr) t.nodehist
 
@@ -187,6 +204,7 @@ let exp_diff_value : (Value.t * Node.t * Node.t * Value.t * Pexp.t) Exp.t =
 
 
 let age_merge_opt t n1 n2 =
+  let t = Hidden.ro t in
   if Node.equal n1 n2 then Some Age.min
   else
     let rec aux t n1 n2 =

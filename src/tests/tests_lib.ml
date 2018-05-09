@@ -46,13 +46,17 @@ let is_equal = Egraph.is_equal
 type t =
   { wakeup_daemons    : Events.Wait.daemon_key Queue.t;
     solver_state      : Egraph.Backtrackable.t;
+    context : Witan_stdlib.Context.context;
   }
 
 
-let new_solver () = {
-  wakeup_daemons = Queue.create ();
-  solver_state = Egraph.Backtrackable.new_t ();
-}
+let new_solver () =
+  let context = Witan_stdlib.Context.create () in
+  {
+    wakeup_daemons = Queue.create ();
+    solver_state = Egraph.Backtrackable.new_t context;
+    context;
+  }
 
 let new_delayed t =
   let sched_daemon dem = Queue.push dem t.wakeup_daemons in
