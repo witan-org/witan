@@ -224,8 +224,10 @@ end
 module RDaemonPropaNot = Demon.Fast.Register(DaemonPropaNot)
 
 module DaemonPropa = struct
+  type watcher = (int,int) Context.Ref2.t
+
   type d =
-  | Lit of ThE.t (* prop *) * int  (* watched *) * int (* otherside *)
+    | Lit of ThE.t (* prop *) * int (* watched *) * watcher
   | All of ThE.t
 
   let key = Demon.Fast.create "Bool.DaemonPropa"
@@ -233,8 +235,9 @@ module DaemonPropa = struct
   module Data = struct
     type t = d
     let pp fmt = function
-      | Lit (thterm,w,n) ->
-        Format.fprintf fmt "Lit(%a,%i,%i,%a)" ThE.pp thterm w n
+      | Lit (thterm,i,w) ->
+        let w,n = Context.Ref2.get w in
+        Format.fprintf fmt "Lit(%a,%i(%i,%i),%a)" ThE.pp thterm i w n
           Node.pp (ThE.node thterm)
       | All thterm -> Format.fprintf fmt "All(%a)" ThE.pp thterm
   end
@@ -242,7 +245,7 @@ module DaemonPropa = struct
   let immediate = false
   let throttle = 100
 
-  let wakeup_lit ~first d thterm watched next =
+  let wakeup_lit d thterm watched watcher =
     let v = ThE.sem thterm in
     let own = ThE.node thterm in
     let pexp exp = Egraph.mk_pexp d expprop exp in
@@ -289,27 +292,32 @@ module DaemonPropa = struct
         | Some _ (** false *) -> find_watch dir (dir+pos) bound
     in
     try
-      assert (watched <> next);
-      let dir = if watched < next then 1 else -1 in
-      let clwatched, watched = find_watch dir watched next in
-      let clnext   , next    = find_watch (-dir) next watched in
-      let events = [Demon.Create.EventValue(clwatched,dom,
-                                          Lit(thterm,watched,next))] in
-      let events =
-        if first then
-          Demon.Create.EventValue(clnext,dom,
-                                       Lit(thterm,next,watched))::events
-        else events in
-      Demon.Fast.attach d key events;
-      true
-    with Exit -> false
+      let w1, w2 = Context.Ref2.get watcher in
+      if w1 = -1 (** already done *)
+      then false
+      else begin
+        assert (watched = w1 || watched = w2);
+        assert (w1 < w2);
+        let dir,bound = if watched = w1 then 1,w2 else -1,w1 in
+        let clwatched, watched = find_watch dir watched bound in
+        if dir = 1
+        then Context.Ref2.set1 watcher watched
+        else Context.Ref2.set2 watcher watched;
+        Demon.Fast.attach d key
+          [Demon.Create.EventValue(clwatched,dom,
+                                   Lit(thterm,watched,watcher))] ;
+        true
+      end
+    with Exit ->
+      Context.Ref2.set watcher (-1) (-1);
+      false
 
-  let wakeup_own ~first d thterm =
+  let wakeup_own d thterm =
     let v = ThE.sem thterm in
     let own = ThE.node thterm in
     let pexp exp = Egraph.mk_pexp d expprop exp in
     begin match Egraph.get_value d dom own with
-    | None -> assert (first);
+    | None -> (* only during init *)
       Demon.Fast.attach d key
         [Demon.Create.EventValue(own, dom, All thterm)];
       true
@@ -325,18 +333,21 @@ module DaemonPropa = struct
   (** return true if things should be propagated *)
   let init d thterm =
     let v = ThE.sem thterm in
-    wakeup_own ~first:true d thterm &&
-      let last = IArray.length v.lits - 1 in
-      wakeup_lit ~first:true d thterm 0 last
+    wakeup_own d thterm &&
+    let last = IArray.length v.lits - 1 in
+    assert (last <> 0);
+    let watcher = Context.Ref2.create (Egraph.context d) 0 last in
+    wakeup_lit d thterm 0 watcher &&
+    wakeup_lit d thterm last watcher
 
   let wakeup d = function
     | Events.Fired.EventValue(_,dom',Lit(thterm,watched,next)) ->
       assert( ValueKind.equal dom dom' );
-      ignore (wakeup_lit ~first:false d thterm watched next)
+      ignore (wakeup_lit d thterm watched next)
     | Events.Fired.EventValue(_ownr,dom',All thterm) ->
       assert( ValueKind.equal dom dom' );
       (** use this own because the other is the representant *)
-      ignore (wakeup_own ~first:false d thterm)
+      ignore (wakeup_own d thterm)
     | _ -> raise UnwaitedEvent
 
 
@@ -364,7 +375,8 @@ module DaemonInit = struct
             assert (not lazy_propagation);
             IArray.iter (fun (node,_) -> Egraph.register d node) v.lits;
             if DaemonPropa.init d thterm then ()
-        (* Egraph.ask_decision d (dec v) *)
+        (** we could register a decision here, if we want to do
+            decision on any boolean operations not only variable *)
         with Exit -> ()
       end
     | _ -> raise UnwaitedEvent

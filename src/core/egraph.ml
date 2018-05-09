@@ -120,6 +120,7 @@ and action_ext =
 | ExtDem         : Events.Wait.daemon_key  -> action_ext
 
 end
+
 open Def
 (** {2 Define events} *)
 
@@ -151,6 +152,40 @@ let mk_dumb_delayed () = { env = Obj.magic 0;
 
 let dumb_delayed = mk_dumb_delayed ()
 let unsat_delayed = mk_dumb_delayed ()
+
+module Hidden = Context.Make(struct
+    type saved = Def.saved
+    type t = Def.t
+
+    let save (t:t) : saved =
+      assert (t.current_delayed == dumb_delayed); {
+        saved_repr = t.repr;
+        saved_rang = t.rang;
+        saved_event_repr = t.event_repr;
+        saved_event_value = t.event_value;
+        saved_event_reg = t.event_reg;
+        saved_event_any_reg = t.event_any_reg;
+        saved_dom = VDomTable.copy t.dom;
+        saved_sem = VSemTable.copy t.sem;
+        saved_value = VValueTable.copy t.value;
+        saved_envs = Env.VectorH.copy t.envs;
+      }
+
+    let restore (s:saved) (t:t) =
+      t.repr <- s.saved_repr;
+      t.rang <- s.saved_rang;
+      t.event_repr <- s.saved_event_repr ;
+      t.event_value <- s.saved_event_value ;
+      t.event_reg <- s.saved_event_reg ;
+      t.event_any_reg <- s.saved_event_any_reg;
+      VDomTable.move ~from:s.saved_dom ~to_:t.dom;
+      VSemTable.move ~from:s.saved_sem ~to_:t.sem;
+      VValueTable.move ~from:s.saved_value ~to_:t.value;
+      Env.VectorH.move ~from:s.saved_envs ~to_:t.envs;
+      t.current_delayed <- dumb_delayed
+
+    let get_history t = t.history
+  end)
 
 (** {2 Table access in the environment } *)
 
@@ -353,6 +388,8 @@ let draw_graph =
 module Delayed = struct
   open T
   type t = delayed_t
+
+  let context t = Hidden.creator t.env.history
 
   let is_current_env t = t.env.current_delayed == t
 
@@ -969,42 +1006,6 @@ module Backtrackable = struct
   let check_disabled_delayed t =
     t.current_delayed == dumb_delayed || t.current_delayed == unsat_delayed
 
-  module Saved = struct
-    type saved = Def.saved
-    type t = Def.t
-
-    let save (t:t) : saved =
-      assert (t.current_delayed == dumb_delayed); {
-        saved_repr = t.repr;
-        saved_rang = t.rang;
-        saved_event_repr = t.event_repr;
-        saved_event_value = t.event_value;
-        saved_event_reg = t.event_reg;
-        saved_event_any_reg = t.event_any_reg;
-        saved_dom = VDomTable.copy t.dom;
-        saved_sem = VSemTable.copy t.sem;
-        saved_value = VValueTable.copy t.value;
-        saved_envs = Env.VectorH.copy t.envs;
-      }
-
-    let restore (s:saved) (t:t) =
-      t.repr <- s.saved_repr;
-      t.rang <- s.saved_rang;
-      t.event_repr <- s.saved_event_repr ;
-      t.event_value <- s.saved_event_value ;
-      t.event_reg <- s.saved_event_reg ;
-      t.event_any_reg <- s.saved_event_any_reg;
-      VDomTable.move ~from:s.saved_dom ~to_:t.dom;
-      VSemTable.move ~from:s.saved_sem ~to_:t.sem;
-      VValueTable.move ~from:s.saved_value ~to_:t.value;
-      Env.VectorH.move ~from:s.saved_envs ~to_:t.envs;
-      t.current_delayed <- dumb_delayed
-
-    let get_history t = t.history
-  end
-
-  module Hidden = Context.Make(Saved)
-
   type delayed = t
   type t = Hidden.hidden
 
@@ -1024,6 +1025,10 @@ module Backtrackable = struct
     current_delayed = dumb_delayed;
     history = Hidden.create context;
   }
+
+  let context t =
+    let t = Hidden.ro t in
+    Hidden.creator t.history
 
   let new_delayed ~sched_daemon ~sched_decision t =
     let t = Hidden.rw t in
@@ -1147,6 +1152,8 @@ module type Getter = sig
 
   val get_env : t -> 'a Env.t -> 'a
   val set_env : t -> 'a Env.t -> 'a -> unit
+
+  val context : t -> Context.creator
 
 end
 

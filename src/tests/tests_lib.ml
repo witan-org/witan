@@ -54,7 +54,7 @@ let new_solver () =
   let context = Witan_stdlib.Context.create () in
   {
     wakeup_daemons = Queue.create ();
-    solver_state = Egraph.Backtrackable.new_t context;
+    solver_state = Egraph.Backtrackable.new_t (Witan_stdlib.Context.creator context);
     context;
   }
 

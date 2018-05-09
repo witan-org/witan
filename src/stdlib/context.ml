@@ -30,6 +30,10 @@ and bp = {
   context : context;
 }
 
+type creator = context
+
+let creator t = t
+
 let bp_equal (a:bp) b = CCEqual.physical a b
 
 let create () =
@@ -103,6 +107,89 @@ module Ref = struct
   let get r =
     rewind r;
     r.contents
+
+  let creator (h:'a t) = h.context
+
+end
+
+
+module Ref2 = struct
+  type ('a,'b) t = {
+    mutable contents1 : 'a;
+    mutable contents2 : 'b;
+    mutable previous : ('a,'b) history list;
+    context : context;
+  }
+
+  and ('a,'b) history = {
+    value1 : 'a;
+    value2 : 'b;
+    at: bp;
+  }
+
+  let creator (h:('a,'b) t) = h.context
+
+  let create context x1 x2 = {
+    contents1 = x1;
+    contents2 = x2;
+    previous = [];
+    context;
+  }
+
+  let rewind r =
+    match r.previous with
+    | [] -> ()
+    | {at}::_ when at.alive -> ()
+    | _ ->
+      let rec aux v1 v2 = function
+        | {at;value1;value2}::l when not at.alive -> aux value1 value2 l
+        | l -> r.contents1 <- v1; r.contents2 <- v2; r.previous <- l
+      in
+      aux r.contents1 r.contents2 r.previous
+
+  let set1 r v1 =
+    rewind r;
+    if not (CCEqual.physical r.contents1 v1)
+    then
+      match r.previous with
+      | {at}::_ when bp_equal at (bp r.context) -> r.contents1 <- v1
+      | _ ->
+      r.previous <- {at=bp r.context; value1 = r.contents1; value2 = r.contents2}::r.previous;
+      r.contents1 <- v1
+
+  let get1 r =
+    rewind r;
+    r.contents1
+
+  let set2 r v2 =
+    rewind r;
+    if not (CCEqual.physical r.contents2 v2)
+    then
+      match r.previous with
+      | {at}::_ when bp_equal at (bp r.context) -> r.contents2 <- v2
+      | _ ->
+      r.previous <- {at=bp r.context; value1 = r.contents1; value2 = r.contents2}::r.previous;
+      r.contents2 <- v2
+
+  let get2 r =
+    rewind r;
+    r.contents2
+
+  let set r v1 v2 =
+    rewind r;
+    if not (CCEqual.physical r.contents1 v1 && CCEqual.physical r.contents2 v2)
+    then
+      match r.previous with
+      | {at}::_ when bp_equal at (bp r.context) ->
+        r.contents1 <- v1; r.contents2 <- v2
+      | _ ->
+      r.previous <- {at=bp r.context; value1 = r.contents1; value2 = r.contents2}::r.previous;
+      r.contents1 <- v1;
+      r.contents2 <- v2
+
+  let get r =
+    rewind r;
+    r.contents1, r.contents2
 end
 
 type 'a history = {
@@ -154,4 +241,7 @@ module Make(S:sig
   let ro t = refresh t; t
   let rw t = save t; t
   let hide t = t
+
+  let creator (h:'a history) = h.context
+
 end

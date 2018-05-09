@@ -75,7 +75,7 @@ end
 
 (** trail and additional information *)
 type t
-val create: Context.context -> t
+val create: Context.creator -> t
 
 val current_age: t -> age
 val print_current_age: t Pp.pp

@@ -118,7 +118,7 @@ let new_solver () =
   let context = Context.create () in
   { wakeup_daemons = Prio.empty;
     prev_scheduler_state = None;
-    solver_state = S.Backtrackable.new_t context;
+    solver_state = S.Backtrackable.new_t (Context.creator context);
     context;
     learnt = Bag.empty;
     delayed    = None;

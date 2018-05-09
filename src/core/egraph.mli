@@ -56,6 +56,8 @@ module type Getter = sig
   val get_env : t -> 'a Env.t -> 'a
   val set_env : t -> 'a Env.t -> 'a -> unit
 
+  val context : t -> Context.creator
+
 end
 
 module type Ro = sig
@@ -147,7 +149,7 @@ module Backtrackable: sig
   type delayed = t
   include Getter
 
-  val new_t    : Context.context -> t
+  val new_t    : Context.creator -> t
 
   val new_delayed :
     sched_daemon:(Events.Wait.daemon_key -> unit) ->

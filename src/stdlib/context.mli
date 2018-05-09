@@ -26,6 +26,11 @@
 type context
 (** A context, with an history of backtrack point *)
 
+type creator
+(** Same than context, but only used for creating datastructure *)
+
+val creator: context -> creator
+
 type bp
 (** A backtrack point associated to a context *)
 
@@ -54,7 +59,7 @@ module Ref: sig
   type 'a t
   (** A reference aware of a context *)
 
-  val create: context -> 'a -> 'a t
+  val create: creator -> 'a -> 'a t
   (** Create a reference in this context with the given value *)
 
   val set: 'a t -> 'a -> unit
@@ -62,6 +67,37 @@ module Ref: sig
 
   val get: 'a t -> 'a
   (** Get the current value of the reference *)
+
+  val creator: 'a t -> creator
+end
+
+module Ref2: sig
+  type ('a,'b) t
+  (** A reference aware of a context *)
+
+  val create: creator -> 'a -> 'b -> ('a,'b) t
+  (** Create a reference in this context with the given value *)
+
+  val set: ('a,'b) t -> 'a -> 'b -> unit
+  (** Modify the reference *)
+
+  val get: ('a,'b) t -> 'a * 'b
+  (** Get the current value of the reference *)
+
+  val set1: ('a,'b) t -> 'a -> unit
+  (** Modify the reference *)
+
+  val get1: ('a,'b) t -> 'a
+  (** Get the current value of the reference *)
+
+  val set2: ('a,'b) t -> 'b -> unit
+  (** Modify the reference *)
+
+  val get2: ('a,'b) t -> 'b
+  (** Get the current value of the reference *)
+
+  val creator: ('a,'b) t -> creator
+
 end
 
 type 'a history
@@ -83,7 +119,7 @@ module Make(S:sig
     val get_history: t -> saved history
   end): sig
 
-  val create: context -> S.saved history
+  val create: creator -> S.saved history
   (** Create an history *)
 
   val refresh: S.t -> unit
@@ -97,4 +133,7 @@ module Make(S:sig
   val ro: hidden -> S.t
   val rw: hidden -> S.t
   val hide: S.t -> hidden
+
+  val creator: 'a history -> creator
+
 end
