@@ -64,6 +64,7 @@ module type Key = sig
   val equal: 'a t -> 'b t -> bool
   val hash : 'a t -> int
   val tag: 'a t -> int
+  val key: 'a t -> K.t
 
   type iter = {iter : 'a. 'a t -> unit}
   val iter : iter -> unit
@@ -97,7 +98,7 @@ module type Key = sig
                          type 'a key = 'a t and type ('a,'b) data = ('a,'b) D.t
 
   module Vector  : Vector_hetero.R1 with type 'a key = 'a t
-  module VectorH : Vector_hetero.T1 with type 'a key = 'a t
+  module VectorH : Hashtbl_hetero.T1 with type 'a key = 'a t
   module M : Intmap_hetero.R1 with type 'a key = 'a t
   module Make_Registry(S:sig
       type 'a data
@@ -153,8 +154,38 @@ module Make_key(X:sig end): Key = struct
     Intmap_hetero.Make1(struct type nonrec 'a t = 'a t end)(D)
   module Vector =
     Vector_hetero.RMake1(struct type nonrec 'a t = 'a t end)
-  module VectorH =
-    Vector_hetero.TMake1(struct type nonrec 'a t = 'a t end)
+  module VectorH : Hashtbl_hetero.T1 with type 'a key = 'a t = struct
+
+    module VH = Vector_hetero.TMake1(struct type nonrec 'a t = 'a t end)
+    type 'a key = 'a VH.key
+    type t = unit VH.t
+    let create = VH.create
+    let size = VH.size
+    let get  = VH.get
+    let get_def = VH.get_def
+    let set = VH.set
+    let is_uninitialized = VH.is_uninitialized
+    let inc_size = VH.inc_size
+    type iter_initialized  = { iter : 'a. 'a -> unit; }
+    type iter_initializedi = { iteri : 'a. 'a key -> 'a -> unit; }
+    let iter_initializedi ({iteri}:iter_initializedi) =
+      VH.iter_initializedi { VH.iteri }
+    let iter_initialized ({iter}:iter_initialized) =
+      VH.iter_initializedi { VH.iteri = fun _ c -> iter c }
+    type 'c fold_initialized  = { fold : 'a. 'c -> 'a -> 'c; }
+    type 'c fold_initializedi = { foldi : 'a. 'c -> 'a key -> 'a -> 'c; }
+    let fold_initializedi ({foldi}:'c fold_initializedi) =
+      VH.fold_initializedi {VH.foldi}
+    let fold_initialized ({fold}:'c fold_initialized) =
+      VH.fold_initializedi { foldi = fun sofar _ c -> fold sofar c }
+    let copy = VH.copy
+    type printk = { printk : 'a. 'a key Format.printer }
+    type printd = { printd : 'a. 'a key -> 'a Format.printer }
+    let pp sep1 sep2 {printk} {printd} = VH.pp sep1 sep2 {VH.printk} {VH.printd}
+    let clear _ = ()
+    let uninitialize _ = failwith "Unneeded"
+
+  end
   module M =
     Intmap_hetero.RMake1(struct type nonrec 'a t = 'a t end)
 
@@ -251,12 +282,12 @@ module type Key2 = sig
 
   module Eq: sig
     val eq_type : ('a1,'b1) t -> ('a2,'b2) t
-      -> (('a1,'a2) Poly.eq * ('b1,'b2) Poly.eq) option
+      -> ('a1*'b1,'a2*'b2) Poly.eq option
     (** If the two arguments are physically identical then an equality witness
         between the types is returned *)
 
     val coerce_type : ('a1,'b1) t -> ('a2,'b2) t
-      -> ('a1,'a2) Poly.eq * ('b1,'b2) Poly.eq
+      -> ('a1*'b1,'a2*'b2) Poly.eq
       (** If the two arguments are physically identical then an equality witness
           between the types is returned otherwise
           the exception BadCoercion is raised  *)
@@ -295,22 +326,22 @@ module Make_key2(X:sig end) : Key2 = struct
 
     let eq_type :
       type a1 b1 a2 b2. (a1,b1) t -> (a2,b2) t
-      -> ((a1,a2) Poly.eq * (b1,b2) Poly.eq) option =
+      -> (a1*b1,a2*b2) Poly.eq option =
       fun a b ->
         if equal a b
-        then let eq1 = (Obj.magic (Poly.Eq : (a1,a1) Poly.eq) : (a1,a2) Poly.eq) in
-          let eq2 = (Obj.magic (Poly.Eq : (b1,b1) Poly.eq) : (b1,b2) Poly.eq) in
-          Some (eq1,eq2)
+        then
+          let eq = (Obj.magic (Poly.Eq : (a1*b1,a1*b1) Poly.eq) : (a1*b1,a2*b2) Poly.eq)
+          in Some eq
         else None
 
     let coerce_type :
       type a1 b1 a2 b2. (a1,b1) t -> (a2,b2) t
-      -> ((a1,a2) Poly.eq * (b1,b2) Poly.eq) =
+      -> (a1*b1,a2*b2) Poly.eq =
       fun a b ->
         if equal a b
-        then let eq1 = (Obj.magic (Poly.Eq : (a1,a1) Poly.eq) : (a1,a2) Poly.eq) in
-          let eq2 = (Obj.magic (Poly.Eq : (b1,b1) Poly.eq) : (b1,b2) Poly.eq) in
-          (eq1,eq2)
+        then
+          let eq = (Obj.magic (Poly.Eq : (a1*b1,a1*b1) Poly.eq) : (a1*b1,a2*b2) Poly.eq)
+          in eq
         else raise BadCoercion
 
   end

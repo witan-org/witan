@@ -9,6 +9,7 @@
                witan.core
                witan.solver
                witan.theories.bool
+               witan.theories.LRA
    ))
    (preprocess (pps (ppx_optcomp)))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 -color always))

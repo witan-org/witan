@@ -81,6 +81,7 @@ module type Key = sig
   val equal: 'a t -> 'b t -> bool
   val hash : 'a t -> int
   val tag: 'a t -> int
+  val key: 'a t -> K.t
 
   type iter = {iter : 'a. 'a t -> unit}
   val iter : iter -> unit
@@ -114,7 +115,8 @@ module type Key = sig
                          type 'a key = 'a t and type ('a,'b) data = ('a,'b) D.t
 
   module Vector  : Vector_hetero.R1 with type 'a key = 'a t
-  module VectorH : Vector_hetero.T1 with type 'a key = 'a t
+  module VectorH : Hashtbl_hetero.T1 with type 'a key = 'a t
+  (* module VectorH : Vector_hetero.T1 with type 'a key = 'a t *)
   module M : Intmap_hetero.R1 with type 'a key = 'a t
   module Make_Registry(S:sig
       type 'a data
@@ -160,12 +162,12 @@ module type Key2 = sig
 
   module Eq: sig
     val eq_type : ('a1,'b1) t -> ('a2,'b2) t
-      -> (('a1,'a2) Poly.eq * ('b1,'b2) Poly.eq) option
+      -> ('a1*'b1,'a2*'b2) Poly.eq option
     (** If the two arguments are physically identical then an equality witness
         between the types is returned *)
 
     val coerce_type : ('a1,'b1) t -> ('a2,'b2) t
-      -> ('a1,'a2) Poly.eq * ('b1,'b2) Poly.eq
+      -> ('a1*'b1,'a2*'b2) Poly.eq
       (** If the two arguments are physically identical then an equality witness
           between the types is returned otherwise
           the exception BadCoercion is raised  *)

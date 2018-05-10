@@ -1,1 +1,1 @@
-[%%define keys "well-typed"]
+[%%define keys "well-type"]
