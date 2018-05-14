@@ -5,11 +5,11 @@ env:
   #  - OCAML_VERSION=4.03.0+flambda
   #  - OCAML_VERSION=4.04.2
   #  - OCAML_VERSION=4.04.2+flambda
-  - OCAML_VERSION=4.05.0
-  - OCAML_VERSION=4.05.0+flambda
-    # There are some dependency build problems on 4.06
-    # - OCAML_VERSION=4.06.0
-    # - OCAML_VERSION=4.06.0+flambda
+  #  Only 4.06 allows type constructors with different parameters to be substituted.
+  #  - OCAML_VERSION=4.05.0
+  #  - OCAML_VERSION=4.05.0+flambda
+ - OCAML_VERSION=4.06.0
+ - OCAML_VERSION=4.06.0+flambda
 addons:
   apt:
     sources:
