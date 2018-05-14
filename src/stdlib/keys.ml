@@ -65,6 +65,7 @@ module Make_key(X:sig end) = struct
     end)
 
   let all_keys = AllKeys.create 17
+  let num_keys = ref 0
 
   let create_key (type a) (module NT : NamedType with type t = a) : a t =
     let module TMP = struct
@@ -74,9 +75,12 @@ module Make_key(X:sig end) = struct
       | TMP.K -> Poly.Eq
       | _ -> Poly.Neq
     in
+    incr num_keys;
+    (* let stats = AllKeys.stats all_keys in *)
     let key = { gadt = TMP.K;
                 name = K.create NT.name;
-                id = AllKeys.length all_keys;
+                id = !num_keys;
+                (* id = stats.Hashtbl.num_bindings; *)
                 iseq }
     in
     AllKeys.add all_keys (K key) ();
@@ -195,6 +199,7 @@ module Make_key2(X:sig end) : Key2 = struct
     end)
 
   let all_keys = AllKeys.create 17
+  let num_keys = ref 0
 
   let create_key (type a1) (type a2) (module NT : NamedType2 with type t = a1
                                                               and type d = a2)
@@ -206,9 +211,10 @@ module Make_key2(X:sig end) : Key2 = struct
       | TMP.K -> Poly.Eq
       | _ -> Poly.Neq
     in
+    incr num_keys;
     let key = { gadt = TMP.K;
                 name = K.create NT.name;
-                id = AllKeys.length all_keys;
+                id = !num_keys;
                 iseq }
     in
     AllKeys.add all_keys (K key) ();
