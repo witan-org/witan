@@ -81,8 +81,8 @@ end
 
 (** Same as S1 but for ('a,'b) data = 'b *)
 module type R1 = sig
-  type ('a,'b) data = 'b
-  include S1 with type ('a,'b) data := 'b
+  (* type ('a,'b) data = 'b *)
+  include S1 with type ('a,'b) data = 'b
   (* Some primitives get their types simplified *)
   val iter_initialized  : ('b -> unit) -> 'b t -> unit
   val fold_initialized  : ('c -> 'b -> 'c) -> 'c -> 'b t -> 'c
