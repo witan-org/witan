@@ -67,6 +67,7 @@ module type S1 = sig
 
   val copy : 'b t -> 'b t
   (* shallow *)
+  val move: from:'b t -> to_:'b t -> unit
 
   type printk = { printk: 'a. 'a key Format.printer }
   type 'b printd = { printd: 'a. 'a key -> ('a,'b) data Format.printer }
@@ -117,6 +118,7 @@ module type T1 = sig
   type 'c fold_initializedi = { foldi : 'a. 'c -> 'a key -> 'a -> 'c; }
   val fold_initializedi : 'c fold_initializedi -> 'c -> t -> 'c
   val copy : t -> t
+  val move : from: t -> to_: t -> unit
   type printk = { printk : 'a. 'a key Containers.Format.printer; }
   type printd = { printd : 'a. 'a key -> 'a Containers.Format.printer; }
   val pp :
@@ -172,4 +174,5 @@ module type S2 = sig
 
   val copy : 'b t -> 'b t
   (* shallow *)
+  val move: from:'b t -> to_:'b t -> unit
 end

@@ -179,6 +179,7 @@ module Make_key(X:sig end): Key = struct
     let fold_initialized ({fold}:'c fold_initialized) =
       VH.fold_initializedi { foldi = fun sofar _ c -> fold sofar c }
     let copy = VH.copy
+    let move = VH.move
     type printk = { printk : 'a. 'a key Format.printer }
     type printd = { printd : 'a. 'a key -> 'a Format.printer }
     let pp sep1 sep2 {printk} {printd} = VH.pp sep1 sep2 {VH.printk} {VH.printd}

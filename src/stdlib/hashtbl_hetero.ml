@@ -86,6 +86,10 @@ module MakeS1(K:Keys1)(D:sig type ('a,'b) t end)
       H.fold (fun _ (Pair(k,v)) sofar -> f.foldi sofar k v) m seed
 
     let copy : 'b t -> 'b t = H.copy
+    let move ~from ~to_ =
+      H.reset to_;
+      let aux k v = H.add to_ k v in
+      H.iter aux from
 
     let pp (sep1 : unit Format.printer) (sep2 : unit Format.printer)
         (printkey : printk) (printdata : 'b printd) : 'b t Format.printer
@@ -208,6 +212,10 @@ module Make2
     H.fold (fun _ (Pair(k,v)) sofar -> f.foldi sofar k v) m seed
 
   let copy : 'b t -> 'b t = H.copy
+  let move ~from ~to_ =
+    H.reset to_;
+    let aux k v = H.add to_ k v in
+    H.iter aux from
 
 end
 
@@ -276,7 +284,8 @@ module MakeS1(K:Keys1)(D:sig type ('a,'b) t end)
       H.fold_initialized (fun sofar (Pair(k,v)) -> f.foldi sofar k v) seed m
 
     let copy : 'b t -> 'b t = H.copy
-
+    let move = H.move
+                 
     let pp (sep1 : unit Format.printer) (sep2 : unit Format.printer)
         (printkey : printk) (printdata : 'b printd) : 'b t Format.printer
       =
@@ -398,6 +407,10 @@ module Make2
     H.fold (fun _ (Pair(k,v)) sofar -> f.foldi sofar k v) m seed
 
   let copy : 'b t -> 'b t = H.copy
+  let move ~from ~to_ =
+    H.reset to_;
+    let aux k v = H.add to_ k v in
+    H.iter aux from
 
 end
 

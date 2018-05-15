@@ -1,24 +1,25 @@
-(**************************************************************************)
-(*                                                                        *)
-(*  This file is part of Frama-C.                                         *)
-(*                                                                        *)
-(*  Copyright (C) 2013                                                    *)
-(*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
-(*         alternatives)                                                  *)
-(*                                                                        *)
-(*  you can redistribute it and/or modify it under the terms of the GNU   *)
-(*  Lesser General Public License as published by the Free Software       *)
-(*  Foundation, version 2.1.                                              *)
-(*                                                                        *)
-(*  It is distributed in the hope that it will be useful,                 *)
-(*  but WITHOUT ANY WARRANTY; without even the implied warranty of        *)
-(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *)
-(*  GNU Lesser General Public License for more details.                   *)
-(*                                                                        *)
-(*  See the GNU Lesser General Public License version 2.1                 *)
-(*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
-(*                                                                        *)
-(**************************************************************************)
+(*************************************************************************)
+(*  This file is part of Witan.                                          *)
+(*                                                                       *)
+(*  Copyright (C) 2017                                                   *)
+(*    CEA   (Commissariat à l'énergie atomique et aux énergies           *)
+(*           alternatives)                                               *)
+(*    INRIA (Institut National de Recherche en Informatique et en        *)
+(*           Automatique)                                                *)
+(*    CNRS  (Centre national de la recherche scientifique)               *)
+(*                                                                       *)
+(*  you can redistribute it and/or modify it under the terms of the GNU  *)
+(*  Lesser General Public License as published by the Free Software      *)
+(*  Foundation, version 2.1.                                             *)
+(*                                                                       *)
+(*  It is distributed in the hope that it will be useful,                *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of       *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        *)
+(*  GNU Lesser General Public License for more details.                  *)
+(*                                                                       *)
+(*  See the GNU Lesser General Public License version 2.1                *)
+(*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
+(*************************************************************************)
 
 open Witan_popop_lib
 open Witan_stdlib.Std
@@ -131,33 +132,39 @@ module Convexe = struct
   let lower_min_max e1 e2 =
     let c = Q.compare e1.minv e2.minv in
     match e1.minb, e2.minb with
-    | Strict, Large when c =  0 -> e2,e1
-    | _             when c <= 0 -> e1,e2
-    | _                         -> e2,e1
+    | Strict, Large when c =  0 -> e2,e1, false
+    | _             when c <= 0 -> e1,e2, true
+    | _                         -> e2,e1, false
 
   let bigger_min_max e1 e2 =
     let c = Q.compare e1.maxv e2.maxv in
     match e1.maxb, e2.maxb with
-    | Strict, Large when c =  0 -> e1,e2
-    | _             when c >= 0 -> e2,e1
-    | _                         -> e1,e2
+    | Strict, Large when c =  0 -> e1,e2, true
+    | _             when c >= 0 -> e2,e1, false
+    | _                         -> e1,e2, true
 
 
-  let is_distinct e1 e2 =
+  let is_comparable e1 e2 =
     (** x1 in e1, x2 in e2 *)
     (** order by the minimum *)
-    let emin,emax = lower_min_max e1 e2 in (** emin.minv <= emax.minv *)
+    let emin,emax,same = lower_min_max e1 e2 in (** emin.minv <= emax.minv *)
     (** look for inclusion *)
     let c = Q.compare emin.maxv emax.minv in
     match emin.maxb, emax.minb with
     (** emin.minv <? e1 <? emin.maxv < emax.minv <? e2 <? emax.maxv *)
-    | _ when c <  0 -> true
+    | _ when c <  0 -> if same then `Lt else `Gt
     (** emin.minv <? e1 <  emin.maxv = emax.minv <  e2 <? emax.maxv *)
     (** emin.minv <? e1 <  emin.maxv = emax.minv <= e2 <? emax.maxv *)
     (** emin.minv <? e1 <= emin.maxv = emax.minv <  e2 <? emax.maxv *)
     | Strict, Strict | Strict, Large | Large, Strict
-      when c = 0 -> true
-    | _ -> false
+      when c = 0 ->
+      if same then `Lt else `Gt
+    | _ -> `Uncomparable
+
+  let is_distinct e1 e2 =
+    match is_comparable e1 e2 with
+    | `Uncomparable -> false
+    | _ -> true
 
   let is_included e1 e2 =
     assert (invariant e1);
@@ -224,8 +231,8 @@ module Convexe = struct
     assert (invariant t); t
 
   let union e1 e2 =
-    let emin,_ = lower_min_max  e1 e2 in
-    let _,emax = bigger_min_max e1 e2 in
+    let emin,_,_ = lower_min_max  e1 e2 in
+    let _,emax,_ = bigger_min_max e1 e2 in
     {minb = emin.minb; minv = emin.minv;
      maxv = emax.maxv; maxb = emax.maxb}
 
@@ -372,9 +379,14 @@ module ConvexeWithExceptions = struct
     | Some con ->
     normalize { con; exc = Q.S.union e1.exc e2.exc }
 
+
+  let is_comparable e1 e2 =
+    Convexe.is_comparable e1.con e2.con (* ||
+     * not (Q.S.equal e1.exc e2.exc) *)
+
   let is_distinct e1 e2 =
-    Convexe.is_distinct e1.con e2.con ||
-    not (Q.S.equal e1.exc e2.exc)
+    Convexe.is_distinct e1.con e2.con (* ||
+     * not (Q.S.equal e1.exc e2.exc) *)
 
   let is_included e1 e2 =
     Convexe.is_included e1.con e2.con ||
@@ -459,9 +471,11 @@ module Union = struct
     | [r] -> Convexe.is_singleton r
     | _ -> None
 
-  let is_distinct t1 t2 =
-    List.length t1 <> List.length t2 ||
-    List.exists2 Convexe.is_distinct t1 t2
+
+  let is_comparable _t1 _t2  = assert false (** TODO : correctly *)
+  let is_distinct _t1 _t2 = assert false (** TODO : correctly *)
+    (* List.length t1 <> List.length t2 ||
+     * List.exists2 Convexe.is_distinct t1 t2 *)
 
   let is_included _t1 _t2 =
     raise (TODO "Interval.Union.is_included")
@@ -696,6 +710,13 @@ module ConvexeInfo (Info: sig
   type t = { minb : bound; minv: Q.t; mini: Info.t;
              maxv: Q.t; maxb: bound; maxi: Info.t }
 
+  let get_info t = t.mini, t.maxi
+  let to_convexe t = { Convexe.minb = t.minb; minv = t.minv;
+                       maxv = t.maxv; maxb = t.maxb }
+  let of_convexe (t:Convexe.t) ~info = { minb = t.minb; minv = t.minv;
+                                         maxv = t.maxv; maxb = t.maxb;
+                                         mini = info; maxi = info }
+
   let pp fmt t =
     let print_bound_left fmt = function
       | Large  -> Format.fprintf fmt "["
@@ -778,12 +799,13 @@ module ConvexeInfo (Info: sig
     then Some {e with maxb=Strict}
     else Some e
 
+
   let lower_min_max e1 e2 =
     let c = Q.compare e1.minv e2.minv in
     match e1.minb, e2.minb with
-    | Strict, Large when c =  0 -> e2,e1
-    | _             when c <= 0 -> e1,e2
-    | _                         -> e2,e1
+    | Strict, Large when c =  0 -> e2,e1, false
+    | _             when c <= 0 -> e1,e2, true
+    | _                         -> e2,e1, false
 
   let bigger_min_max e1 e2 =
     let c = Q.compare e1.maxv e2.maxv in
@@ -792,22 +814,27 @@ module ConvexeInfo (Info: sig
     | _             when c >= 0 -> e2,e1
     | _                         -> e1,e2
 
-
-  let is_distinct e1 e2 =
+  let is_comparable e1 e2 =
     (** x1 in e1, x2 in e2 *)
     (** order by the minimum *)
-    let emin,emax = lower_min_max e1 e2 in (** emin.minv <= emax.minv *)
+    let emin,emax,same = lower_min_max e1 e2 in (** emin.minv <= emax.minv *)
     (** look for inclusion *)
     let c = Q.compare emin.maxv emax.minv in
     match emin.maxb, emax.minb with
     (** emin.minv <? e1 <? emin.maxv < emax.minv <? e2 <? emax.maxv *)
-    | _ when c <  0 -> true
+    | _ when c <  0 -> if same then `Lt else `Gt
     (** emin.minv <? e1 <  emin.maxv = emax.minv <  e2 <? emax.maxv *)
     (** emin.minv <? e1 <  emin.maxv = emax.minv <= e2 <? emax.maxv *)
     (** emin.minv <? e1 <= emin.maxv = emax.minv <  e2 <? emax.maxv *)
     | Strict, Strict | Strict, Large | Large, Strict
-      when c = 0 -> true
-    | _ -> false
+      when c = 0 ->
+      if same then `Lt else `Gt
+    | _ -> `Uncomparable
+
+  let is_distinct e1 e2 =
+    match is_comparable e1 e2 with
+    | `Uncomparable -> false
+    | _ -> true
 
   let is_included e1 e2 =
     assert (invariant e1);
@@ -877,7 +904,7 @@ module ConvexeInfo (Info: sig
     assert (invariant t); t
 
   let union e1 e2 =
-    let emin,_ = lower_min_max  e1 e2 in
+    let emin,_,_ = lower_min_max  e1 e2 in
     let _,emax = bigger_min_max e1 e2 in
     {minb = emin.minb; minv = emin.minv; mini = emin.mini;
      maxv = emax.maxv; maxb = emax.maxb; maxi = emin.maxi;}

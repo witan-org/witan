@@ -98,6 +98,14 @@ let drop_last t =
   t.size <- t.size - 1;
   uninitialize t t.size
 
+let decrease_size_to t i =
+  assert (i <= t.size);
+  assert (0 <= i);
+  t.size <- i;
+  for j=t.size downto i do
+    Array.unsafe_set t.data j dumb
+  done
+
 let iter_initialized f t =
   for i = 0 to t.size - 1 do
     let e = t.data.(i) in
@@ -134,3 +142,6 @@ let fold_initializedi f acc t =
 
 
 let copy t = { data = Array.copy t.data; size = t.size}
+let move ~from ~to_ =
+  to_.data <- from.data;
+  to_.size <- from.size

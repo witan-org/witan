@@ -59,6 +59,8 @@ module type S1 = sig
   val copy : 'b t -> 'b t
   (* shallow *)
 
+  val move: from:'b t -> to_:'b t -> unit
+
   type printk = { printk: 'a. 'a key Pp.pp }
   type 'b printd = { printd: 'a. 'a key -> ('a,'b) data Pp.pp }
   val pp:
@@ -141,6 +143,9 @@ module Make1
   let copy = Simple_vector.copy
   (* shallow *)
 
+  let move = Simple_vector.move
+  (* shallow *)
+
   type printk = { printk: 'a. 'a key Pp.pp }
   type 'b printd = { printd: 'a. 'a key -> ('a,'b) data Pp.pp }
   let pp sep1 sep2 printkey printdata fmt t =
@@ -199,6 +204,8 @@ module type S2 = sig
 
   val copy : 'b t -> 'b t
   (* shallow *)
+
+  val move: from:'b t -> to_:'b t -> unit
 end
 
 module Make2
@@ -273,6 +280,8 @@ module Make2
   let copy = Simple_vector.copy
   (* shallow *)
 
+  let move = Simple_vector.move
+
 end
 
 (** Same as S1 but for ('a,'b) data = 'b *)
@@ -309,6 +318,8 @@ module type R1 = sig
 
   val copy : 'b t -> 'b t
   (* shallow *)
+
+  val move : from:'b t -> to_:'b t -> unit
 
 
   type printk = { printk: 'a. 'a key Pp.pp }
@@ -370,6 +381,8 @@ module type T1 = sig
 
   val copy : unit t -> unit t
   (* shallow *)
+
+  val move : from:unit t -> to_:unit t -> unit
 
   type printk = { printk: 'a. 'a key Pp.pp }
   type 'b printd = { printd: 'a. 'a key -> 'a Pp.pp }

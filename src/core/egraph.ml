@@ -65,21 +65,36 @@ module VValueTable = ValueKind.MkVector (struct type ('a,'unit) t = 'a valuetabl
 (** Just for easy qualification *)
 module Def = struct
 
-type t = {
-  mutable repr  : Node.t Node.M.t;
-  mutable rang  : int Node.M.t;
-  mutable event_repr : Events.Wait.t Bag.t Node.M.t;
-  mutable event_value : Events.Wait.t Bag.t Node.M.t;
-  mutable event_reg : Events.Wait.t list Node.M.t;
-  mutable event_any_reg : Events.Wait.t list;
-          (** extensible "number of fields" *)
-          dom   : delayed_t VDomTable.t;
-          sem   : semtable VSemTable.t;
-          value : unit VValueTable.t;
-          envs  : Env.VectorH.t;
-          trail : Trail.t;
-  mutable current_delayed  : delayed_t; (** For assert-check *)
-}
+  type saved = {
+      saved_repr  : Node.t Node.M.t;
+      saved_rang  : int Node.M.t;
+      saved_event_repr : Events.Wait.t Bag.t Node.M.t;
+      saved_event_value : Events.Wait.t Bag.t Node.M.t;
+      saved_event_reg : Events.Wait.t list Node.M.t;
+      saved_event_any_reg : Events.Wait.t list;
+      saved_dom   : delayed_t VDomTable.t;
+      saved_sem   : semtable VSemTable.t;
+      saved_value : unit VValueTable.t;
+      saved_envs  : Env.VectorH.t;
+    }
+
+
+    and t = {
+      mutable repr  : Node.t Node.M.t;
+      mutable rang  : int Node.M.t;
+      mutable event_repr : Events.Wait.t Bag.t Node.M.t;
+      mutable event_value : Events.Wait.t Bag.t Node.M.t;
+      mutable event_reg : Events.Wait.t list Node.M.t;
+      mutable event_any_reg : Events.Wait.t list;
+      (** extensible "number of fields" *)
+      dom   : delayed_t VDomTable.t;
+      sem   : semtable VSemTable.t;
+      value : unit VValueTable.t;
+      envs  : Env.VectorH.t;
+      trail : Trail.t;
+      mutable current_delayed  : delayed_t; (** For assert-check *)
+      history : saved Context.history;
+    }
 
   (** delayed_t is used *)
   and delayed_t = {
@@ -107,6 +122,7 @@ type t = {
     | ExtDem         : Events.Wait.daemon_key  -> action_ext
 
 end
+
 open Def
 (** {2 Define events} *)
 
@@ -138,6 +154,40 @@ let mk_dumb_delayed () = { env = Obj.magic 0;
 
 let dumb_delayed = mk_dumb_delayed ()
 let unsat_delayed = mk_dumb_delayed ()
+
+module Hidden = Context.Make(struct
+    type saved = Def.saved
+    type t = Def.t
+
+    let save (t:t) : saved =
+      assert (Equal.physical t.current_delayed dumb_delayed); {
+        saved_repr = t.repr;
+        saved_rang = t.rang;
+        saved_event_repr = t.event_repr;
+        saved_event_value = t.event_value;
+        saved_event_reg = t.event_reg;
+        saved_event_any_reg = t.event_any_reg;
+        saved_dom = VDomTable.copy t.dom;
+        saved_sem = VSemTable.copy t.sem;
+        saved_value = VValueTable.copy t.value;
+        saved_envs = Env.VectorH.copy t.envs;
+      }
+
+    let restore (s:saved) (t:t) =
+      t.repr <- s.saved_repr;
+      t.rang <- s.saved_rang;
+      t.event_repr <- s.saved_event_repr ;
+      t.event_value <- s.saved_event_value ;
+      t.event_reg <- s.saved_event_reg ;
+      t.event_any_reg <- s.saved_event_any_reg;
+      VDomTable.move ~from:s.saved_dom ~to_:t.dom;
+      VSemTable.move ~from:s.saved_sem ~to_:t.sem;
+      VValueTable.move ~from:s.saved_value ~to_:t.value;
+      Env.VectorH.move ~from:s.saved_envs ~to_:t.envs;
+      t.current_delayed <- dumb_delayed
+
+    let get_history t = t.history
+  end)
 
 (** {2 Table access in the environment } *)
 
@@ -339,6 +389,8 @@ let draw_graph =
 module Delayed = struct
   open T
   type t = delayed_t
+
+  let context t = Hidden.creator t.env.history
 
   let is_current_env t = Equal.physical t.env.current_delayed t
 
@@ -943,10 +995,16 @@ end
 include Delayed
 
 module Backtrackable = struct
-  type delayed = t
-  type t = Def.t
 
-  let new_t () = {
+  let check_disabled_delayed t =
+    Equal.physical t.current_delayed dumb_delayed
+    || Equal.physical t.current_delayed unsat_delayed
+
+  type delayed = t
+  type t = Hidden.hidden
+
+  let new_t context =
+    Hidden.hide {
     repr = Node.M.empty;
     rang = Node.M.empty;
     event_repr = Node.M.empty;
@@ -957,28 +1015,34 @@ module Backtrackable = struct
     sem = VSemTable.create 5;
     value = VValueTable.create 5;
     envs = Env.VectorH.create 5;
-    trail = Trail.create ();
+    trail = Trail.create context;
     current_delayed = dumb_delayed;
+    history = Hidden.create context;
   }
 
-  let new_handle t =
-    assert (Equal.physical t.current_delayed dumb_delayed);
-    {
-      repr  = t.repr;
-      rang  = t.rang;
-      event_repr = t.event_repr;
-      event_value = t.event_value;
-      event_reg = t.event_reg;
-      event_any_reg = t.event_any_reg;
-      dom = VDomTable.copy t.dom;
-      sem = VSemTable.copy t.sem;
-      value = VValueTable.copy t.value;
-      envs = Env.VectorH.copy t.envs;
-      trail = Trail.new_handle t.trail;
-      current_delayed = t.current_delayed;
-    }
+  (* let new_handle t =
+   *   assert (Equal.physical t.current_delayed dumb_delayed);
+   *   {
+   *     repr  = t.repr;
+   *     rang  = t.rang;
+   *     event_repr = t.event_repr;
+   *     event_value = t.event_value;
+   *     event_reg = t.event_reg;
+   *     event_any_reg = t.event_any_reg;
+   *     dom = VDomTable.copy t.dom;
+   *     sem = VSemTable.copy t.sem;
+   *     value = VValueTable.copy t.value;
+   *     envs = Env.VectorH.copy t.envs;
+   *     trail = Trail.new_handle t.trail;
+   *     current_delayed = t.current_delayed;
+   *   } *)
+
+  let context t =
+    let t = Hidden.ro t in
+    Hidden.creator t.history
 
   let new_delayed ~sched_daemon ~sched_decision t =
+    let t = Hidden.rw t in
     assert (Equal.physical t.current_delayed dumb_delayed);
     let d =  { env = t;
                todo_immediate_dem = Queue.create ();
@@ -1005,10 +1069,12 @@ module Backtrackable = struct
     Queue.push (ExtDem dem) d.todo_ext_action
 
   let is_registered t node =
+    let t = Hidden.rw t in
     T.is_registered t node
 
   let is_equal t node1 node2 =
-    assert (Equal.physical t.current_delayed dumb_delayed);
+    let t = Hidden.rw t in
+    assert (check_disabled_delayed t);
     let node1,node2 = Shuffle.shuffle2 (node1,node2) in
     Debug.dprintf4 debug "[Egraph] @[is_equal %a %a@]"
       Node.pp node1 Node.pp node2;
@@ -1016,57 +1082,66 @@ module Backtrackable = struct
     T.is_equal t node1 node2
 
   let find t node =
-    assert (Equal.physical t.current_delayed dumb_delayed);
+    let t = Hidden.rw t in
+    assert (check_disabled_delayed t);
     T.find t node
 
   let get_dom t dom node =
-    assert (Equal.physical t.current_delayed dumb_delayed);
+    let t = Hidden.rw t in
     T.get_dom t dom node
 
   let get_value t value node =
-    assert (Equal.physical t.current_delayed dumb_delayed);
+    let t = Hidden.rw t in
+    assert (check_disabled_delayed t);
     T.get_value t value node
 
   let get_env t env =
-    assert (Equal.physical t.current_delayed dumb_delayed);
+    let t = Hidden.rw t in
+    assert (check_disabled_delayed t);
     T.get_env t env
 
   let set_env t env v =
-    assert (Equal.physical t.current_delayed dumb_delayed);
+    let t = Hidden.rw t in
+    assert (check_disabled_delayed t);
     T.set_env t env v
 
   let is_repr t node =
-    assert (Equal.physical t.current_delayed dumb_delayed);
+    let t = Hidden.rw t in
+    assert (check_disabled_delayed t);
     T.is_repr t node
 
   let find_def t node =
-    assert (Equal.physical t.current_delayed dumb_delayed);
+    let t = Hidden.rw t in
+    assert (check_disabled_delayed t);
     T.find_def t node
 
   let get_trail t =
-    (* assert (t.current_delayed == dumb_delayed ||
-     *         t.current_delayed == unsat_delayed); *)
+    let t = Hidden.ro t in
+    (* assert (check_disabled_delayed t); *)
     t.trail
 
   let get_getter t =
-    (* assert (t.current_delayed == dumb_delayed); *)
-    t.current_delayed
-
+    (* assert (check_disabled_delayed t); *)
+    t
 
   let new_dec t =
-    assert (Equal.physical t.current_delayed dumb_delayed);
+    let t = Hidden.ro t in
+    assert (check_disabled_delayed t);
     Trail.new_dec t.trail
 
-  let current_age (t:t) = Trail.current_age t.trail
-  let current_nbdec (t:t) = Trail.nbdec t.trail
+  let current_age (t:t) =
+    let t = Hidden.ro t in
+    Trail.current_age t.trail
+  let current_nbdec (t:t) =
+    let t = Hidden.ro t in
+    Trail.nbdec t.trail
 
   let get_direct_dom t dom node =
-    assert (Equal.physical t.current_delayed dumb_delayed ||
-            Equal.physical t.current_delayed unsat_delayed);
+    assert (check_disabled_delayed t);
     get_direct_dom t dom node
 
-  let draw_graph = draw_graph
-  let output_graph = output_graph
+  let draw_graph ?force t = let t = Hidden.ro t in draw_graph ?force t
+  let output_graph s t = let t = Hidden.ro t in output_graph s t
 end
 
 module type Getter = sig
@@ -1089,12 +1164,14 @@ module type Getter = sig
   val get_env : t -> 'a Env.t -> 'a
   val set_env : t -> 'a Env.t -> 'a -> unit
 
+  val context : t -> Context.creator
+
 end
 
-module Getter : Getter with type t = Delayed.t = Delayed
+module Getter : Getter with type t = Backtrackable.t = Backtrackable
 
 module type Ro = sig
-  type t = private Getter.t
+  type t
   include Getter with type t := t
 
   (** {3 Immediate information} *)

@@ -56,12 +56,12 @@ module type Getter = sig
   val get_env : t -> 'a Env.t -> 'a
   val set_env : t -> 'a Env.t -> 'a -> unit
 
+  val context : t -> Context.creator
+
 end
 
-module Getter : Getter
-
 module type Ro = sig
-  type t = private Getter.t
+  type t
   include Getter with type t := t
 
   val register : t -> Node.t -> unit
@@ -142,13 +142,14 @@ val check_initialization: unit -> bool
 val print_dom: 'a Dom.t -> 'a Format.printer
 val print_dom_opt: 'a Dom.t -> 'a option Format.printer
 
+module Getter : Getter
 
 (** {2 External use of the solver} *)
 module Backtrackable: sig
   type delayed = t
   include Getter
 
-  val new_t    : unit -> t
+  val new_t    : Context.creator -> t
 
   val new_delayed :
     sched_daemon:(Events.Wait.daemon_key -> unit) ->
@@ -178,12 +179,6 @@ module Backtrackable: sig
   val new_dec : t -> Trail.dec
   val current_age : t -> Trail.Age.t
   val current_nbdec : t -> int
-
-  (** {2 Implementation Specifics } *)
-  (** Because this module is implemented with persistent datastructure *)
-
-  val new_handle: t -> t
-  (** Modification in one of the environnement doesn't modify the other *)
 
   (** Debug *)
   val draw_graph: ?force:bool -> t -> unit

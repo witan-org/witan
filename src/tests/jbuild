@@ -2,7 +2,7 @@
 
 (executable
   ((name tests)
-   (libraries (containers witan.core witan.theories.bool witan.theories.LRA oUnit witan.solver))
+   (libraries (containers witan.core witan.theories.bool witan.theories.LRA oUnit witan.solver witan.stdlib))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60-9@8 -color always))
    (ocamlopt_flags (:standard -O3
                     -unbox-closures -unbox-closures-factor 20))
@@ -11,9 +11,6 @@
 (alias
  ((name    runtest)
   (deps    (tests.exe
-            (files_recursively_in solve/dimacs/sat)
-            (files_recursively_in solve/dimacs/unsat)
-            (files_recursively_in solve/smt_uf/unsat)
-            (files_recursively_in solve/smt_uf/sat)
+            (files_recursively_in solve/)
   ))
   (action  (run ${<}))))

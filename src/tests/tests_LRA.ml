@@ -1,3 +1,25 @@
+(*************************************************************************)
+(*  This file is part of Witan.                                          *)
+(*                                                                       *)
+(*  Copyright (C) 2017                                                   *)
+(*    CEA   (Commissariat à l'énergie atomique et aux énergies           *)
+(*           alternatives)                                               *)
+(*    INRIA (Institut National de Recherche en Informatique et en        *)
+(*           Automatique)                                                *)
+(*    CNRS  (Centre national de la recherche scientifique)               *)
+(*                                                                       *)
+(*  you can redistribute it and/or modify it under the terms of the GNU  *)
+(*  Lesser General Public License as published by the Free Software      *)
+(*  Foundation, version 2.1.                                             *)
+(*                                                                       *)
+(*  It is distributed in the hope that it will be useful,                *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of       *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        *)
+(*  GNU Lesser General Public License for more details.                  *)
+(*                                                                       *)
+(*  See the GNU Lesser General Public License version 2.1                *)
+(*  for more details (enclosed in the file licenses/LGPLv2.1).           *)
+(*************************************************************************)
 
 open OUnit
 open Tests_lib
@@ -232,13 +254,50 @@ let basic = "LRA.Basic" &:
  *             ]
  * 
  * let altergo = TestList (List.map Tests_lib.test_split files)
- * 
- * let smtlib2sat =
- *   "smtlib2-lra-sat" >:::
- *     tests_smt2 Popop_of_smtlib2.Sat "tests/smtlib2/lra/sat/"
- * 
- * let smtlib2unsat =
- *   "smtlib2-lra-unsat" >:::
- *     tests_smt2 Popop_of_smtlib2.Unsat "tests/smtlib2/lra/unsat/" *)
+*)
 
-let tests = TestList [basic;(* (\* mult;*\)altergo; smtlib2sat; smtlib2unsat *)]
+
+let check_file filename =
+  let statements = Witan_solver.Input.read
+      ~language:Witan_solver.Input.Smtlib
+      ~dir:(Filename.dirname filename)
+      (Filename.basename filename)
+  in
+  Witan_solver.Notypecheck.run ~theories ~limit:1000 statements
+
+let tests_smt2 expected dir =
+  if Sys.file_exists dir then
+    let files = Sys.readdir dir in
+    Array.sort String.compare files;
+    let files = Array.to_list files in
+    List.map
+      (fun s ->
+         s >: TestCase (fun () ->
+             begin match check_file (Filename.concat dir s) with
+               | `Sat ->
+                 Witan_popop_lib.Debug.dprintf1 Tests_lib.debug "@[%s: Sat@]" s;
+                 assert_bool s (`Sat = expected)
+               | `Unsat ->
+                 Witan_popop_lib.Debug.dprintf1 Tests_lib.debug "@[%s: Unsat@]" s;
+                 assert_bool s (`Unsat = expected)
+               | exception Witan_solver.Notypecheck.Typing_error (msg, t) ->
+                 assert_string
+                   (Format.asprintf
+                      "%a:@\n%s:@ %a"
+                      Dolmen.ParseLocation.fmt (Witan_solver.Notypecheck.get_loc t) msg
+                      Dolmen.Term.print t
+                   )
+             end;
+           )) files
+  else
+    []
+
+let smtlib2sat =
+  "smtlib2-lra-sat" >:::
+  tests_smt2 `Sat "solve/smt_lra/sat/"
+
+let smtlib2unsat =
+  "smtlib2-lra-unsat" >:::
+  tests_smt2 `Unsat  "solve/smt_lra/unsat/"
+
+let tests = TestList [basic;(* (\* mult;*\)altergo;*) (* smtlib2sat; smtlib2unsat *)]
