@@ -184,7 +184,7 @@ module Make_key(X:sig end): Key = struct
     type printd = { printd : 'a. 'a key -> 'a Format.printer }
     let pp sep1 sep2 {printk} {printd} = VH.pp sep1 sep2 {VH.printk} {VH.printd}
     let clear _ = ()
-    let uninitialize _ = failwith "Unneeded"
+    let remove _ = failwith "Unneeded"
 
   end
   module M =

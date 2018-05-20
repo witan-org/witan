@@ -39,14 +39,12 @@ module type S1 = sig
   type 'b t
 
   val create  : int -> 'b t
-  val size    : 'b t -> int
   val get     : 'b t -> 'a key -> ('a,'b) data
   val get_def : 'b t -> 'a key -> ('a,'b) data -> ('a,'b) data
   val set     : 'b t -> 'a key -> ('a,'b) data -> unit
-  val is_uninitialized : 'b t -> 'a key -> bool
-  (** Contrary to Simple_vector it tests the size too *)
-  val uninitialize     : 'b t -> 'a key -> unit
   val clear    : 'b t -> unit
+  val is_uninitialized : 'b t -> 'a key -> bool
+  val remove   : 'b t -> 'a key -> unit
   val inc_size : 'a key -> 'b t -> unit
 
   type 'b iter_initialized = { iter: 'a. ('a,'b) data -> unit }
@@ -69,7 +67,7 @@ module type S1 = sig
   (* shallow *)
   val move: from:'b t -> to_:'b t -> unit
 
-  type printk = { printk: 'a. 'a key Format.printer }
+  type printk    = { printk: 'a. 'a key Format.printer }
   type 'b printd = { printd: 'a. 'a key -> ('a,'b) data Format.printer }
   val pp:
     unit Format.printer ->
@@ -101,13 +99,12 @@ module type T1 = sig
   type t
   type 'a key
   val create : int -> t
-  val size : t -> int
   val get : t -> 'a key -> 'a
   val get_def : t -> 'a key -> 'a -> 'a
   val set : t -> 'a key -> 'a -> unit
-  val is_uninitialized : t -> 'a key -> bool
-  val uninitialize : t -> 'a key -> unit
   val clear : t -> unit
+  val is_uninitialized : t -> 'a key -> bool
+  val remove   : t -> 'a key -> unit
   val inc_size : 'a key -> t -> unit
   type iter_initialized = { iter : 'a. 'a -> unit; }
   val iter_initialized : iter_initialized -> t -> unit
@@ -141,17 +138,13 @@ module type S2 = sig
 
   val create : int -> 'b t
 
-  val size : 'b t -> int
   val get  : 'b t -> ('a1,'a2) key -> ('a1,'a2,'b) data
   val get_def  : 'b t -> ('a1,'a2) key -> ('a1,'a2,'b) data -> ('a1,'a2,'b) data
   val set  : 'b t -> ('a1,'a2) key -> ('a1,'a2,'b) data -> unit
-
-  val is_uninitialized : 'b t -> ('a1,'a2) key -> bool
-    (** Contrary to Simple_vector it tests the size too *)
-  val uninitialize     : 'b t -> ('a1,'a2) key -> unit
-
   val clear: 'b t -> unit
 
+  val is_uninitialized : 'b t -> ('a1,'a2) key -> bool
+  val remove   : 'b t -> ('a1,'a2) key -> unit
   val inc_size : ('a1,'a2) key -> 'b t -> unit
 
   type 'b iter_initialized = { iter: 'a1 'a2. ('a1, 'a2, 'b) data -> unit }
