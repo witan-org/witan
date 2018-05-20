@@ -45,7 +45,6 @@ module type S1 = sig
   val clear    : 'b t -> unit
   val is_uninitialized : 'b t -> 'a key -> bool
   val remove   : 'b t -> 'a key -> unit
-  val inc_size : 'a key -> 'b t -> unit
 
   type 'b iter_initialized = { iter: 'a. ('a,'b) data -> unit }
   val iter_initialized : 'b iter_initialized -> 'b t -> unit
@@ -105,7 +104,6 @@ module type T1 = sig
   val clear : t -> unit
   val is_uninitialized : t -> 'a key -> bool
   val remove   : t -> 'a key -> unit
-  val inc_size : 'a key -> t -> unit
   type iter_initialized = { iter : 'a. 'a -> unit; }
   val iter_initialized : iter_initialized -> t -> unit
   type 'c fold_initialized = { fold : 'a. 'c -> 'a -> 'c; }
@@ -145,7 +143,6 @@ module type S2 = sig
 
   val is_uninitialized : 'b t -> ('a1,'a2) key -> bool
   val remove   : 'b t -> ('a1,'a2) key -> unit
-  val inc_size : ('a1,'a2) key -> 'b t -> unit
 
   type 'b iter_initialized = { iter: 'a1 'a2. ('a1, 'a2, 'b) data -> unit }
   val iter_initialized : 'b iter_initialized -> 'b t -> unit

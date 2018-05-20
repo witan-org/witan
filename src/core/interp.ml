@@ -37,7 +37,6 @@ module Register = struct
   let thterm sem f =
     if not (ThInterp.is_uninitialized thterms sem)
     then invalid_arg (Format.asprintf "Interpretation for semantic value %a already done" Nodes.ThTermKind.pp sem);
-    ThInterp.inc_size sem thterms;
     ThInterp.set thterms sem f
 
   let models = Ty.H.create 16

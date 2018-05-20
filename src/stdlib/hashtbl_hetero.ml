@@ -66,8 +66,6 @@ module MakeS1(K:Keys1)(D:sig type ('a,'b) t end)
 
     let clear : 'b t -> unit = H.clear
 
-    let inc_size : 'a key -> 'b t -> unit = fun _ _ -> ()
-
     let iter_initialized (f : 'b iter_initialized) (m: 'b t) : unit =
       H.iter (fun _ (Pair(_,v)) -> f.iter v) m
 
@@ -183,8 +181,6 @@ module Make2
   let remove (m: 'b t) (k : ('a1,'a2) key) : unit = H.remove m (K.tag k)
 
   let clear : 'b t -> unit = H.clear
-
-  let inc_size : ('a1,'a2) key -> 'b t -> unit = fun _ _ -> ()
 
   type 'b iter_initialized = { iter: 'a1 'a2. ('a1, 'a2, 'b) data -> unit }
   let iter_initialized (f : 'b iter_initialized) (m: 'b t) : unit =
