@@ -41,7 +41,7 @@ module type Getter = sig
 
   val is_equal  : t -> Node.t -> Node.t -> bool
   val find_def  : t -> Node.t -> Node.t
-  val get_dom   : t -> 'a Dom.t -> Node.t -> 'a option
+  val get_dom   : t -> 'a DomKind.t -> Node.t -> 'a option
     (** dom of the class *)
   val get_value : t -> 'a ValueKind.t -> Node.t -> 'a option
     (** value of the class *)
@@ -77,10 +77,10 @@ type t = private Ro.t
 include Ro with type t := t
 
 (** {3 Immediate modifications} *)
-val set_dom  : t -> 'a Dom.t -> Node.t -> 'a -> unit
+val set_dom  : t -> 'a DomKind.t -> Node.t -> 'a -> unit
 (** change the dom of the equivalence class *)
 
-val unset_dom  : t -> 'a Dom.t -> Node.t -> unit
+val unset_dom  : t -> 'a DomKind.t -> Node.t -> unit
 (** remove the dom of the equivalence class *)
 
 
@@ -95,7 +95,7 @@ val merge    : t -> Trail.Pexp.t -> Node.t -> Node.t -> unit
 
 
 (** {3 Attach Event} *)
-val attach_dom: t -> Node.t -> 'a Dom.t -> ('event,'r) Events.Dem.t -> 'event -> unit
+val attach_dom: t -> Node.t -> 'a DomKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
 (** wakeup when the dom change *)
 val attach_value: t -> Node.t -> 'a ValueKind.t -> ('event,'r) Events.Dem.t -> 'event -> unit
 (** wakeup when a value is attached to this equivalence class *)
@@ -132,15 +132,15 @@ module Wait : Events.Wait.S with type delayed = t and type delayed_ro = Ro.t
 
 (** {2 Domains and Semantic Values key creation} *)
 
-module type Dom = Dom.Dom_partial with type delayed := t and type pexp := Trail.Pexp.t
+module type Dom = DomKind.Dom_partial with type delayed := t and type pexp := Trail.Pexp.t
 
 val register_dom : (module Dom with type t = 'a) -> unit
 
 val check_initialization: unit -> bool
 (** Check if the initialization of all the dom, sem and dem have been done *)
 
-val print_dom: 'a Dom.t -> 'a Format.printer
-val print_dom_opt: 'a Dom.t -> 'a option Format.printer
+val print_dom: 'a DomKind.t -> 'a Format.printer
+val print_dom_opt: 'a DomKind.t -> 'a option Format.printer
 
 module Getter : Getter
 

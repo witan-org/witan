@@ -86,7 +86,7 @@ module SE = ThTermKind.Register(S)
 
 module D = Interval.Convexe
 
-let dom = Dom.create_key (module struct type t = D.t let name = "ARITH" end)
+let dom = DomKind.create_key (module struct type t = D.t let name = "ARITH" end)
 
 type exp =
   | ExpAdd of SE.t * Node.t (** on what we propagated *)
@@ -120,7 +120,7 @@ let minus_or_one inv =
 
 let print_bag_node = Bag.pp Format.(const char ',') Node.pp
 
-let () = Dom.register(module struct
+let () = DomKind.register(module struct
     include D
     let key = dom
     let merged i1 i2 =

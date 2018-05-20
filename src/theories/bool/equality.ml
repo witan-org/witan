@@ -119,7 +119,7 @@ end = struct
   let iter = ThE.M.iter
 end
 
-let dom = Dom.create_key (module struct type t = Dis.t let name = "dis" end)
+let dom = DomKind.create_key (module struct type t = Dis.t let name = "dis" end)
 
 (** For each value key give the value *)
 module MValues = ValueKind.MkMap(struct type ('a, _) t = 'a end)
@@ -163,7 +163,7 @@ module D = struct
   let key = dom
 end
 
-let () = Dom.register(module D)
+let () = DomKind.register(module D)
 
 let set_dom d _pexp cl s =
   let s = match Egraph.get_dom d dom cl with

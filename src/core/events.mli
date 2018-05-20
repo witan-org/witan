@@ -27,7 +27,7 @@ open Nodes
 module Fired : sig
   type 'b event =
     (** the domain dom of the class change *)
-    | EventDom      : Node.t * 'a Dom.t  *      'b -> 'b event
+    | EventDom      : Node.t * 'a DomKind.t  *      'b -> 'b event
     (** the value of the node has been set *)
     | EventValue    : Node.t * 'a ValueKind.t * 'b -> 'b event
     (** a new semantical term 'a point to this class (not complete) *)
@@ -70,7 +70,7 @@ module Wait : sig
 
   type 'a translate = { translate : 'd. 'a -> 'd -> 'd Fired.event}
 
-  val translate_dom      : (Node.t * 'a Dom.t) translate
+  val translate_dom      : (Node.t * 'a DomKind.t) translate
   val translate_value    : (Node.t * 'a ValueKind.t) translate
   val translate_reg      : Node.t translate
   val translate_regnode  : Node.t translate

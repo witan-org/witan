@@ -53,7 +53,7 @@ end
 module Fired = struct
   type 'b event =
     (** the domain dom of the class change *)
-    | EventDom    : Node.t * 'a Dom.t  *      'b -> 'b event
+    | EventDom    : Node.t * 'a DomKind.t  *      'b -> 'b event
     (** the value of the class has been set *)
     | EventValue    : Node.t * 'a ValueKind.t * 'b -> 'b event
     (** a new theory term 'a point to this class (not complete) *)
@@ -71,7 +71,7 @@ module Fired = struct
 
   let pp fmt = function
     | EventDom      (node, dom, _) ->
-      Format.fprintf fmt "dom:%a of %a" Dom.pp dom Node.pp node
+      Format.fprintf fmt "dom:%a of %a" DomKind.pp dom Node.pp node
     | EventValue    (node, value, _) ->
       Format.fprintf fmt "value:%a of %a" ValueKind.pp value Node.pp node
     | EventSem      (node, sem, v, _) ->

@@ -48,7 +48,7 @@ type 'a domtable = {
 
 type semtable = Events.Wait.t list
 
-module VDomTable = Dom.MkVector (struct type ('a,'unused) t = 'a domtable end)
+module VDomTable = DomKind.MkVector (struct type ('a,'unused) t = 'a domtable end)
 
 module VSemTable = ThTermKind.Vector
 
@@ -113,7 +113,7 @@ module Def = struct
 
   and action_merge_dom =
     | SetMergeDomNode  :
-        Trail.Pexp.t * 'a Dom.t * Node.t * Node.t * bool -> action_merge_dom
+        Trail.Pexp.t * 'a DomKind.t * Node.t * Node.t * bool -> action_merge_dom
 
   and action_merge =
     | Merge of Trail.Pexp.t * Node.t * Node.t
@@ -138,7 +138,7 @@ module Wait : Events.Wait.S with type delayed = delayed_t and type delayed_ro = 
   Events.Wait.Make(WaitDef)
 
 (** {2 Define domain registration} *)
-module VDom = Dom.Make(struct type delayed = delayed_t type pexp = Trail.Pexp.t end)
+module VDom = DomKind.Make(struct type delayed = delayed_t type pexp = Trail.Pexp.t end)
 include VDom
 
 let mk_dumb_delayed () = { env = Obj.magic 0;
@@ -240,7 +240,7 @@ module T = struct
     let node2 = find_def t node2 in
     Node.equal node1 node2
 
-  let get_direct_dom (type a) t (dom : a Dom.t) node =
+  let get_direct_dom (type a) t (dom : a DomKind.t) node =
     Node.M.find_opt node (get_table_dom t dom).table
 
   let get_dom t dom node =
@@ -283,7 +283,7 @@ let _print_env fmt t =
       Format.(pair ~sep:(const char ';') Node.pp (Bag.pp (const char ',') Events.Wait.pp))
     in
     let aux fmt m = Node.M.bindings m |> Format.(list ~sep:newline aux) fmt in
-    Format.fprintf fmt "%a:@[%a@]" Dom.pp dom aux domtable.events
+    Format.fprintf fmt "%a:@[%a@]" DomKind.pp dom aux domtable.events
   in
   VDomTable.pp Format.newline Format.silent
     {VDomTable.printk = Format.silent}
@@ -310,7 +310,7 @@ let output_graph filename t =
         try
           let s = Node.M.find node domtable.table in
           Format.fprintf fmt "| {%a | %s}"
-            Dom.pp dom (escape_for_dot (VDom.print_dom dom) s);
+            DomKind.pp dom (escape_for_dot (VDom.print_dom dom) s);
         with Not_found -> ()
       in
       let iter_value value fmt (valuetable: _ valuetable) =
@@ -558,7 +558,7 @@ module Delayed = struct
         (ExpSameValue(pexp,node0,nodevalue)) in
     set_semvalue_pending t pexp node0 node0'
 
-  let set_dom_pending (type a) t (dom : a Dom.t) node0 new_v =
+  let set_dom_pending (type a) t (dom : a DomKind.t) node0 new_v =
     Debug.incr stats_set_dom;
     let node = find t node0 in
     let domtable = (get_table_dom t.env dom) in
@@ -568,7 +568,7 @@ module Delayed = struct
     let events = Node.M.find_opt node domtable.events in
     Wait.wakeup_events_bag Events.Wait.translate_dom t events (node,dom)
 
-  let set_dom_premerge_pending (type a) t (dom : a Dom.t) ~from:_ node0 (new_v:a) =
+  let set_dom_premerge_pending (type a) t (dom : a DomKind.t) ~from:_ node0 (new_v:a) =
     Debug.incr stats_set_dom;
     let node  = find t node0 in
     let domtable = (get_table_dom t.env dom) in
@@ -605,7 +605,7 @@ module Delayed = struct
     else
       heuristic ()
 
-  let merge_dom_pending (type a) t pexp (dom : a Dom.t) node1_0 node2_0 inv =
+  let merge_dom_pending (type a) t pexp (dom : a DomKind.t) node1_0 node2_0 inv =
     let node1 = find t node1_0 in
     let node2  = find t node2_0  in
     let domtable = (get_table_dom t.env dom) in
@@ -631,7 +631,7 @@ module Delayed = struct
     let node1 = find t node1_0 in
     let node2  = find t node2_0  in
     let dom_not_done = ref false in
-    let iteri (type a) (dom : a Dom.t) (domtable : a domtable) =
+    let iteri (type a) (dom : a DomKind.t) (domtable : a domtable) =
       let s1 = Node.M.find_opt node1 domtable.table in
       let s2  = Node.M.find_opt node2  domtable.table in
       let (module Dom) = VDom.get_dom dom in
@@ -709,7 +709,7 @@ module Delayed = struct
     end;
 
     (** move dom events  *)
-    let iteri (type a) (dom : a Dom.t) (domtable: a domtable) =
+    let iteri (type a) (dom : a DomKind.t) (domtable: a domtable) =
       match Node.M.find_opt other_node domtable.events with
       | None -> ()
       | Some other_events ->
@@ -800,7 +800,7 @@ module Delayed = struct
       match Queue.pop t.todo_merge_dom with
       | SetMergeDomNode(pexp,dom,node1,node2,inv) ->
         Debug.dprintf6 debug "[Egraph] @[do_pending SetDomNode %a %a %a@]"
-          Dom.pp dom Node.pp node1 Node.pp node2;
+          DomKind.pp dom Node.pp node1 Node.pp node2;
         merge_dom_pending t pexp dom node1 node2 inv;
         do_pending t
     else match t.todo_delayed_merge with
@@ -917,7 +917,7 @@ module Delayed = struct
 
   (** {2 API for attaching event} *)
 
-  let attach_dom (type a) t node (dom : a Dom.t) dem event =
+  let attach_dom (type a) t node (dom : a DomKind.t) dem event =
     let node = find_def t node in
     let event = Events.Wait.Event (dem,event) in
     let domtable = get_table_dom t.env dom in
@@ -1149,7 +1149,7 @@ module type Getter = sig
 
   val is_equal  : t -> Node.t -> Node.t -> bool
   val find_def  : t -> Node.t -> Node.t
-  val get_dom   : t -> 'a Dom.t -> Node.t -> 'a option
+  val get_dom   : t -> 'a DomKind.t -> Node.t -> 'a option
   (** dom of the nodeass *)
   val get_value : t -> 'a ValueKind.t -> Node.t -> 'a option
   (** value of the nodeass *)

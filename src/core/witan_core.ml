@@ -64,8 +64,8 @@ module Value = Nodes.Value
 
 module Interp = Interp
 
-module Dom = struct
-  include Dom
+module DomKind = struct
+  include DomKind
   let print = Egraph.print_dom
 
   module type Dom = Egraph.Dom

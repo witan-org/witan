@@ -27,7 +27,7 @@ open Nodes
 module Create : sig
   type 'b event =
     (** the domain dom of the class is watched *)
-    | EventDom      : Node.t * 'a Dom.t  * 'b -> 'b event
+    | EventDom      : Node.t * 'a DomKind.t  * 'b -> 'b event
     (** the value of the class is watched *)
     | EventValue    : Node.t * 'a ValueKind.t  * 'b -> 'b event
     (** the values of the class is watched *)

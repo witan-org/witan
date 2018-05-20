@@ -31,7 +31,7 @@ let debug = Debug.register_info_flag
 
 module Create = struct
     type 'b event =
-    | EventDom      : Node.t * 'a Dom.t  * 'b -> 'b event
+    | EventDom      : Node.t * 'a DomKind.t  * 'b -> 'b event
     | EventValue    : Node.t * 'a ValueKind.t * 'b -> 'b event
     | EventAnyValue : Node.t  * 'b -> 'b event
     | EventRegCl    : Node.t           * 'b -> 'b event
@@ -42,7 +42,7 @@ module Create = struct
 
     let pp fmt = function
       | EventDom      (node, dom, _) ->
-        Format.fprintf fmt "dom:%a of %a" Dom.pp dom Node.pp node
+        Format.fprintf fmt "dom:%a of %a" DomKind.pp dom Node.pp node
       | EventValue    (node, value, _) ->
         Format.fprintf fmt "value:%a of %a" ValueKind.pp value Node.pp node
       | EventAnyValue    (node, _) ->
