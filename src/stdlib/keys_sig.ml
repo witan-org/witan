@@ -26,8 +26,6 @@
 (** Keys are the main programming tools used for implementing
     extensible types (sem, value, dom, pexp, ...) *)
 
-open Witan_popop_lib
-open Stdlib
 open Std
 
 (** {2 Exceptions} *)
@@ -59,21 +57,20 @@ end
 module type Key = sig
   (** Key with arity 1 *)
 
-  module K: Datatype
+  (* module K: Datatype *)
   type 'a t
 
   val pp: 'a t Format.printer
   val compare: 'a t -> 'b t -> int
   val equal: 'a t -> 'b t -> bool
   val hash : 'a t -> int
-  val tag: 'a t -> int
-  val key: 'a t -> K.t
+  val tag  : 'a t -> int
+  val name : 'a t -> string
 
-  type iter = {iter : 'a. 'a t -> unit}
+  type iter = {iter : 'a. 'a t -> unit} [@@unboxed]
   val iter : iter -> unit
-  type 'b fold = {fold : 'a. 'a t -> 'b -> 'b}
+  type 'b fold = {fold : 'a. 'a t -> 'b -> 'b} [@@unboxed]
   val fold : 'b fold -> 'b -> 'b
-  val hint_size : unit -> int
 
   module Eq: sig
     val eq_type : 'a t -> 'b t -> ('a,'b) Poly.iseq
@@ -137,18 +134,17 @@ end
 module type Key2 = sig
   (** Key with arity 2 *)
 
-  module K: Datatype
   type ('k,'d) t
 
   val pp: ('k,'d) t Format.printer
   val equal: ('k1,'d1) t -> ('k2,'d2) t -> bool
   val hash : ('k,'d) t -> int
-  val key: ('k,'d) t -> K.t
+  val name : ('k,'d) t -> string
 
-  type iter = {iter : 'k 'd. ('k,'d) t -> unit}
+  type iter = {iter : 'k 'd. ('k,'d) t -> unit} [@@unboxed]
   val iter : iter -> unit
 
-  type 'b fold = {fold : 'a1 'a2. ('a1,'a2) t -> 'b -> 'b}
+  type 'b fold = {fold : 'a1 'a2. ('a1,'a2) t -> 'b -> 'b} [@@unboxed]
   val fold : 'b fold -> 'b -> 'b
 
   val create_key: (module NamedType2 with type t = 'a1

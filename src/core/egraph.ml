@@ -208,7 +208,7 @@ let get_table_value t k =
       events = Node.M.empty;
       reg_events = [] }
 
-exception UninitializedEnv of Env.K.t
+exception UninitializedEnv of string
 
 exception NotRegistered
 
@@ -255,7 +255,7 @@ module T = struct
     = fun t k ->
       Env.check_is_registered k;
       if Env.VectorH.is_uninitialized t.envs k then
-        raise (UninitializedEnv (Env.key k :> Env.K.t))
+        raise (UninitializedEnv (Env.name k))
       else
         Env.VectorH.get t.envs k
 
@@ -1184,7 +1184,6 @@ let check_initialization () =
 let () = Exn_printer.register (fun fmt exn ->
     match exn with
     | UninitializedEnv env ->
-      Format.fprintf fmt "The environnement of %a is not initialized."
-        Env.K.pp env
+      Format.fprintf fmt "The environnement of %s is not initialized." env
     | exn -> raise exn
   )

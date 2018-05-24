@@ -32,7 +32,7 @@ open Nodes
 
 exception NotRegistered
 
-exception UninitializedEnv of Env.K.t
+exception UninitializedEnv of string
 
 exception Contradiction of Trail.Pexp.t
 

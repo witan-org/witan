@@ -28,27 +28,26 @@
 open Std
 
 module Strings = Witan_popop_lib.Strings
+module StringH = Witan_popop_lib.Stdlib.DStr.H
 module Exn_printer = Witan_popop_lib.Exn_printer
 
 include Keys_sig
 
 module Make_key(X:sig end) = struct
-  module K = Strings.Fresh(struct end)
 
   type _ gadt = ..
   type 'a t = { gadt : 'a gadt;
-                name : K.t;
+                name : string;
                 id   : int;
                 iseq : 'b. 'b gadt -> ('a,'b) Poly.iseq }
 
-  let pp fmt x = K.pp fmt x.name
+  let pp fmt x = String.pp fmt x.name
   let equal a b = a.id = b.id
   let compare x y = compare x.id y.id
   let hash x = x.id
   let tag  x = x.id
-  let key  x = x.name
+  let name x = x.name
                  
-  (** the 'a k can be used as equality witness because K gives fresh values *)
   module Eq = struct
     let eq_type a b = a.iseq b.gadt
     let coerce_type a b = eq_type a b |> Poly.eq
@@ -65,8 +64,8 @@ module Make_key(X:sig end) = struct
     end)
 
   let all_keys = AllKeys.create 17
-  let num_keys = ref 0
-
+  let used_names : (* next id to use *) int StringH.t = StringH.create 17
+  
   let create_key (type a) (module NT : NamedType with type t = a) : a t =
     let module TMP = struct
       type _ gadt += K : NT.t gadt
@@ -75,24 +74,19 @@ module Make_key(X:sig end) = struct
       | TMP.K -> Poly.Eq
       | _ -> Poly.Neq
     in
-    incr num_keys;
-    (* let stats = AllKeys.stats all_keys in *)
     let key = { gadt = TMP.K;
-                name = K.create NT.name;
-                id = !num_keys;
-                (* id = stats.Hashtbl.num_bindings; *)
+                name = Strings.find_new_name used_names NT.name;
+                id   = AllKeys.length all_keys;
                 iseq }
     in
-    AllKeys.add all_keys (K key) ();
+    AllKeys.replace all_keys (K key) ();
     key
 
 
-  type iter = {iter : 'a. 'a t -> unit}
+  type iter = {iter : 'a. 'a t -> unit} [@@unboxed]
   let iter f = AllKeys.iter (fun (K x) () -> f.iter x) all_keys
-  type 'b fold = {fold : 'a. 'a t -> 'b -> 'b}
+  type 'b fold = {fold : 'a. 'a t -> 'b -> 'b} [@@unboxed]
   let fold f = AllKeys.fold (fun (K x) () -> f.fold x) all_keys
-
-  let hint_size = K.hint_size
 
   module K1 = struct
     type nonrec 'a t = 'a t
@@ -168,22 +162,20 @@ end
 
 
 module Make_key2(X:sig end) : Key2 = struct
-  module K = Strings.Fresh(struct end)
 
   type (_,_) gadt = ..
   type ('k,'d) t = { gadt : ('k,'d) gadt;
-                     name : K.t;
+                     name : string;
                      id   : int;
                      iseq : 'b1 'b2. ('b1,'b2) gadt -> ('k*'d,'b1*'b2) Poly.iseq }
 
-  let pp fmt x = K.pp fmt x.name
+  let pp fmt x = String.pp fmt x.name
   let equal a b = a.id = b.id
   let compare x y = compare x.id y.id
   let hash x = x.id
   let tag    = hash
-  let key x = x.name
+  let name x = x.name
   
-  (** the ('k,'d) k can be used as equality witness because K gives fresh values *)
   module Eq = struct
     let eq_type a b = a.iseq b.gadt
     let coerce_type a b = eq_type a b |> Poly.eq
@@ -198,7 +190,7 @@ module Make_key2(X:sig end) : Key2 = struct
     end)
 
   let all_keys = AllKeys.create 17
-  let num_keys = ref 0
+  let used_names : (* next id to use *) int StringH.t = StringH.create 17
 
   let create_key (type a1) (type a2) (module NT : NamedType2 with type t = a1
                                                               and type d = a2)
@@ -210,18 +202,17 @@ module Make_key2(X:sig end) : Key2 = struct
       | TMP.K -> Poly.Eq
       | _ -> Poly.Neq
     in
-    incr num_keys;
     let key = { gadt = TMP.K;
-                name = K.create NT.name;
-                id = !num_keys;
+                name = Strings.find_new_name used_names NT.name;
+                id   = AllKeys.length all_keys;
                 iseq }
     in
     AllKeys.add all_keys (K key) ();
     key
 
-  type iter = {iter : 'k 'd. ('k,'d) t -> unit}
+  type iter = {iter : 'k 'd. ('k,'d) t -> unit} [@@unboxed]
   let iter f = AllKeys.iter (fun (K x) () -> f.iter x) all_keys
-  type 'b fold = {fold : 'a1 'a2. ('a1,'a2) t -> 'b -> 'b}
+  type 'b fold = {fold : 'a1 'a2. ('a1,'a2) t -> 'b -> 'b} [@@unboxed]
   let fold f = AllKeys.fold (fun (K x) () -> f.fold x) all_keys
 
   module K2 = struct
