@@ -370,7 +370,7 @@ end = struct
   let sort l = List.sort compare_level_hyp l
 
   let merge t l2 =
-    Debug.dprintf2 debug "[Hypflict] @[Analyse resulted in: %a@]"
+    Debug.dprintf2 debug "[Conflict] @[Analyse resulted in: %a@]"
       Format.(list ~sep:(const char ',') pp_phyp) l2;
     let iter (type a) hyp (c:a) dec pc =
       match dec with
