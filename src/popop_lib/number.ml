@@ -10,7 +10,7 @@
 (********************************************************************)
 
 open Format
-open Big_int
+open Big_int_Z
 
 (** Construction *)
 

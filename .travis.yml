@@ -28,7 +28,7 @@ before_install:
   - opam switch ${OCAML_VERSION}
   - eval `opam config env`
   - opam update
-  - opam pin add --dev-repo dolmen
+  - opam pin add dolmen https://github.com/Gbury/dolmen.git#cf27065cbb04f0c15e43d04ab10d2fd136c146b3
   - opam pin add --no-action witan .
   - opam install --deps-only witan
   - opam install ounit

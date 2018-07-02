@@ -13,6 +13,7 @@ opam pin add witan https://github.com/witan-org/witan.git
 
 ```shell
 git clone https://github.com/witan-org/witan.git
+opam pin add dolmen https://github.com/Gbury/dolmen.git#cf27065cbb04f0c15e43d04ab10d2fd136c146b3
 opam pin add --no-action witan .
 opam install --deps-only witan
 opam install ounit
