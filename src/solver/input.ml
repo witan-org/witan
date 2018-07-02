@@ -59,7 +59,7 @@ let read_aux ~language ~dir input =
             | None -> raise (File_not_found f)
             | Some f -> f
           in
-          let _, g' = P.parse_input ~language (`File file) in
+          let _, g', _ = P.parse_input ~language (`File file) in
           acc := g' :: !acc;
           aux ()
         | (Some _) as res -> res
