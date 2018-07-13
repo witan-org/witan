@@ -6,6 +6,7 @@ A prototype implementation of McSat solver
 Using [opam](http://opam.ocaml.org/):
 
 ```shell
+opam pin add dolmen https://github.com/Gbury/dolmen.git#1cabe6b20b3b5f32c4dd9704fdb105cd941cd572
 opam pin add witan https://github.com/witan-org/witan.git
 ```
 
